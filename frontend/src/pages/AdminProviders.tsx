@@ -7,7 +7,7 @@ interface Card {
   id: string; label: string; key: string; model_key: string | null; hint: string; testable: boolean
   key_state: KeyState; model_state: KeyState | null; active: boolean; models: { id: string; label: string }[]
 }
-interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; google_redirect_uri: string }
+interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; only_mock: boolean; google_redirect_uri: string }
 
 const SMTP_PRESETS: Record<string, { label: string; host: string; port: string; security: string; user?: string }> = {
   brevo: { label: 'Brevo (ex Sendinblue) — 300/giorno gratis, EU', host: 'smtp-relay.brevo.com', port: '587', security: 'starttls' },
@@ -95,7 +95,8 @@ export default function AdminProviders() {
   return (
     <div className="stack">
       <p className="muted">Le chiavi vengono salvate cifrate nel database (con la SECRET_KEY del server) e applicate subito, senza riavvio. Una chiave inserita qui ha la precedenza su quella del file <code>.env</code>.</p>
-      {st.mock_active && <div className="error">Nessun provider AI configurato: è attivo solo il provider di prova "mock".</div>}
+      {st.only_mock && <div className="error">Nessun provider AI configurato: è attivo solo il provider di prova "mock".</div>}
+      {st.mock_active && !st.only_mock && <small className="muted">Il provider di prova "mock" è attivo (modalità sviluppo) accanto a quelli reali.</small>}
       {msg && <div className="ok">{msg}</div>}
       {err && <div className="error">{err}</div>}
       <div><button className="ghost" disabled={busy !== ''} onClick={async () => { setBusy('save'); try { setSt(await put<Status>('/admin/providers', { values: {} })); setMsg('Elenco modelli aggiornato dai provider') } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>🔄 Aggiorna elenco modelli</button> <small className="muted">I modelli nei menu vengono letti direttamente dalle API dei provider.</small></div>

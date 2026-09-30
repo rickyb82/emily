@@ -415,7 +415,8 @@ async def providers_status(ctx: AuthContext = Depends(require_admin), db: AsyncS
     from .google_auth import redirect_uri
 
     return {"providers": cards, "settings": {k: st[k] for k in OTHER_SETTINGS},
-            "mock_active": "mock" in active, "google_redirect_uri": redirect_uri()}
+            "mock_active": "mock" in active, "only_mock": set(active) == {"mock"},
+            "google_redirect_uri": redirect_uri()}
 
 
 @router.put("/providers")
