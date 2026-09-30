@@ -142,7 +142,8 @@ export default function Chat() {
             setStatus('')
             if (ev.message) {
               const done = ev.message
-              setMessages((m) => (current ? m.map((x) => (x.id === current!.id ? done : x)) : [...m, done]))
+              const tmpId = current?.id   // catturato ora: l'updater di React gira dopo (e due volte in StrictMode)
+              setMessages((m) => (tmpId && m.some((x) => x.id === tmpId) ? m.map((x) => (x.id === tmpId ? done : x)) : [...m, done]))
               current = null
             }
             window.dispatchEvent(new Event('familai:conversations'))
