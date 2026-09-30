@@ -234,6 +234,26 @@ export default function AdminProviders() {
           </label>
           <label>Modello immagini Gemini<input placeholder={s.gemini_image_model.value} value={draft.gemini_image_model ?? ''} onChange={(e) => setDraft({ ...draft, gemini_image_model: e.target.value })} /></label>
           <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
+          <label>Voce naturale (TTS) <small className="muted">({s.tts_provider.value})</small>
+            <select value={draft.tts_provider ?? s.tts_provider.value} onChange={(e) => setDraft({ ...draft, tts_provider: e.target.value })}>
+              <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">disattivata</option>
+            </select>
+          </label>
+          <label>Voce OpenAI <small className="muted">({s.tts_voice_openai.value})</small>
+            <select value={draft.tts_voice_openai ?? s.tts_voice_openai.value} onChange={(e) => setDraft({ ...draft, tts_voice_openai: e.target.value })}>
+              {['nova', 'coral', 'sage', 'shimmer', 'alloy', 'ash', 'ballad', 'echo', 'fable', 'onyx', 'verse'].map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </label>
+          <label>Modello voce OpenAI<input placeholder={s.tts_model_openai.value} value={draft.tts_model_openai ?? ''} onChange={(e) => setDraft({ ...draft, tts_model_openai: e.target.value })} /></label>
+          <label>Voce Gemini <small className="muted">({s.tts_voice_gemini.value})</small>
+            <select value={draft.tts_voice_gemini ?? s.tts_voice_gemini.value} onChange={(e) => setDraft({ ...draft, tts_voice_gemini: e.target.value })}>
+              {['Kore', 'Puck', 'Zephyr', 'Charon', 'Fenrir', 'Leda', 'Aoede', 'Orus', 'Callirrhoe', 'Autonoe'].map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </label>
+          <label>Modello voce Gemini<input placeholder={s.tts_model_gemini.value} value={draft.tts_model_gemini ?? ''} onChange={(e) => setDraft({ ...draft, tts_model_gemini: e.target.value })} /></label>
+          <label className="wide">Stile della voce <small className="muted">(istruzioni in linguaggio naturale; vuoto = voce calda e chiara, adatta ai bambini)</small>
+            <input placeholder="es. Parla lentamente e con allegria, come una maestra" value={draft.tts_style ?? s.tts_style.value} onChange={(e) => setDraft({ ...draft, tts_style: e.target.value })} />
+          </label>
           <label>Embedding (RAG) <small className="muted">({s.embedding_provider.value})</small>
             <select value={draft.embedding_provider ?? s.embedding_provider.value} onChange={(e) => setDraft({ ...draft, embedding_provider: e.target.value })}>
               <option value="auto">auto</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">solo parole chiave</option>
@@ -241,7 +261,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

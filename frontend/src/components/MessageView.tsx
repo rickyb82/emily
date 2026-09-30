@@ -1,6 +1,8 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message } from '../lib/api'
+import { useEffect, useState } from 'react'
+import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
 
 const TOOL_LABELS: Record<string, string> = {
   web_search: '🔎 Ricerca web',
@@ -64,6 +66,39 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
         <div key={t.id} className="tool-chip">{toolLabel(t.name)}: <code>{JSON.stringify(t.input).slice(0, 120)}</code></div>
       ))}
       {m.flagged && <div className="flag">⚑ segnalato dal filtro contenuti</div>}
+      {m.role === 'assistant' && !m.streaming && text.trim() && <SpeakButton text={text} />}
+    </div>
+  )
+}
+
+/** Legge il messaggio con la voce naturale del backend (se configurata). */
+function SpeakButton({ text }: { text: string }) {
+  const [enabled, setEnabled] = useState(false)
+  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle')
+  const [err, setErr] = useState('')
+  useEffect(() => { ttsEnabled().then(setEnabled) }, [])
+  useEffect(() => () => { if (state === 'playing') stopSpeaking() }, [state])
+  if (!enabled) return null
+  async function toggle() {
+    if (state === 'playing' && isSpeaking()) { stopSpeaking(); setState('idle'); return }
+    setErr('')
+    setState('loading')
+    try {
+      const p = speak(plainText(text))
+      setState('playing')
+      await p
+    } catch (e: any) {
+      setErr(e.message)
+    } finally {
+      setState('idle')
+    }
+  }
+  return (
+    <div className="speak-row">
+      <button className="ghost small" onClick={toggle} disabled={state === 'loading'} title={state === 'playing' ? 'Ferma' : 'Leggi ad alta voce'}>
+        {state === 'loading' ? '⏳' : state === 'playing' ? '⏹ Ferma' : '🔊 Leggi'}
+      </button>
+      {err && <small className="error">{err}</small>}
     </div>
   )
 }

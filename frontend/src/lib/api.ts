@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-const HEADERS = { 'X-Requested-With': 'FamilAI' }
+export const HEADERS = { 'X-Requested-With': 'FamilAI' }
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...HEADERS, ...(init.headers as any) }

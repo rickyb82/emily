@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     image_model: str = "gpt-image-1"
     gemini_image_model: str = "imagen-4.0-generate-001"
     video_model: str = "veo-3.0-generate-001"
+    # Voce (sintesi vocale naturale per lettura messaggi e giochi/app negli artifact)
+    tts_provider: str = "auto"            # auto | openai | gemini | none
+    tts_model_openai: str = "gpt-4o-mini-tts"
+    tts_voice_openai: str = "nova"
+    tts_model_gemini: str = "gemini-2.5-flash-preview-tts"
+    tts_voice_gemini: str = "Kore"
+    tts_style: str = ""                   # istruzioni di stile (vuoto = default: voce calda e chiara per bambini)
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
 

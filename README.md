@@ -86,6 +86,9 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Voce naturale (TTS)
+Con una chiave OpenAI (o Gemini) FamilAI legge i messaggi ad alta voce (pulsante 🔊 sotto ogni risposta) e mette a disposizione dei giochi/app negli artifact la funzione `FamilAI.speak(testo)`, che Claude usa al posto della sintesi vocale del browser: voci umane, in italiano, con stile configurabile in **Provider AI → Altre impostazioni** (provider, voce, istruzioni di stile). L'audio è messo in cache in `data/tts/`, quindi una frase già generata non costa più nulla. Endpoint: `POST /api/tts {text, voice?, style?}`.
+
 ### Email: inviti, password dimenticata, codice al posto della passkey
 In **Famiglia → Provider AI → Email** puoi **collegare un account Google** (OAuth, scope `gmail.send`: nessuna password per le app; usa il client della scheda "Accesso con Google" e richiede anche l'URI `/api/admin/email/google/callback`; finché l'app Google è in modalità Test aggiungi l'account fra gli utenti di test) oppure configurare l'SMTP classico (pulsante "Preimposta Gmail": `smtp.gmail.com:587` STARTTLS; utente = indirizzo Gmail; password = *password per le app* di Google) e verifica con "Invia email di prova". Da quel momento:
 - creando un adulto senza password parte un **invito** con link (valido 48 h) per scegliere la password (pulsante "✉️ Invito" per reinviarlo);

@@ -436,6 +436,7 @@ PROVIDER_CARDS = [
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
 OTHER_SETTINGS = ["web_search_provider", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
+                  "tts_provider", "tts_model_openai", "tts_voice_openai", "tts_model_gemini", "tts_voice_gemini", "tts_style",
                   "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]
 
 

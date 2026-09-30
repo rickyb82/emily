@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { get, patch } from '../lib/api'
+import { fetchSpeech } from '../lib/speech'
 
 export interface ArtifactData {
   id: string
@@ -16,8 +17,53 @@ export interface ArtifactData {
 const CAN_PREVIEW = new Set(['html', 'svg', 'markdown', 'mermaid'])
 
 /** HTML della pagina di anteprima: iframe sandbox senza same-origin, quindi senza cookie né accesso alle API. */
+/** Script iniettato negli artifact HTML: espone FamilAI.speak() che chiede l'audio alla pagina madre via postMessage
+ *  (l'iframe e' sandboxato senza cookie: non puo' chiamare le API da solo). */
+const BRIDGE = `<script>(function(){
+  if (window.FamilAI) return;
+  var seq = 0, pending = {}, current = null;
+  function stop(){ if (current) { try { current.pause(); } catch(e){} current = null; } }
+  window.addEventListener('message', function(ev){
+    var d = ev.data || {};
+    if (d.type !== 'familai:speak:result' || !pending[d.id]) return;
+    var p = pending[d.id]; delete pending[d.id];
+    if (d.error) { p.reject(new Error(d.error)); return; }
+    try {
+      var url = URL.createObjectURL(new Blob([d.audio], { type: d.mime || 'audio/mpeg' }));
+      stop();
+      var a = new Audio(url); current = a;
+      a.onended = function(){ if (current === a) current = null; URL.revokeObjectURL(url); p.resolve(); };
+      a.onerror = function(){ URL.revokeObjectURL(url); p.reject(new Error('audio')); };
+      a.play().catch(p.reject);
+    } catch (e) { p.reject(e); }
+  });
+  window.FamilAI = {
+    speak: function(text, opts){
+      text = String(text == null ? '' : text).trim();
+      if (!text) return Promise.resolve();
+      if (window.parent === window) {
+        return new Promise(function(res){ try { var u = new SpeechSynthesisUtterance(text); u.lang = 'it-IT'; u.onend = function(){ res(); }; speechSynthesis.speak(u); } catch(e) { res(); } });
+      }
+      var id = ++seq;
+      return new Promise(function(resolve, reject){
+        pending[id] = { resolve: resolve, reject: reject };
+        window.parent.postMessage({ type: 'familai:speak', id: id, text: text, opts: opts || {} }, '*');
+      });
+    },
+    stopSpeaking: function(){ stop(); try { speechSynthesis.cancel(); } catch(e){} },
+  };
+})();</script>`
+
+function injectBridge(html: string): string {
+  const i = html.search(/<head[^>]*>/i)
+  if (i >= 0) { const end = html.indexOf('>', i) + 1; return html.slice(0, end) + BRIDGE + html.slice(end) }
+  const j = html.search(/<html[^>]*>/i)
+  if (j >= 0) { const end = html.indexOf('>', j) + 1; return html.slice(0, end) + BRIDGE + html.slice(end) }
+  return BRIDGE + html
+}
+
 function previewDoc(a: ArtifactData): string {
-  if (a.kind === 'html') return a.content
+  if (a.kind === 'html') return injectBridge(a.content)
   if (a.kind === 'svg') return `<!doctype html><html><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${a.content}</body></html>`
   if (a.kind === 'mermaid')
     return `<!doctype html><html><body style="margin:16px;background:#fff"><pre class="mermaid">${a.content.replace(/</g, '&lt;')}</pre>
@@ -45,6 +91,25 @@ export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, on
   }, [artifact.id, artifact.version])
 
   const doc = useMemo(() => previewDoc(shown), [shown, reloadKey])
+  const frame = useRef<HTMLIFrameElement>(null)
+
+  // ponte voce: l'artifact chiede l'audio, il pannello lo recupera dal backend e lo rimanda nell'iframe
+  useEffect(() => {
+    const onMsg = async (ev: MessageEvent) => {
+      const d = ev.data || {}
+      if (d.type !== 'familai:speak' || !frame.current || ev.source !== frame.current.contentWindow) return
+      const reply = (payload: any, transfer: Transferable[] = []) => frame.current?.contentWindow?.postMessage({ type: 'familai:speak:result', id: d.id, ...payload }, '*', transfer)
+      try {
+        const { blob } = await fetchSpeech(String(d.text).slice(0, 2000), { voice: d.opts?.voice, style: d.opts?.style })
+        const buf = await blob.arrayBuffer()
+        reply({ audio: buf, mime: blob.type }, [buf])
+      } catch (e: any) {
+        reply({ error: e.message || 'Sintesi vocale non disponibile' })
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
 
   async function save() {
     const a = await patch<ArtifactData>(`/artifacts/${artifact.id}`, { content: draft })
@@ -103,6 +168,7 @@ export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, on
         )}
         {tab === 'preview' && shown.kind !== 'markdown' && (
           <iframe
+            ref={frame}
             key={`${shown.id}-${shown.version}-${reloadKey}`}
             className="artifact-frame"
             sandbox="allow-scripts allow-modals allow-forms allow-popups allow-pointer-lock"

@@ -121,6 +121,15 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")
+    from .tts import enabled as tts_enabled
+    if tts_enabled():
+        parts.append(
+            "- Voce naturale negli artifact HTML: quando un gioco o un'app deve parlare (leggere lettere, parole, frasi, "
+            "istruzioni) usa la funzione gia' disponibile `await FamilAI.speak(testo, {style})` (restituisce una Promise "
+            "che si risolve a fine riproduzione; `FamilAI.stopSpeaking()` interrompe). Produce una voce umana di qualita' "
+            "(TTS del provider), molto migliore di speechSynthesis: usa speechSynthesis solo come fallback se "
+            "`window.FamilAI` non esiste. Evita di chiamarla per ogni piccolo evento: le frasi vengono messe in cache, "
+            "quindi ripetere lo stesso testo e' immediato.")
     return "\n".join(parts)
 
 
