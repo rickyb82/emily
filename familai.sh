@@ -69,8 +69,10 @@ case "${1:-}" in
     echo ">> FamilAI in produzione su https://$(grep ^PUBLIC_HOST= .env | cut -d= -f2)";;
   update)
     need_env
-    if [ -d .git ]; then
+    if [ -d .git ] && git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
       echo ">> git pull"; git pull --ff-only
+    elif [ -d .git ]; then
+      echo ">> (nessun remote configurato: uso i file gia' presenti nella cartella)"
     else
       echo ">> (nessun repository git: aggiorno solo i container con i file presenti)"
     fi
