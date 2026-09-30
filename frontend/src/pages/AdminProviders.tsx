@@ -9,6 +9,18 @@ interface Card {
 }
 interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; google_redirect_uri: string }
 
+const SMTP_PRESETS: Record<string, { label: string; host: string; port: string; security: string; user?: string }> = {
+  brevo: { label: 'Brevo (ex Sendinblue) — 300/giorno gratis, EU', host: 'smtp-relay.brevo.com', port: '587', security: 'starttls' },
+  smtp2go: { label: 'SMTP2GO — 1.000/mese gratis', host: 'mail.smtp2go.com', port: '587', security: 'starttls' },
+  resend: { label: 'Resend — utente "resend", password = API key', host: 'smtp.resend.com', port: '465', security: 'ssl', user: 'resend' },
+  mailgun: { label: 'Mailgun (EU)', host: 'smtp.eu.mailgun.org', port: '587', security: 'starttls' },
+  sendgrid: { label: 'SendGrid — utente "apikey", password = API key', host: 'smtp.sendgrid.net', port: '587', security: 'starttls', user: 'apikey' },
+  postmark: { label: 'Postmark', host: 'smtp.postmarkapp.com', port: '587', security: 'starttls' },
+  gmail: { label: 'Gmail (password per le app)', host: 'smtp.gmail.com', port: '587', security: 'starttls' },
+  outlook: { label: 'Outlook / Microsoft 365', host: 'smtp.office365.com', port: '587', security: 'starttls' },
+  aruba: { label: 'Aruba', host: 'smtps.aruba.it', port: '465', security: 'ssl' },
+  icloud: { label: 'iCloud Mail (password specifica per app)', host: 'smtp.mail.me.com', port: '587', security: 'starttls' },
+}
 const SOURCE_IT = { admin: 'impostata dal pannello', env: 'dal file .env', none: 'non configurata' }
 
 export default function AdminProviders() {
@@ -139,13 +151,18 @@ export default function AdminProviders() {
             </div>
           )}
         </div>
-        <b>Opzione 2: SMTP classico</b>
-        <p className="muted small">Con Gmail serve una <b>password per le app</b> (Account Google → Sicurezza → Verifica in due passaggi → Password per le app), non la password normale.</p>
+        <b>Opzione 2: server SMTP (servizio esterno o provider di posta)</b>
         <div className="row wrap">
-          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.gmail.com', smtp_port: '587', smtp_security: 'starttls', smtp_from_name: 'FamilAI' })}>Preimposta Gmail</button>
-          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.office365.com', smtp_port: '587', smtp_security: 'starttls' })}>Outlook / Microsoft 365</button>
-          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtps.aruba.it', smtp_port: '465', smtp_security: 'ssl' })}>Aruba</button>
+          <label style={{ flex: '1 1 320px' }}>Servizio esterno preimpostato
+            <select value="" onChange={(e) => { const p = SMTP_PRESETS[e.target.value]; if (p) setDraft({ ...draft, smtp_host: p.host, smtp_port: p.port, smtp_security: p.security, ...(p.user ? { smtp_user: p.user } : {}) }) }}>
+              <option value="">Scegli un servizio… (compila server, porta e sicurezza)</option>
+              {Object.entries(SMTP_PRESETS).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
+            </select>
+          </label>
         </div>
+        <details><summary className="muted small">Quale scegliere?</summary>
+          <p className="muted small"><b>Brevo</b> (ex Sendinblue, azienda europea): 300 email/giorno gratis, attivazione in pochi minuti, ideale per una famiglia. <b>SMTP2GO</b>: 1.000/mese gratis, molto semplice. <b>Resend</b>, <b>Mailgun</b>, <b>SendGrid</b>, <b>Postmark</b>: ottimi ma richiedono di verificare un dominio tuo per il mittente. Con tutti questi servizi l'utente e la password SMTP sono quelli che il servizio ti mostra nella sezione "SMTP" del suo pannello (non la password dell'account), e il mittente deve essere un indirizzo verificato lì.</p>
+        </details>
         <div className="grid3">
           <label>Server SMTP <small className="muted">({s.smtp_host.value || 'non impostato'})</small><input value={draft.smtp_host ?? ''} placeholder={s.smtp_host.value || 'smtp.gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_host: e.target.value })} /></label>
           <label>Porta<input value={draft.smtp_port ?? ''} placeholder={s.smtp_port.value || '587'} onChange={(e) => setDraft({ ...draft, smtp_port: e.target.value })} /></label>
@@ -154,9 +171,9 @@ export default function AdminProviders() {
               <option value="starttls">STARTTLS (587)</option><option value="ssl">SSL (465)</option><option value="none">nessuna</option>
             </select>
           </label>
-          <label>Utente (email Google) <small className="muted">({s.smtp_user.value || '—'})</small><input value={draft.smtp_user ?? ''} placeholder={s.smtp_user.value || 'tuo.nome@gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_user: e.target.value, smtp_from: draft.smtp_from ?? e.target.value })} /></label>
-          <label>Password per le app <small className="muted">({s.smtp_password.configured ? 'impostata' : 'non impostata'})</small><input type="password" autoComplete="off" value={draft.smtp_password ?? ''} placeholder="xxxx xxxx xxxx xxxx" onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value.replace(/\s+/g, '') })} /></label>
-          <label>Mittente <small className="muted">({s.smtp_from.value || '—'})</small><input value={draft.smtp_from ?? ''} placeholder={s.smtp_from.value || 'tuo.nome@gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_from: e.target.value })} /></label>
+          <label>Utente SMTP <small className="muted">({s.smtp_user.value || '—'})</small><input value={draft.smtp_user ?? ''} placeholder={s.smtp_user.value || 'login SMTP del servizio'} onChange={(e) => setDraft({ ...draft, smtp_user: e.target.value })} /></label>
+          <label>Password / chiave SMTP <small className="muted">({s.smtp_password.configured ? 'impostata' : 'non impostata'})</small><input type="password" autoComplete="off" value={draft.smtp_password ?? ''} onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value.trim() })} /></label>
+          <label>Mittente (indirizzo verificato) <small className="muted">({s.smtp_from.value || '—'})</small><input value={draft.smtp_from ?? ''} placeholder={s.smtp_from.value || 'familai@tuodominio.it'} onChange={(e) => setDraft({ ...draft, smtp_from: e.target.value })} /></label>
           <label>Nome mittente<input value={draft.smtp_from_name ?? ''} placeholder={s.smtp_from_name.value} onChange={(e) => setDraft({ ...draft, smtp_from_name: e.target.value })} /></label>
           <label>Canale di invio <small className="muted">({mail?.transport === 'none' ? 'nessuno configurato' : mail?.transport === 'gmail_oauth' ? 'Gmail collegato' : mail?.transport})</small>
             <select value={draft.mail_transport ?? s.mail_transport.value} onChange={(e) => setDraft({ ...draft, mail_transport: e.target.value })}>
