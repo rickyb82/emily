@@ -13,6 +13,7 @@ const TOOL_LABELS: Record<string, string> = {
   create_artifact: '📦 Creazione artifact',
   update_artifact: '📦 Aggiornamento artifact',
   run_code: '⚙️ Esecuzione codice',
+  ask_model: '🤝 Consulto un altro modello',
 }
 export const toolLabel = (n: string) => TOOL_LABELS[n] ?? (n.startsWith('mcp__') ? `🔌 ${n.split('__').slice(1).join(' / ')}` : `🛠 ${n}`)
 

@@ -121,6 +121,17 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")
+    pol = effective_policy(user)
+    if "ask_model" in pol.get("allowed_tools", []):
+        from ..tools.ask_model import describe_available
+        avail = describe_available(pol.get("allowed_providers", []))
+        if avail:
+            parts.append(
+                "\n# Altri modelli\n"
+                f"Con il tool ask_model puoi consultare altri modelli: {avail}. Fallo quando l'utente lo chiede "
+                "(es. 'chiedi a Gemini', 'cosa direbbe GPT', 'confrontate') o per una seconda opinione utile; riporta "
+                "sempre chi ha risposto. Se l'utente vuole invece che d'ora in poi risponda un altro modello, ricordagli che "
+                "puo' cambiarlo dal menu in alto nella chat.")
     from .tts import enabled as tts_enabled
     if tts_enabled():
         parts.append(

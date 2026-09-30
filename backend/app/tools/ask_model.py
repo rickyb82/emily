@@ -1,0 +1,128 @@
+"""Tool ask_model: il modello in uso delega una domanda a un altro provider/modello (seconda opinione, confronto,
+compito specifico) e ne riporta la risposta. Solo per chi puo' scegliere il provider (adulti)."""
+from __future__ import annotations
+
+import logging
+
+from sqlalchemy import select
+
+from ..config import get_settings
+from ..policy.permissions import log_usage
+from ..providers.registry import available_providers, get_provider
+from .registry import ToolContext, ToolResult, register
+
+log = logging.getLogger(__name__)
+settings = get_settings()
+
+ALIASES = {"claude": "anthropic", "anthropic": "anthropic", "gpt": "openai", "chatgpt": "openai", "openai": "openai",
+           "gemini": "gemini", "google": "gemini"}
+MAX_CONTEXT_MESSAGES = 12
+MAX_CONTEXT_CHARS = 12_000
+
+
+def _resolve(provider: str, model: str | None, allowed: list[str]) -> tuple[str, str]:
+    key = (provider or "").strip().lower()
+    pid = ALIASES.get(key)
+    if not pid:
+        # accetta anche un id di modello al posto del provider (es. "gpt-4.1", "gemini-2.5-pro", "claude-...")
+        for prefix, p in (("claude", "anthropic"), ("gpt", "openai"), ("o1", "openai"), ("o3", "openai"), ("o4", "openai"), ("gemini", "gemini")):
+            if key.startswith(prefix):
+                pid, model = p, model or key
+                break
+    if not pid:
+        raise ValueError(f"Provider '{provider}' sconosciuto: usa claude, gpt o gemini")
+    if pid not in allowed:
+        raise ValueError(f"Il provider {pid} non e' consentito per questo utente")
+    prov = get_provider(pid)
+    if prov.id != pid:
+        raise ValueError(f"Il provider {pid} non e' configurato (manca la chiave API)")
+    ids = {m["id"] for m in prov.models()}
+    if model:
+        m = model.strip().lower().replace(" ", "")
+        if ids and m not in ids:
+            # prova un match parziale (es. "sonnet" -> claude-sonnet-4-5)
+            cand = [i for i in sorted(ids) if m in i]
+            if not cand:
+                raise ValueError(f"Modello '{model}' non trovato per {pid}. Disponibili: {', '.join(sorted(ids)[:15])}")
+            m = cand[0]
+        model = m
+    return pid, model or prov.default_model
+
+
+@register(
+    "ask_model",
+    "Chiedi qualcosa a UN ALTRO modello/provider AI (Claude di Anthropic, GPT di OpenAI, Gemini di Google) e ricevi la sua "
+    "risposta testuale. Usalo quando l'utente chiede esplicitamente di coinvolgere, consultare o confrontare un altro "
+    "modello ('chiedi a Gemini', 'cosa ne pensa GPT', 'fai rispondere anche Claude', 'confronta le risposte'), oppure per "
+    "una seconda opinione su un punto delicato. Riporta la risposta all'utente indicando chiaramente quale modello l'ha "
+    "data; se l'utente vuole un confronto, aggiungi il tuo parere. Per default il modello riceve anche gli ultimi "
+    "messaggi della conversazione come contesto.",
+    {"type": "object",
+     "properties": {
+         "provider": {"type": "string", "description": "claude | gpt | gemini (oppure direttamente un id di modello)"},
+         "model": {"type": "string", "description": "Modello specifico (opzionale; default: quello predefinito del provider)"},
+         "prompt": {"type": "string", "description": "La domanda o il compito da sottoporre, completo e autonomo"},
+         "include_context": {"type": "boolean", "description": "Allega gli ultimi messaggi della chat come contesto (default true)"},
+     },
+     "required": ["provider", "prompt"]},
+    usage_kind="tool",
+)
+async def ask_model(args: dict, ctx: ToolContext) -> ToolResult:
+    prompt = str(args.get("prompt", "")).strip()
+    if not prompt:
+        return ToolResult("Prompt vuoto", is_error=True)
+    allowed = list(ctx.policy.get("allowed_providers") or [])
+    try:
+        pid, model = _resolve(str(args.get("provider", "")), args.get("model"), allowed)
+    except ValueError as e:
+        return ToolResult(str(e), is_error=True)
+    provider = get_provider(pid)
+
+    # contesto: ultimi messaggi testuali della conversazione (senza tool e senza il turno corrente in corso)
+    context = ""
+    if args.get("include_context", True) and ctx.conversation_id and ctx.db is not None:
+        from ..models import Message
+        rows = (await ctx.db.execute(select(Message).where(Message.conversation_id == ctx.conversation_id)
+                                     .order_by(Message.created_at.desc()).limit(MAX_CONTEXT_MESSAGES))).scalars().all()
+        lines = []
+        for m in reversed(rows):
+            if m.role not in ("user", "assistant"):
+                continue
+            txt = " ".join(b.get("text", "") for b in (m.content or []) if b.get("type") == "text").strip()
+            if txt:
+                lines.append(f"[{'Utente' if m.role == 'user' else 'Assistente'}] {txt}")
+        context = "\n".join(lines)[-MAX_CONTEXT_CHARS:]
+
+    system = ("Sei un assistente consultato da un altro assistente AI per conto di un utente. Rispondi in italiano, "
+              "in modo completo ma senza preamboli, direttamente al compito richiesto.")
+    user_text = prompt if not context else (f"Contesto della conversazione (per riferimento):\n{context}\n\n---\n"
+                                             f"Richiesta:\n{prompt}")
+    messages = [{"role": "user", "content": [{"type": "text", "text": user_text}]}]
+
+    text, usage = "", {}
+    try:
+        async for ev in provider.stream(model, system, messages, [], max_tokens=min(settings.max_output_tokens, 8192)):
+            if ev.type == "text_delta":
+                text += ev.text
+            elif ev.type == "usage":
+                usage = ev.usage or {}
+    except Exception as e:
+        log.exception("ask_model %s/%s", pid, model)
+        return ToolResult(f"Errore dal provider {provider.label} ({model}): {e}", is_error=True)
+    if usage:
+        await log_usage(ctx.db, ctx.user, "message", pid, model, int(usage.get("input_tokens", 0) or 0),
+                        int(usage.get("output_tokens", 0) or 0), detail="ask_model",
+                        cache_read_tokens=int(usage.get("cache_read_tokens", 0) or 0),
+                        cache_write_tokens=int(usage.get("cache_write_tokens", 0) or 0))
+    header = f"Risposta di {provider.label} ({model}):\n\n"
+    return ToolResult(header + (text.strip() or "(nessuna risposta)"))
+
+
+def describe_available(allowed: list[str]) -> str:
+    """Riga per il prompt di sistema: quali altri modelli si possono consultare con ask_model."""
+    parts = []
+    for p in available_providers():
+        if p["id"] in allowed and p["id"] != "mock":
+            ids = [m["id"] for m in p["models"]][:6]
+            parts.append(f"{p['label']} [{p['id']}] (default {p['default_model']}; altri: {', '.join(ids)})")
+    return "; ".join(parts)

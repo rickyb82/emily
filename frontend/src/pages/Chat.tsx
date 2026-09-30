@@ -7,7 +7,7 @@ import ShareDialog from '../components/ShareDialog'
 import ArtifactPanel, { type ArtifactData } from '../components/ArtifactPanel'
 
 interface ToolInfo { name: string; description: string; kind: string; group: string }
-const GROUP_LABEL: Record<string, string> = { web_search: '🔎 Ricerca web', generate_image: '🎨 Immagini', generate_video: '🎬 Video', read_document: '📄 Documenti', artifacts: '📦 Artifact', run_code: '⚙️ Esecuzione codice', mcp: '🔌 MCP' }
+const GROUP_LABEL: Record<string, string> = { web_search: '🔎 Ricerca web', generate_image: '🎨 Immagini', generate_video: '🎬 Video', read_document: '📄 Documenti', artifacts: '📦 Artifact', run_code: '⚙️ Esecuzione codice', mcp: '🔌 MCP', ask_model: '🤝 Altri modelli' }
 
 export default function Chat() {
   const { id } = useParams()

@@ -86,6 +86,9 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Consultare un altro modello dalla chat (`ask_model`)
+Gli adulti possono chiedere in linguaggio naturale di coinvolgere un altro provider ("chiedi a Gemini cosa ne pensa", "fai rispondere anche GPT e confronta"): il modello in uso chiama il tool `ask_model`, che passa la richiesta (con gli ultimi messaggi come contesto) all'altro provider e riporta la risposta indicando chi l'ha data. Il consumo viene registrato sul provider consultato. Il tool si disattiva per utente dalla pagina Famiglia; i bambini non lo hanno (il loro provider è fissato dal genitore). Per cambiare il modello che risponde d'ora in poi resta il menu in alto nella chat.
+
 ### Prompt caching (costi)
 Il prompt di sistema e i tool sono costruiti in modo da restare **identici** tra una richiesta e l'altra (data/ora ed estratti RAG vanno in una parte separata, dopo il punto di cache). Con Claude vengono inviati i `cache_control` espliciti (fine del system e ultimo messaggio utente: cache incrementale della conversazione, letture al 10% del prezzo); OpenAI e Gemini 2.5 mettono in cache automaticamente il prefisso identico (25–50%). Nella pagina **Costi** ogni provider mostra la quota di input servita dalla cache e il risparmio stimato; i token in cache sono conteggiati a parte nel log di utilizzo.
 

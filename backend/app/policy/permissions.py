@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AgeGroup, Role, UsageLog, User
 
-ALL_TOOLS = ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "mcp"]
+ALL_TOOLS = ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "mcp", "ask_model"]
 
 DEFAULTS: dict[str, dict] = {
     AgeGroup.young.value: {
