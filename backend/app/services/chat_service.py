@@ -183,6 +183,8 @@ def resolve_provider_model(user: User, policy: dict, provider_id: str | None, mo
         known = {m["id"] for m in provider.models()}
         return provider.id, (chosen if not known or chosen in known else provider.default_model)
     pid = provider_id or (conv.provider if conv else None)
+    if pid is None and router_enabled(policy):
+        pid = AUTO_ID   # nuova chat senza scelta esplicita: parte il router (locale quando basta, cloud quando serve)
     if pid == AUTO_ID:
         if router_enabled(policy):
             return AUTO_ID, AUTO_ID

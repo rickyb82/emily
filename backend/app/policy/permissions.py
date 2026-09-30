@@ -124,6 +124,9 @@ def effective_policy(user: User) -> dict:
     pol = dict(DEFAULTS[group])
     pol.update(user.policy or {})
     pol["age_group"] = group
+    if user.role != Role.child:
+        # gli adulti possono sempre usare il modello locale e il router Auto (anche con una policy salvata prima che esistessero)
+        pol["allowed_providers"] = list(dict.fromkeys(list(pol.get("allowed_providers", [])) + ["ollama", "auto"]))
     return pol
 
 

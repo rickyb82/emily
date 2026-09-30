@@ -70,7 +70,7 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
       {m.role === 'assistant' && !m.streaming && m.usage?.model && (
         <div className="route-badge" title={m.usage.route_reason ? `Router: ${m.usage.route_reason}` : ''}>
           {m.usage.provider === 'ollama' ? '🏠 locale' : '☁️ cloud'} · {m.usage.model}
-          {m.usage.routed && <> · scelto dal router</>}
+          {m.usage.routed && <> · router: {m.usage.route_reason || 'scelta automatica'}</>}
           {(m.usage.input_tokens || m.usage.output_tokens) ? <> · {(m.usage.input_tokens ?? 0) + (m.usage.cache_read_tokens ?? 0) + (m.usage.cache_write_tokens ?? 0)} → {m.usage.output_tokens ?? 0} token</> : null}
           {(m.usage.cache_read_tokens ?? 0) > 0 && <> ({Math.round(100 * m.usage.cache_read_tokens / Math.max(1, (m.usage.input_tokens ?? 0) + m.usage.cache_read_tokens + (m.usage.cache_write_tokens ?? 0)))}% da cache)</>}
         </div>

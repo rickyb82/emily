@@ -17,11 +17,11 @@ AUTO_ID = "auto"
 
 # segnali che richiedono tool o capacita' superiori: niente LLM, si va diretti al cloud
 CLOUD_HINTS = re.compile(
-    r"\b(cerca|ricerca|notizi|oggi|ieri|domani|meteo|prezz|quanto costa|ultim[ei]|aggiornat|sito|link|url|"
-    r"immagin|disegn|foto|illustra|video|"
-    r"codice|programm|script|funzione|bug|errore|debug|html|css|javascript|python|java|sql|api|app\b|gioco|"
-    r"grafico|tabella excel|csv|pdf|documento|file|allegat|"
-    r"artifact|pagina web|sito web|esegui|calcola precisamente|dimostra|analizza in dettaglio|"
+    r"(cerca(mi|lo|la)?\s+(su|in|nel|sul)\s+(web|internet|google|rete)|notizie|meteo|quanto costa|prezzo attuale|"
+    r"(genera|crea|fai|disegna|fammi|realizza)\w*\s+(un'?|una|la|le|delle?)?\s*(immagin|foto|illustrazion|disegn|video|logo)|"
+    r"\b(codice|script|programma\w*|html|css|javascript|typescript|python|bug|debug|refactor|compila|eseguil?o)\b|"
+    r"\b(pdf|documento allegato|allegat[oi]|questo file|analizza il file)\b|"
+    r"\b(artifact|pagina web|app web|webapp|gioco|videogioco|dashboard)\b|"
     r"chiedi a (claude|gpt|gemini)|cosa ne pensa (claude|gpt|gemini))", re.I)
 
 ROUTER_SYSTEM = """Sei un router. Decidi se una richiesta puo' essere gestita bene da un piccolo modello locale (8B) oppure
@@ -75,8 +75,9 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         return to_cloud("allegati presenti")
     if len(text) > 4000:
         return to_cloud("richiesta molto lunga")
-    if CLOUD_HINTS.search(text):
-        return to_cloud("richiede strumenti o capacita' avanzate")
+    m = CLOUD_HINTS.search(text)
+    if m:
+        return to_cloud(f"richiede strumenti/capacita' avanzate ('{m.group(0)[:30]}')")
 
     mode = (settings.router_mode or "balanced").lower()
     route, conf, reason = "local", 3, "classificazione non disponibile"
