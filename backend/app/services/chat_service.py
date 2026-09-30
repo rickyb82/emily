@@ -33,6 +33,7 @@ from ..tools.registry import ToolContext, all_tools, get_tool
 log = logging.getLogger(__name__)
 settings = get_settings()
 MAX_TOOL_ROUNDS = 8
+LOCAL_TOOLS = {"create_artifact", "update_artifact", "search_documents", "read_document", "ask_model"}
 INLINE_DOC_CHARS = settings.rag_inline_max_chars
 
 
@@ -276,8 +277,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 continue
         tools.append(t.spec)
 
-    if routed is not None and routed.local:
-        tools = []   # in locale niente tool: il router manda al cloud tutto cio' che li richiede
+    if provider.id == "ollama":
+        # Modelli locali (Qwen3 & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
+        # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
+        tools = [t for t in tools if t.name in LOCAL_TOOLS]
 
     # ricerca web nativa di Anthropic (solo con Claude, non in modalita' ricerca sicura per i bambini)
     if (provider.id == "anthropic" and str(settings.anthropic_native_search).lower() in ("1", "true", "yes")
