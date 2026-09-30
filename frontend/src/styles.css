@@ -95,6 +95,7 @@ code { font-size: 13px; }
 .conv-item.active, .conv-item:hover { background: var(--bg); }
 .conv-item .icon { opacity: 0; }
 .conv-item:hover .icon { opacity: 1; }
+.navlinks.bottom { border-top: 1px solid var(--border); padding-top: 8px; margin-top: -2px; }
 .userbox { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
 .userbox > div { flex: 1; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }

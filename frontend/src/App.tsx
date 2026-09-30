@@ -43,7 +43,7 @@ export default function App() {
         <Route path="/c/:id" element={<Chat />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<Projects />} />
-        <Route path="/settings" element={<Settings />} />
+        {me.user.role !== 'child' && <Route path="/settings" element={<Settings />} />}
         {me.user.role === 'admin' && <Route path="/admin/*" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

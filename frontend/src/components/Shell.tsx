@@ -56,8 +56,6 @@ export default function Shell({ children }: { children: ReactNode }) {
         <button className="primary wide" onClick={newChat}>＋ Nuova chat</button>
         <nav className="navlinks">
           <NavLink to="/projects" onClick={() => setOpen(false)}>📁 Progetti</NavLink>
-          <NavLink to="/settings" onClick={() => setOpen(false)}>⚙️ Impostazioni</NavLink>
-          {me?.user.role === 'admin' && <NavLink to="/admin" onClick={() => setOpen(false)}>👪 Famiglia</NavLink>}
         </nav>
         <div className="conv-list">
           {convs.map((c) => (
@@ -71,6 +69,12 @@ export default function Shell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </div>
+        {!isChild && (
+          <nav className="navlinks bottom">
+            <NavLink to="/settings" onClick={() => setOpen(false)}>⚙️ Impostazioni</NavLink>
+            {me?.user.role === 'admin' && <NavLink to="/admin" onClick={() => setOpen(false)}>👪 Famiglia</NavLink>}
+          </nav>
+        )}
         <div className="userbox">
           <span className="kid-avatar small">{me?.user.avatar}</span>
           <div>
