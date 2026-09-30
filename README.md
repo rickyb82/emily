@@ -86,6 +86,9 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Costi e budget
+**Famiglia → Costi** mostra per il mese corrente la spesa **stimata** per provider e per membro (log di utilizzo × listino prezzi modificabile), un **budget mensile** per provider con rimanente e barra, e, inserendo le chiavi *Admin* di Anthropic/OpenAI, la **spesa reale** letta dai rispettivi report di costo dell'organizzazione. Nessun provider espone il credito residuo a una chiave API normale; Gemini non offre report via API.
+
 ### Coding, artifact e anteprime
 - **Artifact** (`create_artifact` / `update_artifact`): pagine e app HTML/CSS/JS, SVG, diagrammi Mermaid, markdown e programmi completi vengono creati in un pannello laterale con schede *Anteprima* e *Codice*, versioni, modifica manuale, download e apertura in nuova scheda. L'anteprima gira in un `<iframe sandbox>` senza `allow-same-origin`, quindi il codice generato non può leggere cookie né chiamare le API di FamilAI; l'endpoint `/api/artifacts/{id}/raw` aggiunge una CSP `sandbox`.
 - **Esecuzione codice** (`run_code`): Python (numpy, pandas, matplotlib, pillow, sympy, scipy), JavaScript/TypeScript (Node 22), Java (JDK) e Bash girano nel servizio **`sandbox`** del compose: container separato, utente non root, filesystem read-only con tmpfs, `cap_drop: ALL`, limiti CPU/RAM/PID, timeout per esecuzione e **rete interna senza internet** (`sandbox_net: internal`). Output e file prodotti (grafici, CSV, immagini) tornano in chat come allegati. Il modello può passare file della chat/progetto alla sandbox (`file_ids`).

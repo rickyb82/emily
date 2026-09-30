@@ -38,6 +38,12 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "video_model": ("Modello video", False),
     "embedding_provider": ("Provider embedding (RAG)", False),
     "embedding_model": ("Modello embedding", False),
+    "pricing_json": ("Listino prezzi (JSON)", False),
+    "budget_anthropic": ("Budget mensile Anthropic (USD)", False),
+    "budget_openai": ("Budget mensile OpenAI (USD)", False),
+    "budget_gemini": ("Budget mensile Gemini (USD)", False),
+    "anthropic_admin_key": ("Chiave Admin Anthropic (spesa reale)", True),
+    "openai_admin_key": ("Chiave Admin OpenAI (spesa reale)", True),
 }
 
 _env_defaults: dict[str, str] = {k: getattr(settings, k) for k in MANAGED_KEYS}

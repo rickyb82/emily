@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
 import AdminMcp from './AdminMcp'
+import AdminCosts from './AdminCosts'
 
-type Tab = 'members' | 'providers' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp'
+type Tab = 'members' | 'providers' | 'costs' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp'
 const TOOLS = ['web_search', 'generate_image', 'generate_video', 'read_document', 'artifacts', 'run_code', 'mcp']
 const TOOL_IT: Record<string, string> = { web_search: 'Ricerca web', generate_image: 'Immagini', generate_video: 'Video', read_document: 'Documenti (lettura + ricerca)', artifacts: 'Artifact (pagine/app/codice con anteprima)', run_code: 'Esecuzione codice (sandbox)', mcp: 'Server MCP' }
 const PROVIDERS = ['anthropic', 'openai', 'gemini']
@@ -20,14 +21,15 @@ export default function Admin() {
     <div className="page stack">
       <h2>👪 Famiglia <small className="muted">FamilAI v{version}</small></h2>
       <div className="tabs">
-        {(['members', 'providers', 'supervision', 'usage', 'devices', 'audit', 'mcp'] as Tab[]).map((t) => (
+        {(['members', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp'] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-            {{ members: 'Membri', providers: 'Provider AI', supervision: 'Supervisione', usage: 'Utilizzo', devices: 'Dispositivi', audit: 'Eventi', mcp: 'MCP' }[t]}
+            {{ members: 'Membri', providers: 'Provider AI', costs: 'Costi', supervision: 'Supervisione', usage: 'Utilizzo', devices: 'Dispositivi', audit: 'Eventi', mcp: 'MCP' }[t]}
           </button>
         ))}
       </div>
       {tab === 'members' && <Members />}
       {tab === 'providers' && <AdminProviders />}
+      {tab === 'costs' && <AdminCosts />}
       {tab === 'supervision' && <Supervision />}
       {tab === 'usage' && <Usage />}
       {tab === 'devices' && <Devices />}

@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
 
+    # Costi e budget (pannello Costi)
+    pricing_json: str = ""            # override del listino prezzi (JSON), vedi services/costs.py
+    budget_anthropic: str = ""        # budget mensile in USD (vuoto = nessun budget)
+    budget_openai: str = ""
+    budget_gemini: str = ""
+    anthropic_admin_key: str = ""     # chiave Admin (sk-ant-admin…) per leggere la spesa reale
+    openai_admin_key: str = ""        # Admin API key OpenAI per leggere la spesa reale
+
     # Sandbox esecuzione codice (servizio separato nel compose; vuoto = esecuzione disabilitata)
     sandbox_url: str = ""
     sandbox_timeout: int = 60

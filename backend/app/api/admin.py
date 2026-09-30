@@ -368,3 +368,17 @@ async def providers_test(pid: str, ctx: AuthContext = Depends(require_admin)):
     if pid not in {c["id"] for c in PROVIDER_CARDS}:
         raise HTTPException(404)
     return await settings_store.test_provider(pid)
+
+
+# ---- costi e budget ----
+from ..services import costs as _costs  # noqa: E402
+
+
+@router.get("/costs")
+async def costs_report(ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Spesa stimata (dai log) e reale (se chiavi Admin), budget e rimanente per il mese corrente."""
+    st = await settings_store.describe(db)
+    rep = await _costs.full_report(db, ctx.user.family_id)
+    rep["settings"] = {k: st[k] for k in ("pricing_json", "budget_anthropic", "budget_openai", "budget_gemini",
+                                          "anthropic_admin_key", "openai_admin_key")}
+    return rep
