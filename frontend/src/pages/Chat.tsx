@@ -21,6 +21,7 @@ export default function Chat() {
   const [files, setFiles] = useState<FileOut[]>([])
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
+  const [gotText, setGotText] = useState(false)   // true appena arriva il primo token
   const [err, setErr] = useState('')
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set())
@@ -64,7 +65,7 @@ export default function Chat() {
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, status])
+  }, [messages, status, busy])
 
   useEffect(() => {
     const h = (e: Event) => {
@@ -103,6 +104,8 @@ export default function Chat() {
   async function runTurn(c: Conversation, action: 'messages' | 'regenerate', body: any) {
     setErr('')
     setBusy(true)
+    setGotText(false)
+    setStatus('')
     let current: Message | null = null
     abort.current = new AbortController()
     try {
@@ -120,8 +123,11 @@ export default function Chat() {
             setStatus(`↻ Rigenero con ${ev.model}…`)
           } else if (ev.type === 'user_message') {
             setMessages((m) => [...m, ev.message])
+          } else if (ev.type === 'status') {
+            setStatus(ev.text || '')
           } else if (ev.type === 'text_delta') {
             setStatus('')
+            setGotText(true)
             if (!current) {
               current = { id: 'tmp-' + Date.now(), role: 'assistant', author_id: null, content: [{ type: 'text', text: '' }], created_at: '', flagged: false, usage: {}, streaming: true }
               const cur = current
@@ -135,6 +141,7 @@ export default function Chat() {
             setStatus(`📚 Trovati ${ev.hits.length} passaggi in: ${names.join(', ')}`)
           } else if (ev.type === 'tool_start') {
             setStatus(`${toolLabel(ev.name)}…`)
+            setGotText(false)
             if (current) {
               const finished = { ...current, streaming: false }
               setMessages((m) => m.map((x) => (x.id === finished.id ? finished : x)))
@@ -166,6 +173,7 @@ export default function Chat() {
     } finally {
       setBusy(false)
       setStatus('')
+      setGotText(false)
     }
   }
 
@@ -257,7 +265,7 @@ export default function Chat() {
         {messages.map((m) => (
           <MessageView key={m.id} m={m} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
         ))}
-        {status && <div className="status">{status}</div>}
+        {busy && (!gotText || status) && <Working status={status} />}
         {err && <div className="error">{err}</div>}
         {!busy && canWrite && messages.some((m) => m.role === 'assistant') && (
           <div className="row" style={{ justifyContent: 'flex-start' }}>
@@ -320,6 +328,26 @@ export default function Chat() {
     {openArtifact && (
       <ArtifactPanel artifact={openArtifact} canEdit={canWrite} onClose={() => setOpenArtifact(null)} onChange={(a) => upsertArtifact(a)} />
     )}
+    </div>
+  )
+}
+
+
+/** Indicatore animato mostrato mentre il modello lavora: puntini, testo di stato e tempo trascorso. */
+function Working({ status }: { status: string }) {
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    const t0 = Date.now()
+    const t = setInterval(() => setSecs(Math.floor((Date.now() - t0) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const fallback = secs < 6 ? 'Sto pensando' : secs < 20 ? 'Ci sto lavorando, ancora un momento' : secs < 60 ? 'Sto preparando una risposta lunga' : 'Sto ancora lavorando, la connessione è attiva'
+  const label = status ? status.replace(/…+$/, '') : fallback
+  return (
+    <div className="working" role="status" aria-live="polite">
+      <span className="dots"><i /><i /><i /></span>
+      <span>{label}</span>
+      {secs >= 3 && <span className="muted small">{secs}s</span>}
     </div>
   )
 }

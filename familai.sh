@@ -82,6 +82,7 @@ case "${1:-}" in
     backup
     compose build --pull
     compose up -d --remove-orphans      # riavvia solo i servizi la cui immagine e' cambiata
+    compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true   # il Caddyfile e' montato: ricaricalo
     docker image prune -f >/dev/null
     echo ">> Aggiornato alla versione $(cat VERSION 2>/dev/null || echo ?). Stato:"; compose ps;;
   stop)    compose down;;

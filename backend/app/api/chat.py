@@ -107,15 +107,53 @@ async def delete_conversation(cid: str, ctx: AuthContext = Depends(require_auth)
     return {"status": "ok"}
 
 
+HEARTBEAT_SECONDS = 8
+
+
 def _stream(db, ctx, conv, text, file_ids, provider, model, tools):
+    """Incapsula run_turn in uno StreamingResponse SSE. Il turno gira in un task separato: se il modello resta
+    in silenzio (ragionamento, ricerca web, generazione lunga) ogni HEARTBEAT_SECONDS mandiamo comunque un
+    commento SSE, cosi' il browser e i proxy vedono la connessione viva e il client puo' mostrare l'attesa."""
+    import asyncio
+    import json
+
     async def gen():
+        q: asyncio.Queue = asyncio.Queue()
+        DONE = object()
+
+        async def pump():
+            try:
+                async for chunk in run_turn(db, ctx.user, conv, text, file_ids, provider, model, tools):
+                    await q.put(f"data: {chunk}\n\n")
+            except HTTPException as e:
+                await q.put(f"data: {json.dumps({'type': 'error', 'error': e.detail, 'status': e.status_code})}\n\n")
+                await q.put(f"data: {json.dumps({'type': 'done'})}\n\n")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # pragma: no cover - rete di sicurezza
+                await q.put(f"data: {json.dumps({'type': 'error', 'error': f'Errore interno: {e}'})}\n\n")
+                await q.put(f"data: {json.dumps({'type': 'done'})}\n\n")
+            finally:
+                await q.put(DONE)
+
+        task = asyncio.create_task(pump())
         try:
-            async for chunk in run_turn(db, ctx.user, conv, text, file_ids, provider, model, tools):
-                yield f"data: {chunk}\n\n"
-        except HTTPException as e:
-            import json
-            yield f"data: {json.dumps({'type': 'error', 'error': e.detail, 'status': e.status_code})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            while True:
+                try:
+                    item = await asyncio.wait_for(q.get(), timeout=HEARTBEAT_SECONDS)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
+                if item is DONE:
+                    break
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

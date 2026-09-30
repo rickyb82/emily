@@ -258,6 +258,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     for _round in range(MAX_TOOL_ROUNDS + 1):
         text_acc = ""
         tool_uses: list[dict] = []
+        yield sse({"type": "status", "text": "Sto pensando…" if _round == 0 else "Sto elaborando i risultati…"})
         try:
             async for ev in provider.stream(model, system, history, tools):
                 if ev.type == "text_delta":
