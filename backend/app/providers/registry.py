@@ -30,6 +30,13 @@ def reload_providers() -> None:
     _providers.cache_clear()
 
 
+async def refresh_models() -> None:
+    """Chiede a ogni provider la lista aggiornata dei modelli (chiamato all'avvio e dopo un cambio chiavi)."""
+    import asyncio
+
+    await asyncio.gather(*(p.refresh_models() for p in _providers().values()), return_exceptions=True)
+
+
 def get_provider(pid: str | None) -> BaseProvider:
     provs = _providers()
     if pid and pid in provs:

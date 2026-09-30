@@ -118,12 +118,18 @@ def resolve_provider_model(user: User, policy: dict, provider_id: str | None, mo
         if pid not in policy["allowed_providers"]:
             pid = next((p for p in policy["allowed_providers"] if p in {x["id"] for x in available_providers()}), None)
         provider = get_provider(pid)
-        return provider.id, policy.get("model") or provider.default_model
+        chosen = policy.get("model") or provider.default_model
+        known = {m["id"] for m in provider.models()}
+        return provider.id, (chosen if not known or chosen in known else provider.default_model)
     pid = provider_id or (conv.provider if conv else None)
     if pid and pid not in policy["allowed_providers"] and pid != "mock":
         raise HTTPException(403, "Provider non consentito per questo utente")
     provider = get_provider(pid)
-    return provider.id, model or (conv.model if conv and conv.provider == provider.id else "") or provider.default_model
+    chosen = model or (conv.model if conv and conv.provider == provider.id else "") or provider.default_model
+    known = {m["id"] for m in provider.models()}
+    if known and chosen not in known:
+        chosen = provider.default_model   # es. modello ritirato dal provider
+    return provider.id, chosen
 
 
 async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str | None, file_ids: list[str],

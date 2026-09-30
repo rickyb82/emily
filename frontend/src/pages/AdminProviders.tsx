@@ -76,6 +76,7 @@ export default function AdminProviders() {
       {st.mock_active && <div className="error">Nessun provider AI configurato: è attivo solo il provider di prova "mock".</div>}
       {msg && <div className="ok">{msg}</div>}
       {err && <div className="error">{err}</div>}
+      <div><button className="ghost" disabled={busy !== ''} onClick={async () => { setBusy('save'); try { setSt(await put<Status>('/admin/providers', { values: {} })); setMsg('Elenco modelli aggiornato dai provider') } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>🔄 Aggiorna elenco modelli</button> <small className="muted">I modelli nei menu vengono letti direttamente dalle API dei provider.</small></div>
 
       {st.providers.map((c) => {
         const t = tests[c.id]

@@ -10,13 +10,18 @@ class AnthropicProvider(BaseProvider):
     id = "anthropic"
     label = "Claude (Anthropic)"
 
-    def models(self) -> list[dict]:
-        ids = [self.default_model, "claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"]
-        seen, out = set(), []
-        for m in ids:
-            if m not in seen:
-                seen.add(m)
-                out.append({"id": m, "label": m})
+    fallback_models = ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"]
+
+    async def discover_models(self) -> list[dict]:
+        from anthropic import AsyncAnthropic
+
+        client = AsyncAnthropic(api_key=self.api_key)
+        out = []
+        async for m in client.models.list(limit=100):
+            out.append({"id": m.id, "label": getattr(m, "display_name", None) or m.id})
+        # ordina: sonnet, opus, haiku, poi il resto; piu' recenti prima
+        rank = lambda i: (0 if "sonnet" in i else 1 if "opus" in i else 2 if "haiku" in i else 3)
+        out.sort(key=lambda m: (rank(m["id"]), m["id"]))
         return out
 
     @staticmethod

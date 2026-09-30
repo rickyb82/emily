@@ -31,13 +31,22 @@ class GeminiProvider(BaseProvider):
     id = "gemini"
     label = "Gemini (Google)"
 
-    def models(self) -> list[dict]:
-        ids = [self.default_model, "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
-        seen, out = set(), []
-        for m in ids:
-            if m not in seen:
-                seen.add(m)
-                out.append({"id": m, "label": m})
+    fallback_models = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+
+    async def discover_models(self) -> list[dict]:
+        from google import genai
+
+        client = genai.Client(api_key=self.api_key)
+        out = []
+        async for m in await client.aio.models.list():
+            name = (m.name or "").removeprefix("models/")
+            actions = getattr(m, "supported_actions", None) or []
+            if not name.startswith("gemini-") or (actions and "generateContent" not in actions):
+                continue
+            if any(k in name for k in ("embedding", "tts", "image", "audio", "live", "native")):
+                continue
+            out.append({"id": name, "label": getattr(m, "display_name", None) or name})
+        out.sort(key=lambda m: (m["id"] != self.default_model, "flash" not in m["id"], m["id"]))
         return out
 
     @staticmethod

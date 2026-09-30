@@ -78,9 +78,10 @@ async def apply(db: AsyncSession) -> None:
     overrides = await load_overrides(db)
     for k in MANAGED_KEYS:
         setattr(settings, k, overrides.get(k) or _env_defaults[k])
-    from ..providers.registry import reload_providers
+    from ..providers.registry import refresh_models, reload_providers
 
     reload_providers()
+    await refresh_models()
 
 
 async def set_value(db: AsyncSession, key: str, value: str, user_id: str | None) -> None:

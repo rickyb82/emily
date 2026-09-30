@@ -10,14 +10,21 @@ class OpenAIProvider(BaseProvider):
     id = "openai"
     label = "ChatGPT (OpenAI)"
 
-    def models(self) -> list[dict]:
-        ids = [self.default_model, "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o4-mini"]
-        seen, out = set(), []
-        for m in ids:
-            if m not in seen:
-                seen.add(m)
-                out.append({"id": m, "label": m})
-        return out
+    fallback_models = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o4-mini"]
+
+    async def discover_models(self) -> list[dict]:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=self.api_key)
+        page = await client.models.list()
+        skip = ("realtime", "audio", "tts", "transcribe", "whisper", "embedding", "image", "dall-e", "moderation",
+                "instruct", "search", "davinci", "babbage", "codex", "computer-use", "sora")
+        ids = sorted({m.id for m in page.data
+                      if (m.id.startswith("gpt-") or m.id.startswith("o") and m.id[1:2].isdigit() or m.id.startswith("chatgpt-"))
+                      and not any(k in m.id for k in skip)}, reverse=True)
+        # metti prima i modelli "generici" (senza data) e il default
+        ids.sort(key=lambda i: (i != self.default_model, any(ch.isdigit() for ch in i.split("-")[-1]) and len(i.split("-")[-1]) >= 4, i))
+        return [{"id": i, "label": i} for i in ids]
 
     @staticmethod
     def _convert(system: str, messages: list[dict]) -> list[dict]:
