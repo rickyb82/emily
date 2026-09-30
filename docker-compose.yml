@@ -77,11 +77,6 @@ services:
       - backend
       - frontend
 
-networks:
-  default:
-  sandbox_net:
-    internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
-
   # Modello locale (opzionale, per la Ubuntu/Linux): attiva con COMPOSE_PROFILES=ollama nel .env e OLLAMA_URL=http://ollama:11434.
   # Sul Mac NON usarlo: Docker non vede la GPU; installa Ollama nativo e usa OLLAMA_URL=http://host.docker.internal:11434.
   ollama:
@@ -95,6 +90,11 @@ networks:
     #   resources:
     #     reservations:
     #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+networks:
+  default:
+  sandbox_net:
+    internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
 
 volumes:
   ollama_models:
