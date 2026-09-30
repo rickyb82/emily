@@ -7,6 +7,7 @@ interface Prov {
   stats: { messages?: number; input_tokens?: number; output_tokens?: number; images?: number; videos?: number; searches?: number; cache_read_tokens?: number; cache_write_tokens?: number; cache_saved?: number }
 }
 interface Report {
+  local?: { configured: boolean; model: string; messages: number; input_tokens: number; output_tokens: number; cloud_messages: number; avoided_usd: number; reference: string }
   since: string; providers: Prov[]; users: { name: string; cost: number; messages: number; images: number; videos: number; tokens: number }[]
   pricing: Record<string, any>; settings: Record<string, { value: string; source: string; configured: boolean; secret: boolean }>
 }
@@ -52,6 +53,17 @@ export default function AdminCosts() {
       {err && <div className="error">{err}</div>}
 
       <div className="grid3">
+        {rep.local?.configured && (
+          <section className="card stack">
+            <h3 style={{ margin: 0 }}>🏠 Modello locale (Ollama)</h3>
+            <small className="muted">{rep.local.model} · gratis, i dati restano in casa</small>
+            <div><small className="muted">Token elaborati in locale</small><div style={{ fontSize: 22, fontWeight: 600 }}>{(rep.local.input_tokens + rep.local.output_tokens).toLocaleString()}</div>
+              <small className="muted">{rep.local.input_tokens.toLocaleString()} in ingresso · {rep.local.output_tokens.toLocaleString()} generati</small></div>
+            <div><small className="muted">Messaggi</small><div><b>{rep.local.messages}</b> in locale · {rep.local.cloud_messages} nel cloud
+              {rep.local.messages + rep.local.cloud_messages > 0 && <> ({Math.round(100 * rep.local.messages / (rep.local.messages + rep.local.cloud_messages))}% locale)</>}</div></div>
+            <div><small className="muted">Costo evitato (stima, come se fosse {rep.local.reference})</small><div style={{ fontSize: 22, fontWeight: 600, color: 'var(--ok)' }}>{usd(rep.local.avoided_usd)}</div></div>
+          </section>
+        )}
         {rep.providers.map((p) => (
           <section key={p.provider} className="card stack" style={{ opacity: p.configured ? 1 : 0.55 }}>
             <h3 style={{ margin: 0 }}>{LABEL[p.provider]}</h3>

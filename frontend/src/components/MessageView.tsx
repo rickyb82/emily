@@ -67,9 +67,12 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
         <div key={t.id} className="tool-chip">{toolLabel(t.name)}: <code>{JSON.stringify(t.input).slice(0, 120)}</code></div>
       ))}
       {m.flagged && <div className="flag">⚑ segnalato dal filtro contenuti</div>}
-      {m.role === 'assistant' && m.usage?.routed && (
-        <div className="route-badge" title={m.usage.route_reason || ''}>
-          {m.usage.routed === 'local' ? `🏠 risposto in locale (${m.usage.model})` : `☁️ inoltrato a ${m.usage.provider} (${m.usage.model})`}
+      {m.role === 'assistant' && !m.streaming && m.usage?.model && (
+        <div className="route-badge" title={m.usage.route_reason ? `Router: ${m.usage.route_reason}` : ''}>
+          {m.usage.provider === 'ollama' ? '🏠 locale' : '☁️ cloud'} · {m.usage.model}
+          {m.usage.routed && <> · scelto dal router</>}
+          {(m.usage.input_tokens || m.usage.output_tokens) ? <> · {(m.usage.input_tokens ?? 0) + (m.usage.cache_read_tokens ?? 0) + (m.usage.cache_write_tokens ?? 0)} → {m.usage.output_tokens ?? 0} token</> : null}
+          {(m.usage.cache_read_tokens ?? 0) > 0 && <> ({Math.round(100 * m.usage.cache_read_tokens / Math.max(1, (m.usage.input_tokens ?? 0) + m.usage.cache_read_tokens + (m.usage.cache_write_tokens ?? 0)))}% da cache)</>}
         </div>
       )}
       {m.role === 'assistant' && !m.streaming && text.trim() && <SpeakButton text={text} />}

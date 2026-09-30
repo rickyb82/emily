@@ -210,4 +210,16 @@ async def full_report(db: AsyncSession, family_id: str) -> dict:
                     "remaining_usd": round(b - used, 4) if b > 0 else None,
                     "percent": round(min(100.0, used / b * 100), 1) if b > 0 else None,
                     "stats": local["providers"].get(prov, {})})
-    return {"since": since.isoformat(), "providers": out, "users": local["users"], "pricing": pricing_table()}
+    # modello locale: nessun costo, ma mostriamo quanto lavoro ha assorbito e cosa sarebbe costato nel cloud
+    lo = local["providers"].get("ollama", {})
+    local_tokens_in = lo.get("input_tokens", 0)
+    local_tokens_out = lo.get("output_tokens", 0)
+    cloud_msgs = sum(local["providers"].get(p, {}).get("messages", 0) for p in ("anthropic", "openai", "gemini"))
+    ref_prov = settings.router_cloud_provider if settings.router_cloud_provider in ("anthropic", "openai", "gemini") else \
+        next((p for p in ("anthropic", "openai", "gemini") if getattr(settings, f"{p}_api_key", "")), "anthropic")
+    ref_model = getattr(settings, f"{ref_prov}_default_model", "")
+    avoided = estimate_cost(pricing_table(), ref_prov, ref_model, "message", local_tokens_in, local_tokens_out) if lo else 0.0
+    local_info = {"configured": bool(settings.ollama_url), "model": settings.ollama_default_model,
+                  "messages": lo.get("messages", 0), "input_tokens": local_tokens_in, "output_tokens": local_tokens_out,
+                  "cloud_messages": cloud_msgs, "avoided_usd": round(avoided, 4), "reference": f"{ref_prov} / {ref_model}"}
+    return {"since": since.isoformat(), "providers": out, "users": local["users"], "pricing": pricing_table(), "local": local_info}
