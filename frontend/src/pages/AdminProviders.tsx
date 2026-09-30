@@ -17,6 +17,8 @@ export default function AdminProviders() {
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
+  const [mailTo, setMailTo] = useState('')
+  const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = () => get<Status>('/admin/providers').then(setSt)
   useEffect(() => {
@@ -139,8 +141,12 @@ export default function AdminProviders() {
         </div>
         <div className="row wrap">
           <button disabled={busy !== ''} onClick={() => save(['smtp_host', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'email_mfa_fallback'])}>Salva</button>
-          <button className="ghost" disabled={busy !== '' || !s.smtp_host.configured} onClick={async () => { setBusy('mail'); setErr(''); try { const r = await post('/admin/email/test'); setMsg(`Email di prova inviata a ${r.to}`) } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>{busy === 'mail' ? 'Invio…' : '✉️ Invia email di prova a me'}</button>
+          <input style={{ width: 260 }} type="email" placeholder="destinatario di prova (default: la tua email)" value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
+          <button className="ghost" disabled={busy !== '' || !s.smtp_host.configured || !s.smtp_from.configured} title={!s.smtp_host.configured || !s.smtp_from.configured ? 'Prima compila Server e Mittente e premi Salva' : ''}
+            onClick={async () => { setBusy('mail'); setMailResult(null); try { const r = await post('/admin/email/test', { to: mailTo || undefined }); setMailResult({ ok: true, text: `Email inviata a ${r.to}: controlla la casella (anche lo spam).` }) } catch (e: any) { setMailResult({ ok: false, text: e.message }) } finally { setBusy('') } }}>{busy === 'mail' ? 'Invio…' : '✉️ Invia email di prova'}</button>
         </div>
+        {mailResult && <div className={mailResult.ok ? 'ok' : 'error'}>{mailResult.text}</div>}
+        {(!s.smtp_host.configured || !s.smtp_from.configured) && <small className="muted">Il pulsante si attiva dopo aver salvato Server SMTP e Mittente.</small>}
       </section>
 
       <section className="card stack">

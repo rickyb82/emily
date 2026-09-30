@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db import get_db
 from ..models import AgeGroup, AuditLog, Conversation, Message, Role, Session, TrustedDevice, UsageLog, User
 from ..policy.permissions import DEFAULTS, effective_policy
@@ -16,6 +17,7 @@ from ..security.sessions import AuthContext, require_admin
 from ..tools.mcp_client import mcp_manager
 from .auth import audit, user_out
 
+settings = get_settings()
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -91,18 +93,34 @@ async def resend_invite(uid: str, request: Request, ctx: AuthContext = Depends(r
     return {"status": "ok"}
 
 
+class EmailTestIn(BaseModel):
+    to: str | None = None
+
+
 @router.post("/email/test")
-async def email_test(request: Request, ctx: AuthContext = Depends(require_admin)):
+async def email_test(body: EmailTestIn, request: Request, ctx: AuthContext = Depends(require_admin)):
+    import smtplib
+
     from ..services import mailer
 
-    if not ctx.user.email:
-        raise HTTPException(400, "Il tuo utente non ha un'email")
+    to = (body.to or ctx.user.email or "").strip()
+    if "@" not in to:
+        raise HTTPException(400, "Indica un indirizzo destinatario valido")
+    if not mailer.email_enabled():
+        raise HTTPException(400, "Configura almeno Server SMTP e Mittente, poi Salva")
     try:
-        await mailer.send_email(ctx.user.email, "FamilAI: email di prova",
-                                "Se leggi questo messaggio la configurazione SMTP funziona. 🎉")
+        await mailer.send_email(to, "FamilAI: email di prova", "Se leggi questo messaggio la configurazione SMTP funziona. 🎉")
+    except smtplib.SMTPAuthenticationError as e:
+        raise HTTPException(502, "Credenziali rifiutate dal server SMTP. Con Gmail serve una 'password per le app' "
+                                 f"(non quella normale) e la verifica in due passaggi attiva. Dettaglio: {e.smtp_code} {e.smtp_error!r}"[:400])
+    except smtplib.SMTPRecipientsRefused as e:
+        raise HTTPException(502, f"Destinatario rifiutato: {e.recipients}"[:400])
+    except (smtplib.SMTPConnectError, ConnectionRefusedError, TimeoutError, OSError) as e:
+        raise HTTPException(502, f"Impossibile connettersi a {settings.smtp_host}:{settings.smtp_port or 'default'} ({e}). "
+                                 "Controlla server, porta e sicurezza (Gmail: smtp.gmail.com, 587, STARTTLS).")
     except Exception as e:
-        raise HTTPException(502, f"Invio fallito: {type(e).__name__}: {e}")
-    return {"status": "ok", "to": ctx.user.email}
+        raise HTTPException(502, f"Invio fallito: {type(e).__name__}: {e}"[:400])
+    return {"status": "ok", "to": to}
 
 
 @router.patch("/members/{uid}", response_model=UserOut)
