@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
+import { useAuth } from '../lib/auth'
 import AdminMcp from './AdminMcp'
 import AdminCosts from './AdminCosts'
 
@@ -42,6 +43,7 @@ export default function Admin() {
 
 // ---------------- Membri + policy ----------------
 function Members() {
+  const { me } = useAuth()
   const [members, setMembers] = useState<User[]>([])
   const [defaults, setDefaults] = useState<Record<string, any>>({})
   const [edit, setEdit] = useState<User | null>(null)
@@ -68,6 +70,8 @@ function Members() {
               <td className="row wrap">
                 <button className="ghost" onClick={() => setEdit(m)}>Modifica</button>
                 {m.role !== 'child' && m.email && <button className="ghost" title="Invia l'email con il link per impostare la password" onClick={() => post(`/admin/members/${m.id}/invite`).then(() => alert(`Invito inviato a ${m.email}`)).catch((e) => setErr(e.message))}>✉️ Invito</button>}
+                <button className="ghost danger" disabled={m.id === me?.user.id} title={m.id === me?.user.id ? "Non puoi eliminare l'account con cui sei collegato" : 'Elimina definitivamente il membro e tutte le sue chat, file e progetti'}
+                  onClick={() => { if (confirm(`Eliminare definitivamente ${m.display_name}? Verranno cancellate anche le sue chat, i file e i progetti.`)) del(`/admin/members/${m.id}`).then(load).catch((e) => setErr(e.message)) }}>🗑</button>
               </td>
             </tr>
           ))}
@@ -336,5 +340,3 @@ function Audit() {
   )
 }
 
-// evita warning "del non usato" se in futuro serve
-void del

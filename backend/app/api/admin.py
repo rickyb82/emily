@@ -152,13 +152,52 @@ async def update_member(uid: str, body: UpdateMemberRequest, request: Request,
 
 @router.delete("/members/{uid}")
 async def delete_member(uid: str, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Elimina definitivamente un membro e tutto cio' che gli appartiene. Non si puo' eliminare se stessi
+    ne' l'ultimo amministratore."""
+    from pathlib import Path
+
+    from ..models import Artifact, Chunk, EmailToken, FileAsset, Project, Share, WebAuthnCredential
+
     u = await db.get(User, uid)
-    if not u or u.family_id != ctx.user.family_id or u.id == ctx.user.id:
-        raise HTTPException(400)
-    u.is_active = False
+    if not u or u.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    if u.id == ctx.user.id:
+        raise HTTPException(400, "Non puoi eliminare l'account con cui sei collegato")
+    if u.role == Role.admin:
+        admins = (await db.execute(select(func.count()).select_from(User).where(
+            User.family_id == ctx.user.family_id, User.role == Role.admin, User.is_active == True))).scalar_one()  # noqa: E712
+        if admins <= 1:
+            raise HTTPException(400, "Non puoi eliminare l'ultimo amministratore")
+
+    # file su disco e record collegati
+    files = (await db.execute(select(FileAsset).where(FileAsset.owner_id == u.id))).scalars().all()
+    for f in files:
+        Path(f.path).unlink(missing_ok=True)
+        await db.execute(delete(Chunk).where(Chunk.file_id == f.id))
+        await db.delete(f)
+    conv_ids = (await db.execute(select(Conversation.id).where(Conversation.owner_id == u.id))).scalars().all()
+    if conv_ids:
+        await db.execute(delete(Artifact).where(Artifact.conversation_id.in_(conv_ids)))
+        await db.execute(delete(Message).where(Message.conversation_id.in_(conv_ids)))
+        await db.execute(delete(FileAsset).where(FileAsset.conversation_id.in_(conv_ids)))
+        await db.execute(delete(Share).where(Share.resource_type == "conversation", Share.resource_id.in_(conv_ids)))
+        await db.execute(delete(Conversation).where(Conversation.id.in_(conv_ids)))
+    proj_ids = (await db.execute(select(Project.id).where(Project.owner_id == u.id))).scalars().all()
+    if proj_ids:
+        await db.execute(delete(Share).where(Share.resource_type == "project", Share.resource_id.in_(proj_ids)))
+        await db.execute(delete(Project).where(Project.id.in_(proj_ids)))
+    await db.execute(delete(Share).where((Share.owner_id == u.id) | (Share.target_user_id == u.id)))
     await db.execute(delete(Session).where(Session.user_id == u.id))
+    await db.execute(delete(WebAuthnCredential).where(WebAuthnCredential.user_id == u.id))
+    await db.execute(delete(EmailToken).where(EmailToken.user_id == u.id))
+    await db.execute(delete(UsageLog).where(UsageLog.user_id == u.id))
+    # messaggi scritti da lui in chat altrui: restano, senza autore
+    await db.execute(Message.__table__.update().where(Message.author_id == u.id).values(author_id=None))
+    await db.execute(TrustedDevice.__table__.update().where(TrustedDevice.approved_by == u.id).values(approved_by=ctx.user.id))
+    name = u.display_name
+    await db.delete(u)
     await db.commit()
-    await audit(db, "member_disabled", request, ctx.user, u.username)
+    await audit(db, "member_deleted", request, ctx.user, f"{name} ({uid})")
     return {"status": "ok"}
 
 
