@@ -116,6 +116,7 @@ class Session(Base):
     user_agent: Mapped[str] = mapped_column(String(300), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
     device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    auth_method: Mapped[str] = mapped_column(String(12), default="password")  # password | google | pin
 
 
 class TrustedDevice(Base):

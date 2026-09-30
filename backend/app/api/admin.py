@@ -379,7 +379,7 @@ PROVIDER_CARDS = [
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
 OTHER_SETTINGS = ["web_search_provider", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
-                  "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback"]
+                  "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret"]
 
 
 class SettingsUpdate(BaseModel):
@@ -394,8 +394,10 @@ async def providers_status(ctx: AuthContext = Depends(require_admin), db: AsyncS
     for c in PROVIDER_CARDS:
         cards.append({**c, "key_state": st[c["key"]], "model_state": st[c["model_key"]] if c["model_key"] else None,
                       "active": c["id"] in active, "models": active.get(c["id"], {}).get("models", [])})
+    from .google_auth import redirect_uri
+
     return {"providers": cards, "settings": {k: st[k] for k in OTHER_SETTINGS},
-            "mock_active": "mock" in active}
+            "mock_active": "mock" in active, "google_redirect_uri": redirect_uri()}
 
 
 @router.put("/providers")

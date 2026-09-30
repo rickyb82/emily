@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     smtp_security: str = "starttls"   # starttls | ssl | none
     email_mfa_fallback: str = "true"  # consente il codice via email al posto della passkey al login
 
+    # Accesso con Google (OAuth client 'Web application' su console.cloud.google.com)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # Costi e budget (pannello Costi)
     pricing_json: str = ""            # override del listino prezzi (JSON), vedi services/costs.py
     budget_anthropic: str = ""        # budget mensile in USD (vuoto = nessun budget)

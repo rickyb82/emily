@@ -92,6 +92,9 @@ Configura l'SMTP in **Famiglia → Provider AI → Email** (pulsante "Preimposta
 - al login compare **"Password dimenticata?"**: codice a 6 cifre via email (10 min, 5 tentativi) e nuova password;
 - se `EMAIL_MFA_FALLBACK=true`, al passo passkey si può chiedere **un codice via email** come secondo fattore alternativo (comodo contro i blocchi, leggermente meno sicuro della sola passkey: disattivabile dal pannello).
 
+### Accesso con Google
+In **Famiglia → Provider AI → Accesso con Google** inserisci Client ID e secret di un client OAuth "Applicazione web" creato su console.cloud.google.com (API e servizi → Credenziali), con URI di reindirizzamento `https://<PUBLIC_HOST>/api/auth/google/callback` (in dev `http://localhost:8080/api/auth/google/callback`). Sulla schermata di login compare "Accedi con Google": entra chi ha un account Google con la **stessa email** di un membro adulto creato dall'amministratore (nessuna auto-registrazione). L'accesso Google vale come secondo fattore, quindi non richiede la passkey. È del tutto separato dall'account Gmail usato per l'SMTP.
+
 ### Costi e budget
 **Famiglia → Costi** mostra per il mese corrente la spesa **stimata** per provider e per membro (log di utilizzo × listino prezzi modificabile), un **budget mensile** per provider con rimanente e barra, e, inserendo le chiavi *Admin* di Anthropic/OpenAI, la **spesa reale** letta dai rispettivi report di costo dell'organizzazione. Nessun provider espone il credito residuo a una chiave API normale; Gemini non offre report via API.
 

@@ -46,6 +46,8 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "smtp_from_name": ("Nome mittente", False),
     "smtp_security": ("Sicurezza SMTP (starttls/ssl/none)", False),
     "email_mfa_fallback": ("Codice email al posto della passkey", False),
+    "google_client_id": ("Google OAuth Client ID", False),
+    "google_client_secret": ("Google OAuth Client secret", True),
     "pricing_json": ("Listino prezzi (JSON)", False),
     "budget_anthropic": ("Budget mensile Anthropic (USD)", False),
     "budget_openai": ("Budget mensile OpenAI (USD)", False),

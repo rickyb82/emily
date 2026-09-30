@@ -6,7 +6,7 @@ interface Card {
   id: string; label: string; key: string; model_key: string | null; hint: string; testable: boolean
   key_state: KeyState; model_state: KeyState | null; active: boolean; models: { id: string; label: string }[]
 }
-interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean }
+interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; google_redirect_uri: string }
 
 const SOURCE_IT = { admin: 'impostata dal pannello', env: 'dal file .env', none: 'non configurata' }
 
@@ -141,6 +141,16 @@ export default function AdminProviders() {
           <button disabled={busy !== ''} onClick={() => save(['smtp_host', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'email_mfa_fallback'])}>Salva</button>
           <button className="ghost" disabled={busy !== '' || !s.smtp_host.configured} onClick={async () => { setBusy('mail'); setErr(''); try { const r = await post('/admin/email/test'); setMsg(`Email di prova inviata a ${r.to}`) } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>{busy === 'mail' ? 'Invio…' : '✉️ Invia email di prova a me'}</button>
         </div>
+      </section>
+
+      <section className="card stack">
+        <h3 style={{ margin: 0 }}>🔑 Accesso con Google</h3>
+        <p className="muted small">Permette ai membri adulti di entrare con il proprio account Google (l'email Google deve coincidere con quella del membro). È indipendente dall'account Gmail usato per l'SMTP. Crea un client OAuth "Applicazione web" su <b>console.cloud.google.com → API e servizi → Credenziali</b> e inserisci come URI di reindirizzamento autorizzato: <code>{st.google_redirect_uri}</code></p>
+        <div className="grid2">
+          <label>Client ID <small className="muted">({s.google_client_id.value || 'non impostato'})</small><input value={draft.google_client_id ?? ''} placeholder={s.google_client_id.value || '…apps.googleusercontent.com'} onChange={(e) => setDraft({ ...draft, google_client_id: e.target.value })} /></label>
+          <label>Client secret <small className="muted">({s.google_client_secret.configured ? 'impostato' : 'non impostato'})</small><input type="password" autoComplete="off" value={draft.google_client_secret ?? ''} placeholder="GOCSPX-…" onChange={(e) => setDraft({ ...draft, google_client_secret: e.target.value })} /></label>
+        </div>
+        <div><button disabled={busy !== ''} onClick={() => save(['google_client_id', 'google_client_secret'])}>Salva</button></div>
       </section>
 
       <section className="card stack">

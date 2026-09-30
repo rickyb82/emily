@@ -57,11 +57,12 @@ def _set_cookie(response: Response, name: str, value: str, max_age: int) -> None
 
 
 async def create_session(
-    db: AsyncSession, response: Response, user: User, request: Request, mfa_verified: bool
+    db: AsyncSession, response: Response, user: User, request: Request, mfa_verified: bool, auth_method: str = "password"
 ) -> Session:
     hours = settings.session_hours_child if user.role == Role.child else settings.session_hours_adult
     sess = Session(
         user_id=user.id,
+        auth_method=auth_method,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=hours),
         mfa_verified=mfa_verified,
         user_agent=request.headers.get("user-agent", "")[:300],
@@ -136,6 +137,9 @@ async def require_auth(request: Request, db: AsyncSession = Depends(get_db)) -> 
     _csrf_check(request)
     if ctx.user.role != Role.child and not ctx.session.mfa_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})
+    if ctx.user.role != Role.child and settings.require_mfa_for_adults and ctx.session.auth_method != "google":
+        if not await user_has_passkey(db, ctx.user):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Registra una passkey prima di continuare", headers={"X-MFA": "enroll"})
     return ctx
 
 
@@ -145,6 +149,15 @@ async def require_pre_mfa(request: Request, db: AsyncSession = Depends(get_db)) 
     if not ctx:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Non autenticato")
     _csrf_check(request)
+    return ctx
+
+
+async def require_adult_for_enrollment(ctx: AuthContext = Depends(require_pre_mfa)) -> AuthContext:
+    """Adulto con password (e MFA) verificate ma senza obbligo di passkey: serve per registrare la passkey stessa."""
+    if ctx.user.role == Role.child:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Funzione riservata agli adulti")
+    if not ctx.session.mfa_verified:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})
     return ctx
 
 
@@ -158,6 +171,13 @@ async def require_admin(ctx: AuthContext = Depends(require_auth)) -> AuthContext
     if ctx.user.role != Role.admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Funzione riservata all'amministratore")
     return ctx
+
+
+def passkey_enrollment_needed(ctx: "AuthContext", has_passkey: bool) -> bool:
+    """Gli adulti devono avere una passkey, salvo sessioni aperte con Google (che ha la propria 2FA)."""
+    if ctx.user.role == Role.child or not settings.require_mfa_for_adults:
+        return False
+    return not has_passkey and ctx.session.auth_method != "google"
 
 
 async def user_has_passkey(db: AsyncSession, user: User) -> bool:

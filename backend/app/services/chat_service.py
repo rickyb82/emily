@@ -138,8 +138,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     policy = effective_policy(user)
 
     # ---- controlli preliminari ----
-    if user.role != Role.child and settings.require_mfa_for_adults and not await user_has_passkey(db, user):
-        raise HTTPException(403, "Registra una passkey nelle impostazioni prima di usare la chat")
+    # la passkey obbligatoria e' verificata a livello di sessione (require_auth + /me → pagina di registrazione)
     check_time_window(policy)
     await check_daily_quota(db, user, policy, "message")
 

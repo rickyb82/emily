@@ -31,10 +31,12 @@ from ..security.sessions import (
     login_limiter,
     pin_limiter,
     require_adult,
+    require_adult_for_enrollment,
     require_auth,
     require_pre_mfa,
     set_device_cookie,
     user_has_passkey,
+    passkey_enrollment_needed,
 )
 from ..providers.registry import available_providers
 
@@ -122,13 +124,13 @@ async def recovery_login(body: RecoveryLoginRequest, request: Request,
 
 # ---------------- registrazione passkey (dopo il login) ----------------
 @router.post("/webauthn/register/options")
-async def webauthn_reg_options(ctx: AuthContext = Depends(require_adult), db: AsyncSession = Depends(get_db)):
+async def webauthn_reg_options(ctx: AuthContext = Depends(require_adult_for_enrollment), db: AsyncSession = Depends(get_db)):
     return await webauthn_svc.registration_options(db, ctx.user, ctx.session.id)
 
 
 @router.post("/webauthn/register/verify")
 async def webauthn_reg_verify(body: WebAuthnVerifyRequest, request: Request,
-                              ctx: AuthContext = Depends(require_adult), db: AsyncSession = Depends(get_db)):
+                              ctx: AuthContext = Depends(require_adult_for_enrollment), db: AsyncSession = Depends(get_db)):
     try:
         cred = await webauthn_svc.registration_verify(db, ctx.user, ctx.session.id, body.credential, body.name)
     except Exception as e:
@@ -221,7 +223,7 @@ async def pin_login(body: PinLoginRequest, request: Request, response: Response,
         await audit(db, "pin_failed", request, user)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "PIN errato")
     user.failed_logins = 0
-    await create_session(db, response, user, request, mfa_verified=True)
+    await create_session(db, response, user, request, mfa_verified=True, auth_method="pin")
     await audit(db, "login_pin", request, user, dev.name)
     return {"status": "ok"}
 
@@ -236,7 +238,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     if ctx.user.role == Role.child and pol.get("provider"):
         provs = [p for p in provs if p["id"] == pol["provider"]] or provs
     mfa_required = ctx.user.role != Role.child and (
-        not ctx.session.mfa_verified or (settings.require_mfa_for_adults and not u.has_passkey)
+        not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey)
     )
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"])
@@ -292,8 +294,11 @@ class CodeRequest(_BM):
 @router.get("/features")
 async def features():
     """Funzioni disponibili alla schermata di login (nessuna autenticazione)."""
+    from . import google_auth
+
     return {"email": mailer.email_enabled(),
-            "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes")}
+            "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes"),
+            "google": google_auth.enabled()}
 
 
 @router.post("/forgot")
