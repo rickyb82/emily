@@ -134,7 +134,7 @@ async def test_provider(pid: str) -> dict:
             from openai import AsyncOpenAI
 
             c = AsyncOpenAI(api_key=settings.openai_api_key)
-            r = await c.chat.completions.create(model=settings.openai_default_model, max_tokens=5,
+            r = await c.chat.completions.create(model=settings.openai_default_model, max_completion_tokens=16,
                                                 messages=[{"role": "user", "content": "Rispondi solo: OK"}])
             detail = f"{r.model}: {r.choices[0].message.content!r}"
         elif pid == "gemini":
