@@ -1,0 +1,20 @@
+# Profilo sviluppo/anteprima locale: http://localhost:8080, nessun certificato.
+# http://localhost e' un "secure context" per il browser: le passkey funzionano lo stesso.
+{
+    auto_https off
+}
+
+http://localhost:8080 {
+    encode zstd gzip
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            flush_interval -1
+        }
+    }
+    handle /files/* {
+        reverse_proxy backend:8000
+    }
+    handle {
+        reverse_proxy frontend:80
+    }
+}

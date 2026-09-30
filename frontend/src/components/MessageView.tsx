@@ -1,0 +1,69 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Message } from '../lib/api'
+
+const TOOL_LABELS: Record<string, string> = {
+  web_search: '🔎 Ricerca web',
+  generate_image: '🎨 Generazione immagine',
+  generate_video: '🎬 Generazione video',
+  read_document: '📄 Lettura documento',
+  search_documents: '📚 Ricerca nei documenti',
+  create_artifact: '📦 Creazione artifact',
+  update_artifact: '📦 Aggiornamento artifact',
+  run_code: '⚙️ Esecuzione codice',
+}
+export const toolLabel = (n: string) => TOOL_LABELS[n] ?? (n.startsWith('mcp__') ? `🔌 ${n.split('__').slice(1).join(' / ')}` : `🛠 ${n}`)
+
+export default function MessageView({ m, authorName, onOpenArtifact }: { m: Message; authorName?: string; onOpenArtifact?: (a: any) => void }) {
+  if (m.role === 'tool') {
+    return (
+      <div className="msg tool">
+        {m.content.map((b: any, i: number) => (
+          <div key={i}>
+            {(b.artifacts || []).map((a: any, j: number) =>
+              a.type === 'image' ? (
+                <a key={j} href={a.url} target="_blank" rel="noreferrer"><img className="gen-image" src={a.url} alt="immagine generata" /></a>
+              ) : a.type === 'video' ? (
+                <video key={j} className="gen-video" src={a.url} controls />
+              ) : a.type === 'artifact' ? (
+                <button key={j} className="artifact-card" onClick={() => onOpenArtifact?.(a)}>
+                  <span className="big">📦</span>
+                  <span><b>{a.title}</b><br /><small className="muted">{a.kind}{a.language ? ` · ${a.language}` : ''} · v{a.version} · clicca per aprire</small></span>
+                </button>
+              ) : a.type === 'file' ? (
+                <a key={j} className="chip" href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
+              ) : null,
+            )}
+            <details>
+              <summary>{toolLabel(b.name)} {b.is_error ? '⚠️' : '✓'}</summary>
+              <pre>{b.content}</pre>
+            </details>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  const text = m.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+  const images = m.content.filter((b: any) => b.type === 'image' && b.file_id)
+  const tools = m.content.filter((b: any) => b.type === 'tool_use')
+  return (
+    <div className={`msg ${m.role} ${m.flagged ? 'flagged' : ''}`}>
+      {authorName && <div className="author">{authorName}</div>}
+      {images.map((b: any) => (
+        <img key={b.file_id} className="attach-image" src={`/files/${b.file_id}`} alt={b.filename || ''} />
+      ))}
+      {m.role === 'user' ? (
+        <div className="bubble">{text}</div>
+      ) : (
+        <div className="markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          {m.streaming && <span className="cursor">▍</span>}
+        </div>
+      )}
+      {tools.map((t: any) => (
+        <div key={t.id} className="tool-chip">{toolLabel(t.name)}: <code>{JSON.stringify(t.input).slice(0, 120)}</code></div>
+      ))}
+      {m.flagged && <div className="flag">⚑ segnalato dal filtro contenuti</div>}
+    </div>
+  )
+}

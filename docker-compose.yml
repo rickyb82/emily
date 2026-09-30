@@ -1,0 +1,84 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATA_DIR=/data
+      - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
+      - SANDBOX_URL=http://sandbox:8080
+    volumes:
+      - ./data:/data
+      - ./mcp_servers.json:/app/mcp_servers.json:ro
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - default
+      - sandbox_net
+    depends_on:
+      - sandbox
+
+  # Esecuzione codice generato dall'AI: isolata, senza internet, risorse limitate
+  sandbox:
+    build: ./sandbox
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+      - /work:size=512m,uid=10001,gid=10001
+    networks:
+      - sandbox_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    environment:
+      - SANDBOX_MAX_TIMEOUT=120
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+
+networks:
+  default:
+  sandbox_net:
+    internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
+
+volumes:
+  caddy_data:
+  caddy_config:

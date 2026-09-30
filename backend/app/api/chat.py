@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..config import get_settings
+from ..db import get_db
+from ..models import Conversation, Message, Share, User
+from ..policy.permissions import TOOL_ALIASES, effective_policy, tool_allowed
+from ..providers.registry import available_providers, get_provider
+from ..schemas import ConversationCreate, ConversationOut, ConversationUpdate, MessageOut, SendMessageRequest
+from ..security.sessions import AuthContext, require_auth
+from ..services.access import require_access
+from ..services.chat_service import resolve_provider_model, run_turn
+from ..tools.registry import all_tools
+
+settings = get_settings()
+router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.get("/providers")
+async def providers(ctx: AuthContext = Depends(require_auth)):
+    pol = effective_policy(ctx.user)
+    return {"providers": [p for p in available_providers() if p["id"] in pol["allowed_providers"] or p["id"] == "mock"],
+            "tools": [{"name": n, "description": t.spec.description, "kind": t.usage_kind,
+                       "group": "mcp" if n.startswith("mcp__") else TOOL_ALIASES.get(n, n)}
+                      for n, t in all_tools().items() if tool_allowed(pol, n)],
+            "sandbox": bool(settings.sandbox_url)}
+
+
+@router.get("/conversations", response_model=list[ConversationOut])
+async def list_conversations(project_id: str | None = None, include_shared: bool = True,
+                             ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    q = select(Conversation).where(Conversation.family_id == ctx.user.family_id, Conversation.archived == False)  # noqa: E712
+    own = q.where(Conversation.owner_id == ctx.user.id)
+    if project_id:
+        own = own.where(Conversation.project_id == project_id)
+    rows = list((await db.execute(own.order_by(Conversation.updated_at.desc()))).scalars().all())
+    out = [ConversationOut.model_validate(c) for c in rows]
+    if include_shared:
+        shared_ids = (await db.execute(select(Share.resource_id).where(
+            Share.resource_type == "conversation", Share.family_id == ctx.user.family_id,
+            or_(Share.target_user_id == ctx.user.id, Share.target_user_id.is_(None))))).scalars().all()
+        if shared_ids:
+            sq = q.where(Conversation.id.in_(shared_ids), Conversation.owner_id != ctx.user.id)
+            if project_id:
+                sq = sq.where(Conversation.project_id == project_id)
+            shared = (await db.execute(sq.order_by(Conversation.updated_at.desc()))).scalars().all()
+            for c in shared:
+                o = ConversationOut.model_validate(c)
+                o.shared = True
+                owner = await db.get(User, c.owner_id)
+                o.owner_name = owner.display_name if owner else None
+                out.append(o)
+    return out
+
+
+@router.post("/conversations", response_model=ConversationOut)
+async def create_conversation(body: ConversationCreate, ctx: AuthContext = Depends(require_auth),
+                              db: AsyncSession = Depends(get_db)):
+    pol = effective_policy(ctx.user)
+    pid, model = resolve_provider_model(ctx.user, pol, body.provider, body.model)
+    if body.project_id:
+        await require_access(db, "project", body.project_id, ctx.user)
+    conv = Conversation(family_id=ctx.user.family_id, owner_id=ctx.user.id, title=body.title or "Nuova chat",
+                        provider=pid, model=model, project_id=body.project_id)
+    db.add(conv)
+    await db.commit()
+    return ConversationOut.model_validate(conv)
+
+
+@router.get("/conversations/{cid}")
+async def get_conversation(cid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    conv, level = await require_access(db, "conversation", cid, ctx.user)
+    msgs = (await db.execute(select(Message).where(Message.conversation_id == cid).order_by(Message.created_at))).scalars().all()
+    owner = await db.get(User, conv.owner_id)
+    return {"conversation": ConversationOut.model_validate(conv), "access": level,
+            "owner_name": owner.display_name if owner else None,
+            "messages": [MessageOut.model_validate(m) for m in msgs]}
+
+
+@router.patch("/conversations/{cid}", response_model=ConversationOut)
+async def update_conversation(cid: str, body: ConversationUpdate, ctx: AuthContext = Depends(require_auth),
+                              db: AsyncSession = Depends(get_db)):
+    conv, _ = await require_access(db, "conversation", cid, ctx.user, write=True)
+    data = body.model_dump(exclude_none=True)
+    if "provider" in data or "model" in data:
+        # i bambini non possono cambiare modello: resolve_provider_model impone quello del genitore
+        data["provider"], data["model"] = resolve_provider_model(
+            ctx.user, effective_policy(ctx.user), data.get("provider"), data.get("model"), conv)
+    for k, v in data.items():
+        setattr(conv, k, v)
+    await db.commit()
+    return ConversationOut.model_validate(conv)
+
+
+@router.delete("/conversations/{cid}")
+async def delete_conversation(cid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    conv, level = await require_access(db, "conversation", cid, ctx.user)
+    if level not in ("owner", "parent"):
+        raise HTTPException(403, "Solo il proprietario può eliminare")
+    await db.delete(conv)
+    await db.commit()
+    return {"status": "ok"}
+
+
+def _stream(db, ctx, conv, text, file_ids, provider, model, tools):
+    async def gen():
+        try:
+            async for chunk in run_turn(db, ctx.user, conv, text, file_ids, provider, model, tools):
+                yield f"data: {chunk}\n\n"
+        except HTTPException as e:
+            import json
+            yield f"data: {json.dumps({'type': 'error', 'error': e.detail, 'status': e.status_code})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class RegenerateRequest(BaseModel):
+    provider: str | None = None
+    model: str | None = None
+    tools: list[str] | None = None
+
+
+@router.post("/conversations/{cid}/regenerate")
+async def regenerate(cid: str, body: RegenerateRequest, ctx: AuthContext = Depends(require_auth),
+                     db: AsyncSession = Depends(get_db)):
+    """Rigenera l'ultima risposta (con il modello indicato o quello corrente): utile dopo un cambio modello."""
+    conv, _ = await require_access(db, "conversation", cid, ctx.user, write=True)
+    return _stream(db, ctx, conv, None, [], body.provider, body.model, body.tools)
+
+
+@router.post("/conversations/{cid}/messages")
+async def send_message(cid: str, body: SendMessageRequest, ctx: AuthContext = Depends(require_auth),
+                       db: AsyncSession = Depends(get_db)):
+    conv, _ = await require_access(db, "conversation", cid, ctx.user, write=True)
+    if not body.text.strip() and not body.file_ids:
+        raise HTTPException(400, "Messaggio vuoto")
+    return _stream(db, ctx, conv, body.text, body.file_ids, body.provider, body.model, body.tools)
