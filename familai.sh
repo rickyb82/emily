@@ -8,13 +8,32 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 MODE_FILE=".familai-mode"
+
+# --- individua Docker e Compose e spiega chiaramente cosa manca ---
+if ! command -v docker >/dev/null 2>&1; then
+  echo "!! 'docker' non trovato. Installa Docker Desktop (Mac) o Docker Engine (Ubuntu) e riapri il terminale."; exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "!! Docker non e' in esecuzione. Su Mac apri Docker Desktop dalle Applicazioni e attendi che la balena nella barra dei menu sia ferma; su Ubuntu: sudo systemctl start docker (e aggiungi il tuo utente al gruppo docker)."; exit 1
+fi
+if docker compose version >/dev/null 2>&1; then
+  DC="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  DC="docker-compose"
+else
+  echo "!! Il plugin Docker Compose manca. Su Mac di solito significa che nel PATH c'e' un altro 'docker' (es. Homebrew) prima di quello di Docker Desktop:"
+  echo "   which -a docker     -> dovrebbe comparire /usr/local/bin/docker o /Applications/Docker.app/Contents/Resources/bin/docker"
+  echo "   Rimedio rapido: brew uninstall docker  (oppure usa il percorso completo di Docker Desktop)."
+  echo "   Su Ubuntu: sudo apt install docker-compose-v2"; exit 1
+fi
+
 compose() {
   local mode
   mode=$(cat "$MODE_FILE" 2>/dev/null || echo prod)
   if [ "$mode" = "dev" ]; then
-    docker compose -f docker-compose.yml -f docker-compose.dev.yml "$@"
+    $DC -f docker-compose.yml -f docker-compose.dev.yml "$@"
   else
-    docker compose -f docker-compose.yml "$@"
+    $DC -f docker-compose.yml "$@"
   fi
 }
 
