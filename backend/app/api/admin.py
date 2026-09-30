@@ -413,8 +413,13 @@ async def providers_status(ctx: AuthContext = Depends(require_admin), db: AsyncS
         cards.append({**c, "key_state": st[c["key"]], "model_state": st[c["model_key"]] if c["model_key"] else None,
                       "active": c["id"] in active, "models": active.get(c["id"], {}).get("models", [])})
     from .google_auth import redirect_uri
+    from ..providers.registry import _providers
 
-    return {"providers": cards, "settings": {k: st[k] for k in OTHER_SETTINGS},
+    oa = _providers().get("openai")
+    image_models = list(getattr(oa, "image_models", []) or []) if oa else []
+    if not image_models:
+        image_models = ["gpt-image-1", "gpt-image-1-mini", "dall-e-3"]
+    return {"providers": cards, "settings": {k: st[k] for k in OTHER_SETTINGS}, "image_models": image_models,
             "mock_active": "mock" in active, "only_mock": set(active) == {"mock"},
             "google_redirect_uri": redirect_uri()}
 

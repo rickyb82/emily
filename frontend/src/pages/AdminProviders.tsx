@@ -7,7 +7,7 @@ interface Card {
   id: string; label: string; key: string; model_key: string | null; hint: string; testable: boolean
   key_state: KeyState; model_state: KeyState | null; active: boolean; models: { id: string; label: string }[]
 }
-interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; only_mock: boolean; google_redirect_uri: string }
+interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; only_mock: boolean; google_redirect_uri: string; image_models: string[] }
 
 const SMTP_PRESETS: Record<string, { label: string; host: string; port: string; security: string; user?: string }> = {
   brevo: { label: 'Brevo (ex Sendinblue) — 300/giorno gratis, EU', host: 'smtp-relay.brevo.com', port: '587', security: 'starttls' },
@@ -227,7 +227,11 @@ export default function AdminProviders() {
               <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini / Imagen</option>
             </select>
           </label>
-          <label>Modello immagini OpenAI<input placeholder={s.image_model.value} value={draft.image_model ?? ''} onChange={(e) => setDraft({ ...draft, image_model: e.target.value })} /></label>
+          <label>Modello immagini OpenAI <small className="muted">({s.image_model.value})</small>
+            <select value={draft.image_model ?? s.image_model.value} onChange={(e) => setDraft({ ...draft, image_model: e.target.value })}>
+              {Array.from(new Set([s.image_model.value, ...st.image_models])).filter(Boolean).map((m) => <option key={m} value={m}>{m}{st.image_models.includes(m) ? '' : ' (non trovato nel tuo account!)'}</option>)}
+            </select>
+          </label>
           <label>Modello immagini Gemini<input placeholder={s.gemini_image_model.value} value={draft.gemini_image_model ?? ''} onChange={(e) => setDraft({ ...draft, gemini_image_model: e.target.value })} /></label>
           <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
           <label>Embedding (RAG) <small className="muted">({s.embedding_provider.value})</small>

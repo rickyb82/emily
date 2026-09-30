@@ -112,6 +112,8 @@ async def set_value(db: AsyncSession, key: str, value: str, user_id: str | None)
     _, secret = MANAGED_KEYS[key]
     row = await db.get(AppSetting, key)
     value = (value or "").strip()
+    if key.endswith(("_model", "_default_model", "_provider")) or key in ("image_model", "video_model"):
+        value = value.lower().replace(" ", "")   # gli id dei modelli sono minuscoli senza spazi
     if not value:
         if row:
             await db.delete(row)

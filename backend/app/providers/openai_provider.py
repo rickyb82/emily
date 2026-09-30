@@ -12,11 +12,14 @@ class OpenAIProvider(BaseProvider):
 
     fallback_models = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o4-mini"]
 
+    image_models: list[str] = []
+
     async def discover_models(self) -> list[dict]:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=self.api_key)
         page = await client.models.list()
+        self.image_models = sorted({m.id for m in page.data if m.id.startswith(("gpt-image", "dall-e"))}, reverse=True)
         skip = ("realtime", "audio", "tts", "transcribe", "whisper", "embedding", "image", "dall-e", "moderation",
                 "instruct", "search", "davinci", "babbage", "codex", "computer-use", "sora")
         ids = sorted({m.id for m in page.data
