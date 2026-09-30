@@ -138,8 +138,9 @@ async def require_auth(request: Request, db: AsyncSession = Depends(get_db)) -> 
     if ctx.user.role != Role.child and not ctx.session.mfa_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})
     if ctx.user.role != Role.child and settings.require_mfa_for_adults and ctx.session.auth_method != "google":
-        if not await user_has_passkey(db, ctx.user):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Registra una passkey prima di continuare", headers={"X-MFA": "enroll"})
+        if not await user_has_second_factor(db, ctx.user):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Attiva un secondo fattore (passkey o app authenticator) prima di continuare",
+                                headers={"X-MFA": "enroll"})
     return ctx
 
 
@@ -173,11 +174,12 @@ async def require_admin(ctx: AuthContext = Depends(require_auth)) -> AuthContext
     return ctx
 
 
-def passkey_enrollment_needed(ctx: "AuthContext", has_passkey: bool) -> bool:
-    """Gli adulti devono avere una passkey, salvo sessioni aperte con Google (che ha la propria 2FA)."""
+def passkey_enrollment_needed(ctx: "AuthContext", has_second_factor: bool) -> bool:
+    """Gli adulti devono avere un secondo fattore (passkey o app authenticator), salvo sessioni aperte con Google
+    (che ha la propria 2FA)."""
     if ctx.user.role == Role.child or not settings.require_mfa_for_adults:
         return False
-    return not has_passkey and ctx.session.auth_method != "google"
+    return not has_second_factor and ctx.session.auth_method != "google"
 
 
 async def user_has_passkey(db: AsyncSession, user: User) -> bool:
@@ -185,3 +187,11 @@ async def user_has_passkey(db: AsyncSession, user: User) -> bool:
 
     r = await db.execute(select(WebAuthnCredential.id).where(WebAuthnCredential.user_id == user.id).limit(1))
     return r.scalar_one_or_none() is not None
+
+
+def user_has_totp(user: User) -> bool:
+    return bool(user.totp_secret)
+
+
+async def user_has_second_factor(db: AsyncSession, user: User) -> bool:
+    return user_has_totp(user) or await user_has_passkey(db, user)

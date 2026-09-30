@@ -90,6 +90,7 @@ export interface User {
   birth_year: number | null
   is_active: boolean
   has_passkey: boolean
+  has_totp: boolean
   policy: Record<string, any>
   effective_policy: Record<string, any>
 }

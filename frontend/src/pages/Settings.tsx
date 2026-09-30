@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { startRegistration } from '@simplewebauthn/browser'
 import { del, get, post } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import TotpSetup from '../components/TotpSetup'
 
 export default function Settings() {
   const { me, refresh } = useAuth()
@@ -12,6 +13,7 @@ export default function Settings() {
   const [err, setErr] = useState('')
   const [pw, setPw] = useState({ current_password: '', new_password: '' })
   const [deviceName, setDeviceName] = useState('')
+  const [totpSetup, setTotpSetup] = useState(false)
   const isChild = me?.user.role === 'child'
 
   async function load() {
@@ -63,11 +65,24 @@ export default function Settings() {
       {err && <div className="error">{err}</div>}
 
       <section className="card stack">
-        <h3>🔐 Passkey</h3>
+        <h3>🔐 Secondo fattore</h3>
+        <p className="muted small">Serve almeno uno tra passkey e app authenticator. Puoi tenerli entrambi: al login scegli quale usare.</p>
+        <h4>📱 App authenticator</h4>
+        {me?.user.has_totp ? (
+          <div className="row">
+            <span>✅ Attiva</span>
+            <button className="ghost" onClick={() => { if (confirm("Disattivare l'app authenticator?" + (creds.length ? '' : ' Resterai senza secondo fattore e dovrai attivarne uno al prossimo accesso.'))) run(async () => { await del('/auth/totp'); await refresh() }, 'App authenticator disattivata') }}>Disattiva</button>
+          </div>
+        ) : totpSetup ? (
+          <TotpSetup onDone={async (rc) => { setTotpSetup(false); if (rc.length) setCodes(rc); await refresh(); setMsg('App authenticator attivata') }} onCancel={() => setTotpSetup(false)} />
+        ) : (
+          <div className="row"><button onClick={() => setTotpSetup(true)}>＋ Attiva app authenticator</button></div>
+        )}
+        <h4>🔑 Passkey</h4>
         <ul className="file-list">
           {creds.map((c) => (
             <li key={c.id}>{c.name} <small className="muted">creata {new Date(c.created_at).toLocaleDateString()}</small>
-              {creds.length > 1 && <button className="icon" onClick={() => run(() => del(`/auth/webauthn/credentials/${c.id}`))}>🗑</button>}
+              {(creds.length > 1 || me?.user.has_totp) && <button className="icon" onClick={() => run(() => del(`/auth/webauthn/credentials/${c.id}`))}>🗑</button>}
             </li>
           ))}
         </ul>

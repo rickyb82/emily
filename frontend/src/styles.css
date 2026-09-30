@@ -68,6 +68,9 @@ code { font-size: 13px; }
 .auth-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 420px; }
 .auth-card h1 { margin: 0 0 12px; text-align: center; }
 .codes { font-size: 15px; letter-spacing: 1px; }
+.totp-setup .qr { background: #fff; padding: 8px; border-radius: 12px; width: 220px; max-width: 100%; margin: 0 auto; }
+.totp-setup .qr svg { width: 100%; height: auto; display: block; }
+.totp-setup .secret { display: block; font-size: 15px; letter-spacing: 1px; word-break: break-all; padding: 6px 0; user-select: all; }
 .kid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 .kid-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; font-size: 16px; border-radius: 16px; }
 .kid-avatar { font-size: 48px; line-height: 1; }

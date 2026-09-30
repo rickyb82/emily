@@ -42,6 +42,7 @@ class UserOut(BaseModel):
     birth_year: int | None
     is_active: bool
     has_passkey: bool = False
+    has_totp: bool = False
     policy: dict = {}
     effective_policy: dict = {}
 

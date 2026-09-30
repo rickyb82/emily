@@ -8,7 +8,8 @@ export default function Login() {
   const { refresh } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [step, setStep] = useState<'password' | 'passkey' | 'recovery' | 'emailcode'>('password')
+  const [step, setStep] = useState<'password' | 'passkey' | 'recovery' | 'emailcode' | 'totp'>('password')
+  const [methods, setMethods] = useState<{ passkey: boolean; totp: boolean }>({ passkey: true, totp: false })
   const [code, setCode] = useState('')
   const [features, setFeatures] = useState<{ email: boolean; email_mfa: boolean; google: boolean }>({ email: false, email_mfa: false, google: false })
   const [params] = useSearchParams()
@@ -61,8 +62,15 @@ export default function Login() {
     try {
       const r = await post('/auth/login', { email, password })
       if (r.status === 'mfa_required') {
-        setStep('passkey')
-        await doPasskey()
+        const m = r.methods ?? { passkey: true, totp: false }
+        setMethods(m)
+        setCode('')
+        if (m.passkey) {
+          setStep('passkey')
+          await doPasskey()
+        } else {
+          setStep('totp')
+        }
       } else {
         await refresh()
       }
@@ -83,6 +91,20 @@ export default function Login() {
       await refresh()
     } catch (e: any) {
       setErr(e.message || 'Verifica passkey annullata')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function submitTotp(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setErr('')
+    try {
+      await post('/auth/totp/verify', { code })
+      await refresh()
+    } catch (ex: any) {
+      setErr(ex.message)
     } finally {
       setBusy(false)
     }
@@ -128,9 +150,21 @@ export default function Login() {
             <p>🔐 Conferma con la tua passkey (impronta, volto o chiave di sicurezza).</p>
             {err && <div className="error">{err}</div>}
             <button onClick={doPasskey} disabled={busy}>{busy ? 'In attesa…' : 'Usa la passkey'}</button>
+            {methods.totp && <button className="ghost" onClick={() => { setErr(''); setCode(''); setStep('totp') }} disabled={busy}>Usa l'app authenticator</button>}
             {features.email_mfa && <button className="ghost" onClick={sendEmailCode} disabled={busy}>Ricevi un codice via email</button>}
             <button className="ghost" onClick={() => setStep('recovery')}>Usa un codice di recupero</button>
           </div>
+        )}
+        {step === 'totp' && (
+          <form onSubmit={submitTotp} className="stack">
+            <p>📱 Inserisci il codice a 6 cifre della tua app authenticator.</p>
+            <input placeholder="Codice a 6 cifre" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required autoFocus />
+            {err && <div className="error">{err}</div>}
+            <button disabled={busy || code.replace(/\D/g, '').length < 6}>Accedi</button>
+            {methods.passkey && <button type="button" className="ghost" onClick={() => { setStep('passkey'); doPasskey() }}>Usa la passkey</button>}
+            {features.email_mfa && <button type="button" className="ghost" onClick={sendEmailCode} disabled={busy}>Ricevi un codice via email</button>}
+            <button type="button" className="ghost" onClick={() => { setCode(''); setStep('recovery') }}>Usa un codice di recupero</button>
+          </form>
         )}
         {step === 'emailcode' && (
           <form onSubmit={submitEmailCode} className="stack">
@@ -138,7 +172,7 @@ export default function Login() {
             <input placeholder="Codice a 6 cifre" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" required autoFocus />
             {err && <div className="error">{err}</div>}
             <button disabled={busy}>Accedi</button>
-            <button type="button" className="ghost" onClick={() => setStep('passkey')}>Torna alla passkey</button>
+            <button type="button" className="ghost" onClick={() => setStep(methods.passkey ? 'passkey' : 'password')}>Indietro</button>
           </form>
         )}
         {step === 'recovery' && (
@@ -147,7 +181,7 @@ export default function Login() {
             <input placeholder="xxxx-xxxx-xxxx" value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />
             {err && <div className="error">{err}</div>}
             <button disabled={busy}>Accedi</button>
-            <button type="button" className="ghost" onClick={() => setStep('passkey')}>Torna alla passkey</button>
+            <button type="button" className="ghost" onClick={() => setStep(methods.passkey ? 'passkey' : 'password')}>Indietro</button>
           </form>
         )}
       </div>

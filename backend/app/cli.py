@@ -31,14 +31,15 @@ async def main(argv: list[str]) -> None:
         if cmd == "list-users":
             for u in (await db.execute(select(User))).scalars():
                 n = len((await db.execute(select(WebAuthnCredential.id).where(WebAuthnCredential.user_id == u.id))).all())
-                print(f"{u.role.value:6} {u.display_name:20} {u.email or u.username:30} passkey={n} attivo={u.is_active}")
+                print(f"{u.role.value:6} {u.display_name:20} {u.email or u.username:30} passkey={n} authenticator={bool(u.totp_secret)} attivo={u.is_active}")
         elif cmd == "reset-passkey" and len(argv) == 2:
             u = await _user(db, argv[1])
             await db.execute(delete(WebAuthnCredential).where(WebAuthnCredential.user_id == u.id))
             await db.execute(delete(Session).where(Session.user_id == u.id))
             u.recovery_codes, u.failed_logins, u.locked_until = [], 0, None
+            u.totp_secret, u.totp_pending = None, None
             await db.commit()
-            print(f"Passkey rimosse per {u.email}: accedi con la password e registra una nuova passkey.")
+            print(f"Secondo fattore azzerato per {u.email} (passkey e app authenticator): accedi con la password e attivane uno nuovo.")
         elif cmd == "set-password" and len(argv) == 3:
             u = await _user(db, argv[1])
             u.password_hash = hash_secret(argv[2])

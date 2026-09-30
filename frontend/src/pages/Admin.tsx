@@ -59,14 +59,14 @@ function Members() {
     <div className="stack">
       {err && <div className="error">{err}</div>}
       <table className="table">
-        <thead><tr><th>Membro</th><th>Ruolo</th><th>Fascia</th><th>Passkey</th><th></th></tr></thead>
+        <thead><tr><th>Membro</th><th>Ruolo</th><th>Fascia</th><th>2FA</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
               <td>{m.avatar} {m.display_name} <small className="muted">{m.email ?? m.username}</small></td>
               <td>{{ admin: 'Amministratore', adult: 'Adulto', child: 'Bambino/a' }[m.role]}</td>
               <td>{m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
-              <td>{m.role !== 'child' ? (m.has_passkey ? '✅' : '⚠️ no') : '—'}</td>
+              <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : '⚠️ no') : '—'}</td>
               <td className="row wrap">
                 <button className="ghost" onClick={() => setEdit(m)}>Modifica</button>
                 {m.role !== 'child' && m.email && <button className="ghost" title="Invia l'email con il link per impostare la password" onClick={() => post(`/admin/members/${m.id}/invite`).then(() => alert(`Invito inviato a ${m.email}`)).catch((e) => setErr(e.message))}>✉️ Invito</button>}

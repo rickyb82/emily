@@ -72,6 +72,8 @@ class User(Base):
     # policy specifica dell'utente (sovrascrive i default del gruppo di età)
     policy: Mapped[dict] = mapped_column(JSON, default=dict)
     recovery_codes: Mapped[list] = mapped_column(JSON, default=list)  # hash dei codici
+    totp_secret: Mapped[str | None] = mapped_column(String(300), nullable=True)          # app authenticator (cifrato)
+    totp_pending: Mapped[str | None] = mapped_column(String(300), nullable=True)         # in attesa di conferma
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

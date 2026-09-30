@@ -20,6 +20,7 @@ from ..schemas import (
     UserOut,
     WebAuthnVerifyRequest,
 )
+from ..security import totp as totp_svc
 from ..security import webauthn_svc
 from ..security.passwords import consume_recovery_code, generate_recovery_codes, hash_secret, verify_secret
 from ..security.sessions import (
@@ -36,6 +37,8 @@ from ..security.sessions import (
     require_pre_mfa,
     set_device_cookie,
     user_has_passkey,
+    user_has_totp,
+    user_has_second_factor,
     passkey_enrollment_needed,
 )
 from ..providers.registry import available_providers
@@ -65,6 +68,7 @@ async def _register_failure(db: AsyncSession, user: User) -> None:
 async def user_out(db: AsyncSession, user: User) -> UserOut:
     out = UserOut.model_validate(user)
     out.has_passkey = await user_has_passkey(db, user)
+    out.has_totp = user_has_totp(user)
     out.effective_policy = effective_policy(user)
     return out
 
@@ -82,10 +86,13 @@ async def login(body: LoginRequest, request: Request, response: Response, db: As
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenziali non valide")
     user.failed_logins = 0
     has_pk = await user_has_passkey(db, user)
-    # Se ha una passkey deve usarla; se non ce l'ha entra ma dovrà registrarla (se REQUIRE_MFA_FOR_ADULTS).
-    await create_session(db, response, user, request, mfa_verified=not has_pk)
-    await audit(db, "login_password", request, user, "mfa_required" if has_pk else "no_passkey")
-    return {"status": "mfa_required" if has_pk else "ok", "must_enroll_passkey": (not has_pk) and settings.require_mfa_for_adults}
+    has_totp = user_has_totp(user)
+    has_2fa = has_pk or has_totp
+    # Se ha un secondo fattore deve usarlo; se non ce l'ha entra ma dovra' attivarne uno (se REQUIRE_MFA_FOR_ADULTS).
+    await create_session(db, response, user, request, mfa_verified=not has_2fa)
+    await audit(db, "login_password", request, user, "mfa_required" if has_2fa else "no_second_factor")
+    return {"status": "mfa_required" if has_2fa else "ok", "must_enroll_passkey": (not has_2fa) and settings.require_mfa_for_adults,
+            "methods": {"passkey": has_pk, "totp": has_totp}}
 
 
 @router.post("/webauthn/authenticate/options")
@@ -238,7 +245,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     if ctx.user.role == Role.child and pol.get("provider"):
         provs = [p for p in provs if p["id"] == pol["provider"]] or provs
     mfa_required = ctx.user.role != Role.child and (
-        not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey)
+        not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"])
@@ -367,3 +374,66 @@ def mask_email(e: str | None) -> str:
         return ""
     name, dom = e.split("@", 1)
     return f"{name[:2]}…@{dom}"
+
+
+# ---------------- app authenticator (TOTP): alternativa alla passkey ----------------
+@router.post("/totp/setup")
+async def totp_setup(ctx: AuthContext = Depends(require_adult_for_enrollment), db: AsyncSession = Depends(get_db)):
+    """Genera un nuovo segreto (in attesa di conferma) e restituisce QR + segreto da digitare."""
+    from ..services.settings_store import encrypt
+    secret = totp_svc.new_secret()
+    ctx.user.totp_pending = encrypt(secret)
+    await db.commit()
+    account = ctx.user.email or ctx.user.username
+    fam = await db.get(Family, ctx.user.family_id)
+    issuer = f"FamilAI {fam.name}" if fam and fam.name else "FamilAI"
+    uri = totp_svc.provisioning_uri(secret, account, issuer)
+    return {"secret": secret, "uri": uri, "qr_svg": totp_svc.qr_svg(uri)}
+
+
+@router.post("/totp/confirm")
+async def totp_confirm(body: CodeRequest, request: Request, ctx: AuthContext = Depends(require_adult_for_enrollment),
+                       db: AsyncSession = Depends(get_db)):
+    """Conferma il segreto con il primo codice generato dall'app: da qui in poi e' un secondo fattore valido."""
+    from ..services.settings_store import decrypt
+    if not ctx.user.totp_pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nessuna configurazione in corso: ricomincia")
+    if not totp_svc.verify(decrypt(ctx.user.totp_pending), body.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Codice non valido: controlla l'ora del telefono e riprova")
+    ctx.user.totp_secret = ctx.user.totp_pending
+    ctx.user.totp_pending = None
+    ctx.session.mfa_verified = True
+    codes: list[str] = []
+    if not ctx.user.recovery_codes:
+        codes, hashed = generate_recovery_codes()
+        ctx.user.recovery_codes = hashed
+    await db.commit()
+    await audit(db, "totp_enabled", request, ctx.user)
+    return {"status": "ok", "recovery_codes": codes}
+
+
+@router.post("/totp/verify")
+async def totp_verify(body: CodeRequest, request: Request, ctx: AuthContext = Depends(require_pre_mfa),
+                      db: AsyncSession = Depends(get_db)):
+    """Secondo fattore al login: codice a 6 cifre dell'app authenticator."""
+    from ..services.settings_store import decrypt
+    if not ctx.user.totp_secret:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "App authenticator non configurata")
+    login_limiter.check("totp:" + ctx.user.id)
+    if not totp_svc.verify(decrypt(ctx.user.totp_secret), body.code):
+        await audit(db, "mfa_totp_failed", request, ctx.user)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Codice non valido")
+    ctx.session.mfa_verified = True
+    await db.commit()
+    await audit(db, "mfa_totp_ok", request, ctx.user)
+    return {"status": "ok"}
+
+
+@router.delete("/totp")
+async def totp_disable(request: Request, ctx: AuthContext = Depends(require_adult), db: AsyncSession = Depends(get_db)):
+    """Disattiva l'app authenticator (se resta senza secondo fattore dovra' riattivarne uno)."""
+    ctx.user.totp_secret = None
+    ctx.user.totp_pending = None
+    await db.commit()
+    await audit(db, "totp_disabled", request, ctx.user)
+    return {"status": "ok"}

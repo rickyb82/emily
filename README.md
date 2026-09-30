@@ -22,7 +22,7 @@ backend ──▶ SQLite (./data/familai.db) · ./data/uploads · ./data/generat
 | Aspetto | Come |
 |---|---|
 | Trasporto | Solo HTTPS via Caddy, HSTS, header di sicurezza |
-| Adulti | Email + password (Argon2) **e** passkey WebAuthn obbligatoria come secondo fattore (`REQUIRE_MFA_FOR_ADULTS`), codici di recupero monouso |
+| Adulti | Email + password (Argon2) **e** un secondo fattore obbligatorio a scelta (`REQUIRE_MFA_FOR_ADULTS`): passkey WebAuthn **oppure** app authenticator (TOTP: Google/Microsoft Authenticator, Authy, 1Password…), anche entrambi; codici di recupero monouso. La passkey è legata all'origine (localhost ≠ dominio), l'app authenticator vale ovunque |
 | Bambini | Login con avatar + PIN, **solo** da dispositivi approvati da un genitore (cookie di fiducia revocabile) |
 | Sessioni | Cookie opaco HttpOnly + Secure + SameSite=Strict, header anti-CSRF, scadenza diversa adulti/bambini, revoca sessioni |
 | Brute force | Rate limit su login/PIN, blocco account 15 min dopo 5 errori |
@@ -47,7 +47,7 @@ Serve Docker Desktop. Nella cartella del progetto:
 ```bash
 ./familai.sh dev
 ```
-Apri http://localhost:8080, entra con `ADMIN_EMAIL`/`ADMIN_PASSWORD` del `.env` (default `admin@example.com` / `changeme`), registra la passkey (Touch ID), poi in **Famiglia → Provider AI** incolla le chiavi e prova le connessioni. Il DB e i file restano in `./data`.
+Apri http://localhost:8080, entra con `ADMIN_EMAIL`/`ADMIN_PASSWORD` del `.env` (default `admin@example.com` / `changeme`), attiva il secondo fattore (passkey con Touch ID oppure app authenticator inquadrando il QR), poi in **Famiglia → Provider AI** incolla le chiavi e prova le connessioni. Il DB e i file restano in `./data`.
 
 ### 2. Installazione sulla Ubuntu
 Prerequisiti: Docker + plugin Compose (`sudo apt install docker.io docker-compose-v2` oppure lo script ufficiale get.docker.com); un dominio che punta all'IP di casa; porte **80/443** inoltrate alla Ubuntu.
@@ -58,7 +58,7 @@ cp .env.example .env && nano .env          # PUBLIC_HOST, ACME_EMAIL, WEBAUTHN_R
 ./familai.sh prod
 ./familai.sh logs backend
 ```
-Se vuoi partire dai dati provati sul Mac: `./familai.sh backup` sul Mac, copia il file in `backups/` sulla Ubuntu e `./familai.sh restore backups/<file>` (poi correggi `PUBLIC_HOST` e `WEBAUTHN_*` nel `.env`: le passkey registrate su `localhost` non valgono per il dominio e vanno rifatte).
+Se vuoi partire dai dati provati sul Mac: `./familai.sh backup` sul Mac, copia il file in `backups/` sulla Ubuntu e `./familai.sh restore backups/<file>` (poi correggi `PUBLIC_HOST` e `WEBAUTHN_*` nel `.env`: le passkey registrate su `localhost` non valgono per il dominio e vanno rifatte; l'app authenticator invece continua a funzionare).
 
 > WebAuthn richiede un origin sicuro: `https://` con dominio reale oppure `http://localhost`. Non funziona su `http://192.168.x.x`.
 
