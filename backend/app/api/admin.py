@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -314,8 +315,6 @@ async def mcp_call(sid: str, body: dict, ctx: AuthContext = Depends(require_admi
 
 
 # ---- provider AI e chiavi (gestite dal pannello, cifrate nel DB) ----
-from pydantic import BaseModel  # noqa: E402
-
 from ..providers.registry import available_providers  # noqa: E402
 from ..services import settings_store  # noqa: E402
 
