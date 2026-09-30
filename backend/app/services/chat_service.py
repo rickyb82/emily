@@ -54,6 +54,44 @@ async def _hydrate(blocks: list[dict], db: AsyncSession) -> list[dict]:
     return out
 
 
+def repair_history(hist: list[dict]) -> list[dict]:
+    """Rende la cronologia coerente per tutti i provider: ogni tool_use deve avere il suo tool_result nel
+    messaggio successivo (turni interrotti), e nessun tool_result deve restare senza tool_use."""
+    out: list[dict] = []
+    pending: list[dict] = []   # tool_use in attesa di risultato
+    for m in hist:
+        if m["role"] == "tool":
+            ids = {tu["id"] for tu in pending}
+            kept = [b for b in m["content"] if b.get("type") == "tool_result" and b.get("tool_use_id") in ids]
+            answered = {b["tool_use_id"] for b in kept}
+            for tu in pending:
+                if tu["id"] not in answered:
+                    kept.append({"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"],
+                                 "content": "(esecuzione interrotta: nessun risultato)", "is_error": True})
+            pending = []
+            if kept:
+                out.append({"role": "tool", "content": kept})
+            continue
+        if pending:  # l'assistente aveva chiamato tool ma non e' seguito un messaggio tool
+            out.append({"role": "tool", "content": [
+                {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"],
+                 "content": "(esecuzione interrotta: nessun risultato)", "is_error": True} for tu in pending]})
+            pending = []
+        if m["role"] == "assistant":
+            pending = [b for b in m["content"] if b.get("type") == "tool_use"]
+            if not m["content"]:
+                continue
+        out.append(m)
+    if pending:  # cronologia che termina con tool_use senza risultato
+        out.append({"role": "tool", "content": [
+            {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"],
+             "content": "(esecuzione interrotta: nessun risultato)", "is_error": True} for tu in pending]})
+    # il primo messaggio deve essere dell'utente
+    while out and out[0]["role"] != "user":
+        out.pop(0)
+    return out
+
+
 async def build_history(conv: Conversation, db: AsyncSession) -> list[dict]:
     msgs = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
     hist = []
@@ -61,7 +99,7 @@ async def build_history(conv: Conversation, db: AsyncSession) -> list[dict]:
         blocks = await _hydrate(m.content, db)
         if blocks:
             hist.append({"role": m.role, "content": blocks})
-    return hist
+    return repair_history(hist)
 
 
 async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) -> str:
@@ -256,34 +294,42 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
 
         # ---- esecuzione tool ----
         results: list[dict] = []
-        for tu in tool_uses:
-            yield sse({"type": "tool_start", "id": tu["id"], "name": tu["name"], "input": tu["input"]})
-            tool = get_tool(tu["name"])
-            if not tool or not tool_allowed(policy, tu["name"]):
-                res_content, is_err, artifacts = "Strumento non disponibile", True, None
-            else:
-                try:
-                    await check_daily_quota(db, user, policy, tool.usage_kind)
-                    r = await tool.fn(tu["input"] or {}, ctx)
-                    res_content, is_err, artifacts = r.content, r.is_error, r.artifacts
-                    if not is_err:
-                        await log_usage(db, user, tool.usage_kind, provider.id, model, detail=tu["name"])
-                except HTTPException as he:
-                    res_content, is_err, artifacts = he.detail, True, None
-                except Exception as e:
-                    log.exception("Errore tool %s", tu["name"])
-                    res_content, is_err, artifacts = f"Errore: {e}", True, None
-            if not (res_content or "").strip():
-                res_content = "(il tool non ha restituito alcun dettaglio)" if is_err else "(nessun output)"
-            if is_err:
-                log.warning("Tool %s fallito per %s: %s", tu["name"], user.username, res_content[:500])
-            block = {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": res_content[:50_000],
-                     "is_error": is_err, "artifacts": artifacts or []}
-            results.append(block)
-            yield sse({"type": "tool_result", **block, "content": res_content[:800]})
-        tmsg = Message(conversation_id=conv.id, role="tool", content=results)
-        db.add(tmsg)
-        await db.commit()
+        try:
+          for tu in tool_uses:
+              yield sse({"type": "tool_start", "id": tu["id"], "name": tu["name"], "input": tu["input"]})
+              tool = get_tool(tu["name"])
+              if not tool or not tool_allowed(policy, tu["name"]):
+                  res_content, is_err, artifacts = "Strumento non disponibile", True, None
+              else:
+                  try:
+                      await check_daily_quota(db, user, policy, tool.usage_kind)
+                      r = await tool.fn(tu["input"] or {}, ctx)
+                      res_content, is_err, artifacts = r.content, r.is_error, r.artifacts
+                      if not is_err:
+                          await log_usage(db, user, tool.usage_kind, provider.id, model, detail=tu["name"])
+                  except HTTPException as he:
+                      res_content, is_err, artifacts = he.detail, True, None
+                  except Exception as e:
+                      log.exception("Errore tool %s", tu["name"])
+                      res_content, is_err, artifacts = f"Errore: {e}", True, None
+              if not (res_content or "").strip():
+                  res_content = "(il tool non ha restituito alcun dettaglio)" if is_err else "(nessun output)"
+              if is_err:
+                  log.warning("Tool %s fallito per %s: %s", tu["name"], user.username, res_content[:500])
+              block = {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": res_content[:50_000],
+                       "is_error": is_err, "artifacts": artifacts or []}
+              results.append(block)
+              yield sse({"type": "tool_result", **block, "content": res_content[:800]})
+        finally:
+            # anche se lo stream viene interrotto (stop dell'utente), lascia la cronologia coerente
+            done_ids = {r["tool_use_id"] for r in results}
+            for tu in tool_uses:
+                if tu["id"] not in done_ids:
+                    results.append({"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"],
+                                    "content": "(esecuzione interrotta)", "is_error": True, "artifacts": []})
+            if results:
+                db.add(Message(conversation_id=conv.id, role="tool", content=results))
+                await db.commit()
         history.append({"role": "tool", "content": results})
 
 
