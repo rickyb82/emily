@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { get, patch, post, streamMessage, type Conversation, type FileOut, type Message } from '../lib/api'
+import { get, patch, post, type Conversation, type FileOut, type Message } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import MessageView, { toolLabel } from '../components/MessageView'
+import MessageView from '../components/MessageView'
+import { abortTurn, clearTurn, getTurn, startTurn, subscribe, type TurnState } from '../lib/turns'
 import ShareDialog from '../components/ShareDialog'
 import ArtifactPanel, { type ArtifactData } from '../components/ArtifactPanel'
 
@@ -33,7 +34,9 @@ export default function Chat() {
     setArtifacts((l) => (l.some((x) => x.id === a.id) ? l.map((x) => (x.id === a.id ? a : x)) : [...l, a]))
     if (open) setOpenArtifact(a)
   }
-  const abort = useRef<AbortController | null>(null)
+  const messagesRef = useRef<Message[]>([])
+  messagesRef.current = messages
+  const appliedArtifacts = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -58,9 +61,35 @@ export default function Chat() {
         setConv(r.conversation)
         setAccess(r.access)
         setOwnerName(r.owner_name)
-        setMessages(r.messages)
+        const t = getTurn(id)
+        if (t && t.busy) {
+          // turno ancora in corso (l'utente era andato su un'altra chat): riprendi dallo stato del gestore
+          setMessages(t.messages)
+        } else {
+          if (t) clearTurn(id)   // finito mentre eravamo altrove: il server ha gia' tutto
+          setMessages(r.messages)
+        }
       })
       .catch((e) => setErr(e.message))
+  }, [id])
+
+  // iscrizione al gestore dei turni: lo streaming vive fuori dal componente e sopravvive ai cambi di chat
+  useEffect(() => {
+    if (!id) return
+    appliedArtifacts.current = 0
+    const apply = (t: TurnState) => {
+      setMessages(t.messages)
+      setBusy(t.busy)
+      setStatus(t.status)
+      setGotText(t.gotText)
+      if (t.err) setErr(t.err)
+      if (t.provider) setConv((cv) => (cv && (cv.provider !== t.provider || cv.model !== t.model) ? { ...cv, provider: t.provider!, model: t.model! } : cv))
+      while (appliedArtifacts.current < t.artifacts.length) upsertArtifact(t.artifacts[appliedArtifacts.current++])
+    }
+    const t = getTurn(id)
+    if (t?.busy) apply(t)
+    else setBusy(false)
+    return subscribe(id, apply)
   }, [id])
 
   useEffect(() => {
@@ -103,80 +132,8 @@ export default function Chat() {
 
   async function runTurn(c: Conversation, action: 'messages' | 'regenerate', body: any) {
     setErr('')
-    setBusy(true)
-    setGotText(false)
-    setStatus('')
-    let current: Message | null = null
-    abort.current = new AbortController()
-    try {
-      await streamMessage(
-        c.id,
-        body,
-        (ev) => {
-          if (ev.type === 'regenerating') {
-            // tronca tutto ciò che segue l'ultimo messaggio dell'utente (gli id locali dei tool non coincidono con il DB)
-            setMessages((m) => {
-              const i = m.map((x) => x.role).lastIndexOf('user')
-              return i >= 0 ? m.slice(0, i + 1) : m
-            })
-            setConv((cv) => (cv ? { ...cv, provider: ev.provider, model: ev.model } : cv))
-            setStatus(`↻ Rigenero con ${ev.model}…`)
-          } else if (ev.type === 'user_message') {
-            setMessages((m) => [...m, ev.message])
-          } else if (ev.type === 'route') {
-            setStatus(ev.local ? `🏠 Risponde il modello locale (${ev.model})…` : `☁️ Inoltro a ${ev.provider_label} (${ev.model})…`)
-          } else if (ev.type === 'status') {
-            setStatus(ev.text || '')
-          } else if (ev.type === 'text_delta') {
-            setStatus('')
-            setGotText(true)
-            if (!current) {
-              current = { id: 'tmp-' + Date.now(), role: 'assistant', author_id: null, content: [{ type: 'text', text: '' }], created_at: '', flagged: false, usage: {}, streaming: true }
-              const cur = current
-              setMessages((m) => [...m, cur])
-            }
-            current.content[0].text += ev.text
-            const snapshot = { ...current, content: [{ ...current.content[0] }] }
-            setMessages((m) => m.map((x) => (x.id === snapshot.id ? snapshot : x)))
-          } else if (ev.type === 'rag') {
-            const names = Array.from(new Set(ev.hits.map((h: any) => h.filename)))
-            setStatus(`📚 Trovati ${ev.hits.length} passaggi in: ${names.join(', ')}`)
-          } else if (ev.type === 'tool_start') {
-            setStatus(`${toolLabel(ev.name)}…`)
-            setGotText(false)
-            if (current) {
-              const finished = { ...current, streaming: false }
-              setMessages((m) => m.map((x) => (x.id === finished.id ? finished : x)))
-              current = null
-            }
-          } else if (ev.type === 'tool_result') {
-            setStatus('')
-            for (const a of ev.artifacts || []) if (a.type === 'artifact') upsertArtifact(a)
-            const tm: Message = { id: 'tool-' + ev.tool_use_id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {}, content: [ev] }
-            setMessages((m) => [...m, tm])
-          } else if (ev.type === 'error') {
-            setErr(ev.error)
-          } else if (ev.type === 'done') {
-            setStatus('')
-            if (ev.message) {
-              const done = ev.message
-              const tmpId = current?.id   // catturato ora: l'updater di React gira dopo (e due volte in StrictMode)
-              setMessages((m) => (tmpId && m.some((x) => x.id === tmpId) ? m.map((x) => (x.id === tmpId ? done : x)) : [...m, done]))
-              current = null
-            }
-            window.dispatchEvent(new Event('familai:conversations'))
-          }
-        },
-        abort.current.signal,
-        action,
-      )
-    } catch (e: any) {
-      if (e.name !== 'AbortError') setErr(e.message)
-    } finally {
-      setBusy(false)
-      setStatus('')
-      setGotText(false)
-    }
+    // il turno gira nel gestore globale: se cambi chat continua, e al ritorno lo ritrovi
+    await startTurn(c.id, action, body, messagesRef.current)
   }
 
   async function upload(list: FileList | null) {
@@ -308,7 +265,7 @@ export default function Chat() {
               }}
             />
             {busy ? (
-              <button type="button" className="ghost" onClick={() => abort.current?.abort()}>■</button>
+              <button type="button" className="ghost" onClick={() => conv && abortTurn(conv.id)}>■</button>
             ) : (
               <button className="primary">➤</button>
             )}
