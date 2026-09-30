@@ -7,6 +7,7 @@ from .anthropic_provider import AnthropicProvider
 from .base import BaseProvider
 from .gemini_provider import GeminiProvider
 from .mock_provider import MockProvider
+from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 
 
@@ -20,6 +21,8 @@ def _providers() -> dict[str, BaseProvider]:
         out["openai"] = OpenAIProvider(s.openai_api_key, s.openai_default_model)
     if s.gemini_api_key:
         out["gemini"] = GeminiProvider(s.gemini_api_key, s.gemini_default_model)
+    if s.ollama_url:
+        out["ollama"] = OllamaProvider(s.ollama_url, s.ollama_default_model)
     if s.enable_mock_provider or not out:
         out["mock"] = MockProvider("", "mock-1")
     return out
@@ -49,5 +52,11 @@ def get_provider(pid: str | None) -> BaseProvider:
 
 
 def available_providers() -> list[dict]:
-    return [{"id": p.id, "label": p.label, "models": p.models(), "default_model": p.default_model}
-            for p in _providers().values()]
+    out = [{"id": p.id, "label": p.label, "models": p.models(), "default_model": p.default_model}
+           for p in _providers().values()]
+    s = get_settings()
+    if "ollama" in _providers() and (s.router_mode or "balanced").lower() != "off" and len(_providers()) > 1:
+        # pseudo-provider: il router decide a ogni messaggio tra locale e cloud
+        out.insert(0, {"id": "auto", "label": "Auto (locale + cloud)",
+                       "models": [{"id": "auto", "label": "decide il router"}], "default_model": "auto"})
+    return out

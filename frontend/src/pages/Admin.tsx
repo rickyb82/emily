@@ -9,7 +9,7 @@ import AdminCosts from './AdminCosts'
 type Tab = 'members' | 'providers' | 'costs' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp'
 const TOOLS = ['web_search', 'generate_image', 'generate_video', 'read_document', 'artifacts', 'run_code', 'mcp', 'ask_model']
 const TOOL_IT: Record<string, string> = { web_search: 'Ricerca web', generate_image: 'Immagini', generate_video: 'Video', read_document: 'Documenti (lettura + ricerca)', artifacts: 'Artifact (pagine/app/codice con anteprima)', run_code: 'Esecuzione codice (sandbox)', mcp: 'Server MCP', ask_model: 'Consultare altri modelli AI (ask_model)' }
-const PROVIDERS = ['anthropic', 'openai', 'gemini']
+const PROVIDERS = ['anthropic', 'openai', 'gemini', 'ollama', 'auto']
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
 export default function Admin() {

@@ -67,6 +67,11 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
         <div key={t.id} className="tool-chip">{toolLabel(t.name)}: <code>{JSON.stringify(t.input).slice(0, 120)}</code></div>
       ))}
       {m.flagged && <div className="flag">⚑ segnalato dal filtro contenuti</div>}
+      {m.role === 'assistant' && m.usage?.routed && (
+        <div className="route-badge" title={m.usage.route_reason || ''}>
+          {m.usage.routed === 'local' ? `🏠 risposto in locale (${m.usage.model})` : `☁️ inoltrato a ${m.usage.provider} (${m.usage.model})`}
+        </div>
+      )}
       {m.role === 'assistant' && !m.streaming && text.trim() && <SpeakButton text={text} />}
     </div>
   )

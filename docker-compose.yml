@@ -26,6 +26,9 @@ services:
       - sandbox
 
   # Esecuzione codice generato dall'AI: isolata, senza internet, risorse limitate
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # per raggiungere Ollama nativo sull'host (Mac/Linux)
+
   sandbox:
     build: ./sandbox
     restart: unless-stopped
@@ -79,6 +82,21 @@ networks:
   sandbox_net:
     internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
 
+  # Modello locale (opzionale, per la Ubuntu/Linux): attiva con COMPOSE_PROFILES=ollama nel .env e OLLAMA_URL=http://ollama:11434.
+  # Sul Mac NON usarlo: Docker non vede la GPU; installa Ollama nativo e usa OLLAMA_URL=http://host.docker.internal:11434.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    # GPU NVIDIA (se presente, con nvidia-container-toolkit): togli il commento
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
 volumes:
+  ollama_models:
   caddy_data:
   caddy_config:

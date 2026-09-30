@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 
 interface KeyState { label: string; secret: boolean; configured: boolean; source: 'admin' | 'env' | 'none'; value: string }
 interface Card {
-  id: string; label: string; key: string; model_key: string | null; hint: string; testable: boolean
+  id: string; label: string; key: string; model_key: string | null; hint: string; testable: boolean; kind?: 'url'
   key_state: KeyState; model_state: KeyState | null; active: boolean; models: { id: string; label: string }[]
 }
 interface Status { providers: Card[]; settings: Record<string, KeyState>; mock_active: boolean; only_mock: boolean; google_redirect_uri: string; image_models: string[] }
@@ -110,11 +110,19 @@ export default function AdminProviders() {
               <small className="muted">{c.hint}</small>
             </div>
             <div className="grid2">
-              <label>
-                Chiave API <small className="muted">({SOURCE_IT[c.key_state.source]}{c.key_state.value ? `: ${c.key_state.value}` : ''})</small>
-                <input type="password" autoComplete="off" placeholder={c.key_state.configured ? 'Inserisci per sostituire' : 'Incolla la chiave'}
-                  value={draft[c.key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value })} />
-              </label>
+              {c.kind === 'url' ? (
+                <label>
+                  Indirizzo del server <small className="muted">({c.key_state.configured ? c.key_state.value : 'non configurato'})</small>
+                  <input type="url" autoComplete="off" placeholder="http://host.docker.internal:11434"
+                    value={draft[c.key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value.trim() })} />
+                </label>
+              ) : (
+                <label>
+                  Chiave API <small className="muted">({SOURCE_IT[c.key_state.source]}{c.key_state.value ? `: ${c.key_state.value}` : ''})</small>
+                  <input type="password" autoComplete="off" placeholder={c.key_state.configured ? 'Inserisci per sostituire' : 'Incolla la chiave'}
+                    value={draft[c.key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value })} />
+                </label>
+              )}
               {c.model_key && c.model_state && (
                 <label>
                   Modello di default <small className="muted">({c.model_state.value})</small>
@@ -127,7 +135,7 @@ export default function AdminProviders() {
             <div className="row wrap">
               <button disabled={busy !== '' || !(c.key in draft || (c.model_key && c.model_key in draft))} onClick={() => save([c.key, ...(c.model_key ? [c.model_key] : [])])}>Salva</button>
               {c.testable && <button className="ghost" disabled={busy !== '' || !c.key_state.configured} onClick={() => test(c.id)}>{busy === 'test-' + c.id ? 'Verifica…' : '🔌 Prova connessione'}</button>}
-              {c.key_state.source === 'admin' && <button className="ghost danger" disabled={busy !== ''} onClick={() => remove(c.key)}>Rimuovi chiave</button>}
+              {c.key_state.source === 'admin' && <button className="ghost danger" disabled={busy !== ''} onClick={() => remove(c.key)}>{c.kind === 'url' ? 'Disattiva' : 'Rimuovi chiave'}</button>}
               {t && <span className={t.ok ? 'ok' : 'error'}>{t.ok ? `✓ OK (${t.latency_ms} ms) — ${t.detail}` : `✗ ${t.detail}`}</span>}
             </div>
           </section>
@@ -234,6 +242,22 @@ export default function AdminProviders() {
           </label>
           <label>Modello immagini Gemini<input placeholder={s.gemini_image_model.value} value={draft.gemini_image_model ?? ''} onChange={(e) => setDraft({ ...draft, gemini_image_model: e.target.value })} /></label>
           <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
+          <label>Router Auto (locale + cloud) <small className="muted">({s.router_mode.value})</small>
+            <select value={draft.router_mode ?? s.router_mode.value} onChange={(e) => setDraft({ ...draft, router_mode: e.target.value })}>
+              <option value="balanced">bilanciato (locale se il router è sicuro)</option>
+              <option value="economico">economico (locale quando possibile)</option>
+              <option value="qualita">qualità (cloud in caso di dubbio)</option>
+              <option value="off">disattivato (niente voce "Auto")</option>
+            </select>
+          </label>
+          <label>Modello locale del router <small className="muted">({s.router_model.value})</small>
+            <input list="models-ollama" placeholder={s.router_model.value} value={draft.router_model ?? ''} onChange={(e) => setDraft({ ...draft, router_model: e.target.value })} />
+          </label>
+          <label>Provider cloud del router <small className="muted">({s.router_cloud_provider.value})</small>
+            <select value={draft.router_cloud_provider ?? s.router_cloud_provider.value} onChange={(e) => setDraft({ ...draft, router_cloud_provider: e.target.value })}>
+              <option value="auto">auto (Claude, poi OpenAI, poi Gemini)</option><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option>
+            </select>
+          </label>
           <label>Voce naturale (TTS) <small className="muted">({s.tts_provider.value})</small>
             <select value={draft.tts_provider ?? s.tts_provider.value} onChange={(e) => setDraft({ ...draft, tts_provider: e.target.value })}>
               <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">disattivata</option>
@@ -261,7 +285,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

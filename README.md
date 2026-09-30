@@ -86,6 +86,11 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Modello locale (Ollama) e router "Auto"
+FamilAI può usare un modello open source locale (provider **Locale (Ollama)**), gratis e senza far uscire i dati di casa. Consigliati con 16–24 GB di memoria: `qwen3:8b` per le risposte e `qwen3:4b` come router (entrambi multilingua, con tool). Sul **Mac** Ollama va installato nativo (`brew install ollama`, `ollama pull qwen3:8b`, `ollama pull qwen3:4b`): dentro Docker non userebbe la GPU. Poi in **Famiglia → Provider AI → Modello locale** metti `http://host.docker.internal:11434` e prova la connessione. Sulla **Ubuntu** puoi avviarlo nel compose con `COMPOSE_PROFILES=ollama` nel `.env` e indirizzo `http://ollama:11434` (scarica i modelli con `docker compose exec ollama ollama pull qwen3:8b`).
+
+Con Ollama attivo compare il provider **Auto (locale + cloud)**: a ogni messaggio il modello locale piccolo classifica la richiesta e decide se rispondere in locale (domande semplici, chiacchiere, traduzioni, riassunti) o inoltrarla al provider cloud (codice, ragionamento, ricerca, immagini, file, tool). In chat ogni risposta mostra da chi è arrivata. Modalità (Altre impostazioni): *bilanciato*, *economico*, *qualità*, *off*. Anche i bambini possono avere Auto o il modello locale come provider fisso.
+
 ### Consultare un altro modello dalla chat (`ask_model`)
 Gli adulti possono chiedere in linguaggio naturale di coinvolgere un altro provider ("chiedi a Gemini cosa ne pensa", "fai rispondere anche GPT e confronta"): il modello in uso chiama il tool `ask_model`, che passa la richiesta (con gli ultimi messaggi come contesto) all'altro provider e riporta la risposta indicando chi l'ha data. Il consumo viene registrato sul provider consultato. Il tool si disattiva per utente dalla pagina Famiglia; i bambini non lo hanno (il loro provider è fissato dal genitore). Per cambiare il modello che risponde d'ora in poi resta il menu in alto nella chat.
 

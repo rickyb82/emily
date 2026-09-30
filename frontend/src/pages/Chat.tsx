@@ -123,6 +123,8 @@ export default function Chat() {
             setStatus(`↻ Rigenero con ${ev.model}…`)
           } else if (ev.type === 'user_message') {
             setMessages((m) => [...m, ev.message])
+          } else if (ev.type === 'route') {
+            setStatus(ev.local ? `🏠 Risponde il modello locale (${ev.model})…` : `☁️ Inoltro a ${ev.provider_label} (${ev.model})…`)
           } else if (ev.type === 'status') {
             setStatus(ev.text || '')
           } else if (ev.type === 'text_delta') {

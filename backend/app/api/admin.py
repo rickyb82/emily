@@ -430,6 +430,9 @@ PROVIDER_CARDS = [
      "hint": "platform.openai.com/api-keys — usata anche per immagini, moderazione ed embedding", "testable": True},
     {"id": "gemini", "label": "Gemini (Google)", "key": "gemini_api_key", "model_key": "gemini_default_model",
      "hint": "aistudio.google.com/apikey — usata anche per video Veo ed embedding", "testable": True},
+    {"id": "ollama", "label": "Modello locale (Ollama)", "key": "ollama_url", "model_key": "ollama_default_model", "kind": "url",
+     "hint": "Mac: installa Ollama (brew install ollama), poi `ollama pull qwen3:8b` e `ollama pull qwen3:4b`; indirizzo http://host.docker.internal:11434. "
+             "Ubuntu: COMPOSE_PROFILES=ollama nel .env e indirizzo http://ollama:11434", "testable": True},
     {"id": "tavily", "label": "Tavily (ricerca web)", "key": "tavily_api_key", "model_key": None,
      "hint": "app.tavily.com", "testable": True},
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,
@@ -437,6 +440,7 @@ PROVIDER_CARDS = [
 ]
 OTHER_SETTINGS = ["web_search_provider", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
                   "tts_provider", "tts_model_openai", "tts_voice_openai", "tts_model_gemini", "tts_voice_gemini", "tts_style",
+                  "router_model", "router_cloud_provider", "router_mode",
                   "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]
 
 

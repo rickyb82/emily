@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     openai_default_model: str = "gpt-4.1"
     gemini_default_model: str = "gemini-2.5-flash"
     enable_mock_provider: bool = False  # utile per test senza chiavi
+    # Modello locale (Ollama). Vuoto = disabilitato. Mac: http://host.docker.internal:11434 (Ollama nativo, usa la GPU);
+    # Linux con profilo compose 'ollama': http://ollama:11434
+    ollama_url: str = ""
+    ollama_default_model: str = "qwen3:8b"
+    # Router "Auto": un modello locale piccolo decide se rispondere in locale o passare al cloud
+    router_model: str = "qwen3:4b"        # modello locale usato per decidere (e per le risposte rapide se uguale al default)
+    router_cloud_provider: str = "auto"   # provider cloud a cui inoltrare: auto | anthropic | openai | gemini
+    router_mode: str = "balanced"         # off | economico (locale quando possibile) | balanced | qualita (cloud se dubbio)
     max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)
 
     # Tool

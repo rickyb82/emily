@@ -29,6 +29,11 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "openai_default_model": ("Modello di default OpenAI", False),
     "gemini_api_key": ("Chiave API Gemini", True),
     "gemini_default_model": ("Modello di default Gemini", False),
+    "ollama_url": ("Indirizzo Ollama (modello locale)", False),
+    "ollama_default_model": ("Modello locale di default", False),
+    "router_model": ("Modello locale per il router Auto", False),
+    "router_cloud_provider": ("Provider cloud del router Auto", False),
+    "router_mode": ("Modalita' router Auto", False),
     "tavily_api_key": ("Chiave API Tavily", True),
     "brave_api_key": ("Chiave API Brave Search", True),
     "web_search_provider": ("Motore di ricerca web", False),
@@ -171,6 +176,18 @@ async def test_provider(pid: str) -> dict:
             c = genai.Client(api_key=settings.gemini_api_key)
             r = await c.aio.models.generate_content(model=settings.gemini_default_model, contents="Rispondi solo: OK")
             detail = f"{settings.gemini_default_model}: {(r.text or '')[:40]!r}"
+        elif pid == "ollama":
+            import httpx
+
+            async with httpx.AsyncClient(timeout=15) as h:
+                r = await h.get(settings.ollama_url.rstrip("/") + "/api/tags")
+                r.raise_for_status()
+                names = [m.get("name") for m in r.json().get("models", [])]
+            if not names:
+                return {"ok": False, "detail": "Ollama risponde ma non ha modelli scaricati: esegui `ollama pull qwen3:8b` e `ollama pull qwen3:4b`",
+                        "latency_ms": int((time.perf_counter() - t0) * 1000)}
+            missing = [m for m in (settings.ollama_default_model, settings.router_model) if m not in names]
+            detail = f"{len(names)} modelli: {', '.join(names[:8])}" + (f" — mancano: {', '.join(missing)} (ollama pull …)" if missing else "")
         elif pid == "tavily":
             import httpx
 

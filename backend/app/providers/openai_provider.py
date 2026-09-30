@@ -14,10 +14,15 @@ class OpenAIProvider(BaseProvider):
 
     image_models: list[str] = []
 
+    def _client(self):
+        from openai import AsyncOpenAI
+
+        return AsyncOpenAI(api_key=self.api_key)
+
     async def discover_models(self) -> list[dict]:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
+        client = self._client()
         page = await client.models.list()
         self.image_models = sorted({m.id for m in page.data if m.id.startswith(("gpt-image", "dall-e"))}, reverse=True)
         skip = ("realtime", "audio", "tts", "transcribe", "whisper", "embedding", "image", "dall-e", "moderation",

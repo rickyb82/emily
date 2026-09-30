@@ -126,7 +126,7 @@ export interface Message {
   content: any[]
   created_at: string
   flagged: boolean
-  usage: Record<string, number>
+  usage: Record<string, any>
   streaming?: boolean
 }
 export interface Project {

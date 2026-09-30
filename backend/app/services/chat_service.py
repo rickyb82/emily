@@ -171,8 +171,11 @@ async def prepare_user_blocks(text: str, file_ids: list[str], user: User, db: As
 def resolve_provider_model(user: User, policy: dict, provider_id: str | None, model: str | None,
                            conv: Conversation | None = None) -> tuple[str, str]:
     """Bambini: provider e modello fissati dal genitore. Adulti: scelta libera tra i provider consentiti."""
+    from .router import AUTO_ID, enabled as router_enabled
     if user.role == Role.child:
         pid = policy.get("provider") or (conv.provider if conv else None)
+        if pid == AUTO_ID and router_enabled(policy):
+            return AUTO_ID, AUTO_ID
         if pid not in policy["allowed_providers"]:
             pid = next((p for p in policy["allowed_providers"] if p in {x["id"] for x in available_providers()}), None)
         provider = get_provider(pid)
@@ -180,6 +183,10 @@ def resolve_provider_model(user: User, policy: dict, provider_id: str | None, mo
         known = {m["id"] for m in provider.models()}
         return provider.id, (chosen if not known or chosen in known else provider.default_model)
     pid = provider_id or (conv.provider if conv else None)
+    if pid == AUTO_ID:
+        if router_enabled(policy):
+            return AUTO_ID, AUTO_ID
+        pid = None   # router spento: torna al provider di default
     if pid and pid not in policy["allowed_providers"] and pid != "mock":
         raise HTTPException(403, "Provider non consentito per questo utente")
     provider = get_provider(pid)
@@ -201,8 +208,26 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     await check_daily_quota(db, user, policy, "message")
 
     conv.provider, conv.model = resolve_provider_model(user, policy, provider_id, model, conv)
-    provider = get_provider(conv.provider)
-    model = conv.model
+    routed = None   # decisione del router Auto (provider effettivo di questo turno)
+    if conv.provider == "auto":
+        from . import router as _router
+        rtext = text
+        if rtext is None:   # rigenerazione: ultimo messaggio utente
+            lu = (await db.execute(select(Message).where(Message.conversation_id == conv.id, Message.role == "user")
+                                   .order_by(Message.created_at.desc()).limit(1))).scalar_one_or_none()
+            rtext = "".join(b.get("text", "") for b in (lu.content if lu else []) if b.get("type") == "text") if lu else ""
+        tail_rows = (await db.execute(select(Message).where(Message.conversation_id == conv.id)
+                                      .order_by(Message.created_at.desc()).limit(4))).scalars().all()
+        tail = [f"[{m.role}] " + " ".join(b.get("text", "") for b in m.content if b.get("type") == "text")[:300]
+                for m in reversed(tail_rows) if m.role in ("user", "assistant")]
+        routed = await _router.decide(rtext or "", bool(file_ids), policy, tail)
+        provider = get_provider(routed.provider_id)
+        model = routed.model
+        yield sse({"type": "route", "provider": provider.id, "provider_label": provider.label, "model": model,
+                   "local": routed.local, "reason": routed.reason})
+    else:
+        provider = get_provider(conv.provider)
+        model = conv.model
 
     if text is None:
         # ---- rigenerazione: elimina tutto ciò che segue l'ultimo messaggio utente ----
@@ -248,6 +273,9 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             if name not in requested_tools and group not in requested_tools:
                 continue
         tools.append(t.spec)
+
+    if routed is not None and routed.local:
+        tools = []   # in locale niente tool: il router manda al cloud tutto cio' che li richiede
 
     # ricerca web nativa di Anthropic (solo con Claude, non in modalita' ricerca sicura per i bambini)
     if (provider.id == "anthropic" and str(settings.anthropic_native_search).lower() in ("1", "true", "yes")
@@ -321,7 +349,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 out_safety = await check_text(text_acc, policy)
                 if out_safety.flagged:
                     amsg.flagged, amsg.flag_reason = True, "output: " + out_safety.reason
-            amsg.usage = total_usage
+            amsg.usage = {**total_usage, "provider": provider.id, "model": model,
+                          **({"routed": "local" if routed.local else "cloud", "route_reason": routed.reason} if routed else {})}
             await db.commit()
             await log_usage(db, user, "message", provider.id, model, total_usage["input_tokens"], total_usage["output_tokens"],
                             cache_read_tokens=total_usage["cache_read_tokens"], cache_write_tokens=total_usage["cache_write_tokens"])
