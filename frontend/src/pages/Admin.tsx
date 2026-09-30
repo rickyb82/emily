@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
+import AdminMcp from './AdminMcp'
 
 type Tab = 'members' | 'providers' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp'
 const TOOLS = ['web_search', 'generate_image', 'generate_video', 'read_document', 'artifacts', 'run_code', 'mcp']
@@ -31,7 +32,7 @@ export default function Admin() {
       {tab === 'usage' && <Usage />}
       {tab === 'devices' && <Devices />}
       {tab === 'audit' && <Audit />}
-      {tab === 'mcp' && <Mcp />}
+      {tab === 'mcp' && <AdminMcp />}
     </div>
   )
 }
@@ -326,27 +327,6 @@ function Audit() {
         <tr key={a.id}><td>{new Date(a.created_at).toLocaleString()}</td><td>{a.event}</td><td>{a.detail}</td><td>{a.ip}</td></tr>
       ))}</tbody>
     </table>
-  )
-}
-
-function Mcp() {
-  const [status, setStatus] = useState<Record<string, any>>({})
-  useEffect(() => {
-    get('/admin/mcp').then(setStatus)
-  }, [])
-  const names = Object.keys(status)
-  return (
-    <div className="stack">
-      <p className="muted">I server MCP si configurano nel file <code>mcp_servers.json</code> (riavvia il backend dopo le modifiche).</p>
-      {names.length === 0 && <p className="muted">Nessun server configurato.</p>}
-      {names.map((n) => (
-        <div key={n} className="card">
-          <b>{n}</b> — {status[n].enabled ? (status[n].connected ? '🟢 connesso' : `🔴 errore: ${status[n].error}`) : '⚪ disabilitato'}
-          {status[n].min_role && <small className="muted"> · ruolo minimo: {status[n].min_role}</small>}
-          {status[n].tools?.length > 0 && <div className="muted">Tool: {status[n].tools.join(', ')}</div>}
-        </div>
-      ))}
-    </div>
   )
 }
 

@@ -279,3 +279,21 @@ class Artifact(Base):
     history: Mapped[list] = mapped_column(JSON, default=list)  # versioni precedenti [{version, content, created_at}]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class McpServer(Base):
+    """Server MCP configurato dal pannello (sostituisce mcp_servers.json, che resta come import iniziale)."""
+    __tablename__ = "mcp_servers"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+    type: Mapped[str] = mapped_column(String(10), default="stdio")      # stdio | http
+    command: Mapped[str] = mapped_column(String(300), default="")
+    args: Mapped[list] = mapped_column(JSON, default=list)
+    url: Mapped[str] = mapped_column(String(500), default="")
+    headers_enc: Mapped[str] = mapped_column(Text, default="")           # JSON cifrato (token/API key)
+    env_enc: Mapped[str] = mapped_column(Text, default="")               # JSON cifrato
+    min_role: Mapped[str] = mapped_column(String(10), default="adult")   # child | adult | admin
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

@@ -1,12 +1,21 @@
-"""Client MCP: collega i server definiti in mcp_servers.json e registra i loro tool come `mcp__<server>__<tool>`."""
+"""Client MCP con connessioni gestibili a caldo dal pannello admin.
+
+Ogni server gira in un task dedicato che apre la sessione (stdio o Streamable HTTP), registra i tool come
+`mcp__<server>__<tool>` e resta in attesa finche' non viene chiesta la disconnessione: cosi' l'apertura e la
+chiusura dei context manager avvengono nello stesso task (requisito di anyio/mcp).
+
+Configurazione: tabella `mcp_servers` (pannello Famiglia → MCP). Al primo avvio, se la tabella e' vuota,
+vengono importati i server di `mcp_servers.json`.
+"""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from contextlib import AsyncExitStack
+from dataclasses import dataclass, field
 
 from ..config import get_settings
-from ..models import Role
+from ..models import McpServer, Role
 from ..providers.base import ToolSpec
 from .registry import Tool, ToolContext, ToolResult, register_tool, unregister_prefix
 
@@ -15,72 +24,174 @@ settings = get_settings()
 
 ROLE_RANK = {Role.child: 0, Role.adult: 1, Role.admin: 2}
 MIN_ROLE_RANK = {"child": 0, "adult": 1, "admin": 2}
+CONNECT_TIMEOUT = 45
+
+
+@dataclass
+class ServerConfig:
+    name: str
+    type: str = "stdio"
+    command: str = ""
+    args: list[str] = field(default_factory=list)
+    url: str = ""
+    headers: dict = field(default_factory=dict)
+    env: dict = field(default_factory=dict)
+    min_role: str = "adult"
+    enabled: bool = True
+
+
+@dataclass
+class Connection:
+    cfg: ServerConfig
+    task: asyncio.Task | None = None
+    stop: asyncio.Event = field(default_factory=asyncio.Event)
+    ready: asyncio.Event = field(default_factory=asyncio.Event)
+    session: object | None = None
+    tools: list[dict] = field(default_factory=list)
+    error: str = ""
+    connected: bool = False
 
 
 class MCPManager:
     def __init__(self):
-        self.stack = AsyncExitStack()
-        self.sessions: dict[str, object] = {}
-        self.status: dict[str, dict] = {}
-        self.min_role: dict[str, int] = {}
+        self.conns: dict[str, Connection] = {}
 
+    # ---------------- ciclo di vita ----------------
     async def start(self) -> None:
-        path = settings.mcp_config_path
-        if not path.exists():
-            log.info("Nessun mcp_servers.json, MCP disabilitato")
-            return
-        cfg = json.loads(path.read_text())
-        for name, sc in cfg.get("servers", {}).items():
-            if not sc.get("enabled", False):
-                self.status[name] = {"enabled": False, "connected": False, "tools": []}
-                continue
+        """All'avvio: importa il JSON se il DB e' vuoto, poi connette i server abilitati."""
+        from sqlalchemy import select
+
+        from ..db import SessionLocal
+        from ..services import settings_store
+
+        async with SessionLocal() as db:
+            rows = (await db.execute(select(McpServer))).scalars().all()
+            if not rows and settings.mcp_config_path.exists():
+                try:
+                    cfg = json.loads(settings.mcp_config_path.read_text())
+                    for name, sc in cfg.get("servers", {}).items():
+                        db.add(McpServer(name=name, type=sc.get("type", "stdio"), command=sc.get("command", ""),
+                                         args=sc.get("args", []), url=sc.get("url", ""),
+                                         headers_enc=settings_store.encrypt(json.dumps(sc.get("headers") or {})),
+                                         env_enc=settings_store.encrypt(json.dumps(sc.get("env") or {})),
+                                         min_role=sc.get("min_role", "adult"), enabled=bool(sc.get("enabled", False)),
+                                         description="importato da mcp_servers.json"))
+                    await db.commit()
+                    rows = (await db.execute(select(McpServer))).scalars().all()
+                    log.info("MCP: importati %d server da mcp_servers.json", len(rows))
+                except Exception as e:
+                    log.error("MCP: import di mcp_servers.json fallito: %s", e)
+            for row in rows:
+                if row.enabled:
+                    asyncio.create_task(self.connect(self.config_from_row(row)))
+
+    async def stop(self) -> None:
+        for name in list(self.conns):
+            await self.disconnect(name)
+
+    @staticmethod
+    def config_from_row(row: McpServer) -> ServerConfig:
+        from ..services import settings_store
+
+        def dec(v: str) -> dict:
             try:
-                await self._connect(name, sc)
+                return json.loads(settings_store.decrypt(v)) if v else {}
+            except Exception:
+                return {}
+
+        return ServerConfig(name=row.name, type=row.type, command=row.command, args=list(row.args or []), url=row.url,
+                            headers=dec(row.headers_enc), env=dec(row.env_enc), min_role=row.min_role, enabled=row.enabled)
+
+    # ---------------- connessione / disconnessione a caldo ----------------
+    async def connect(self, cfg: ServerConfig) -> Connection:
+        if cfg.name in self.conns:
+            await self.disconnect(cfg.name)
+        conn = Connection(cfg=cfg)
+        self.conns[cfg.name] = conn
+        conn.task = asyncio.create_task(self._run(conn), name=f"mcp-{cfg.name}")
+        try:
+            await asyncio.wait_for(conn.ready.wait(), timeout=CONNECT_TIMEOUT)
+        except asyncio.TimeoutError:
+            conn.error = f"timeout di connessione ({CONNECT_TIMEOUT}s)"
+            await self.disconnect(cfg.name, keep_entry=True)
+        return conn
+
+    async def disconnect(self, name: str, keep_entry: bool = False) -> None:
+        conn = self.conns.get(name)
+        if not conn:
+            return
+        conn.stop.set()
+        if conn.task:
+            try:
+                await asyncio.wait_for(conn.task, timeout=15)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                conn.task.cancel()
             except Exception as e:
-                log.error("MCP %s: connessione fallita: %s", name, e)
-                self.status[name] = {"enabled": True, "connected": False, "error": str(e), "tools": []}
-
-    async def _connect(self, name: str, sc: dict) -> None:
-        from mcp import ClientSession, StdioServerParameters
-        from mcp.client.stdio import stdio_client
-
-        if sc.get("type") == "http":
-            from mcp.client.streamable_http import streamablehttp_client
-
-            read, write, _ = await self.stack.enter_async_context(
-                streamablehttp_client(sc["url"], headers=sc.get("headers") or {}))
-        else:
-            params = StdioServerParameters(command=sc["command"], args=sc.get("args", []), env=sc.get("env"))
-            read, write = await self.stack.enter_async_context(stdio_client(params))
-        session = await self.stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
-        self.sessions[name] = session
-        self.min_role[name] = MIN_ROLE_RANK.get(sc.get("min_role", "adult"), 1)
-        tools = await session.list_tools()
-        names = []
+                log.debug("MCP %s: chiusura con errore %s", name, e)
         unregister_prefix(f"mcp__{name}__")
-        for t in tools.tools:
-            full = f"mcp__{name}__{t.name}"
-            names.append(t.name)
-            register_tool(Tool(
-                spec=ToolSpec(full, f"[MCP {name}] {t.description or t.name}",
-                              t.inputSchema or {"type": "object", "properties": {}}),
-                fn=self._make_caller(name, t.name),
-            ))
-        self.status[name] = {"enabled": True, "connected": True, "tools": names, "min_role": sc.get("min_role", "adult")}
-        log.info("MCP %s: %d tool", name, len(names))
+        conn.connected = False
+        conn.session = None
+        if not keep_entry:
+            self.conns.pop(name, None)
+
+    async def _run(self, conn: Connection) -> None:
+        """Task dedicato: apre la sessione, registra i tool, attende lo stop, chiude tutto nello stesso task."""
+        cfg = conn.cfg
+        try:
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+
+            if cfg.type == "http":
+                from mcp.client.streamable_http import streamablehttp_client
+
+                transport = streamablehttp_client(cfg.url, headers=cfg.headers or None)
+            else:
+                import os
+
+                env = {**os.environ, **(cfg.env or {})} if cfg.env else None
+                transport = stdio_client(StdioServerParameters(command=cfg.command, args=cfg.args, env=env))
+
+            async with transport as streams:
+                read, write = streams[0], streams[1]
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    listed = await session.list_tools()
+                    unregister_prefix(f"mcp__{cfg.name}__")
+                    conn.tools = []
+                    for t in listed.tools:
+                        full = f"mcp__{cfg.name}__{t.name}"
+                        conn.tools.append({"name": t.name, "description": t.description or ""})
+                        register_tool(Tool(
+                            spec=ToolSpec(full, f"[MCP {cfg.name}] {t.description or t.name}",
+                                          t.inputSchema or {"type": "object", "properties": {}}),
+                            fn=self._make_caller(cfg.name, t.name),
+                        ))
+                    conn.session = session
+                    conn.connected = True
+                    conn.error = ""
+                    conn.ready.set()
+                    log.info("MCP %s: connesso, %d tool", cfg.name, len(conn.tools))
+                    await conn.stop.wait()
+        except Exception as e:
+            conn.error = f"{type(e).__name__}: {str(e)[:300]}"
+            log.error("MCP %s: %s", cfg.name, conn.error)
+        finally:
+            conn.connected = False
+            conn.session = None
+            conn.ready.set()
+            unregister_prefix(f"mcp__{cfg.name}__")
 
     def _make_caller(self, server: str, tool: str):
         async def call(args: dict, ctx: ToolContext) -> ToolResult:
-            if ROLE_RANK.get(ctx.user.role, 0) < self.min_role.get(server, 1):
-                return ToolResult("Non hai il permesso di usare questo strumento", is_error=True)
-            session = self.sessions.get(server)
-            if not session:
+            conn = self.conns.get(server)
+            if not conn or not conn.connected or not conn.session:
                 return ToolResult(f"Server MCP {server} non connesso", is_error=True)
+            if ROLE_RANK.get(ctx.user.role, 0) < MIN_ROLE_RANK.get(conn.cfg.min_role, 1):
+                return ToolResult("Non hai il permesso di usare questo strumento", is_error=True)
             try:
-                res = await session.call_tool(tool, arguments=args)
+                res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=120)
             except Exception as e:
-                return ToolResult(f"Errore MCP: {e}", is_error=True)
+                return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts = []
             for c in res.content:
                 if getattr(c, "type", "") == "text":
@@ -90,17 +201,21 @@ class MCPManager:
             return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(res.isError))
         return call
 
+    # ---------------- stato / permessi ----------------
     def allowed_for(self, role: Role, tool_name: str) -> bool:
         if not tool_name.startswith("mcp__"):
             return True
         server = tool_name.split("__")[1]
-        return ROLE_RANK.get(role, 0) >= self.min_role.get(server, 1)
+        conn = self.conns.get(server)
+        if not conn:
+            return False
+        return ROLE_RANK.get(role, 0) >= MIN_ROLE_RANK.get(conn.cfg.min_role, 1)
 
-    async def stop(self) -> None:
-        try:
-            await self.stack.aclose()
-        except Exception as e:
-            log.warning("Chiusura MCP: %s", e)
+    @property
+    def status(self) -> dict[str, dict]:
+        return {name: {"enabled": c.cfg.enabled, "connected": c.connected, "error": c.error,
+                       "tools": [t["name"] for t in c.tools], "min_role": c.cfg.min_role}
+                for name, c in self.conns.items()}
 
 
 mcp_manager = MCPManager()

@@ -167,9 +167,150 @@ async def audit_log(limit: int = 100, ctx: AuthContext = Depends(require_admin),
     return [{"id": a.id, "event": a.event, "detail": a.detail, "user_id": a.user_id, "ip": a.ip, "created_at": a.created_at} for a in rows]
 
 
+# ---- server MCP (configurati dal pannello, connessione a caldo) ----
+import json as _json  # noqa: E402
+
+from ..models import McpServer  # noqa: E402
+
+
+class McpServerIn(BaseModel):
+    name: str
+    type: str = "stdio"          # stdio | http
+    command: str = ""
+    args: list[str] = []
+    url: str = ""
+    headers: dict[str, str] | None = None   # None = non modificare
+    env: dict[str, str] | None = None
+    min_role: str = "adult"
+    enabled: bool = True
+    description: str = ""
+
+
+def _mcp_out(row: McpServer) -> dict:
+    from ..services import settings_store
+
+    st = mcp_manager.status.get(row.name, {})
+    cfg = mcp_manager.config_from_row(row)
+    return {"id": row.id, "name": row.name, "type": row.type, "command": row.command, "args": row.args or [],
+            "url": row.url, "min_role": row.min_role, "enabled": row.enabled, "description": row.description,
+            "headers_keys": list(cfg.headers.keys()), "env_keys": list(cfg.env.keys()),
+            "connected": st.get("connected", False), "error": st.get("error", ""), "tools": st.get("tools", []),
+            "updated_at": row.updated_at}
+
+
 @router.get("/mcp")
-async def mcp_status(ctx: AuthContext = Depends(require_admin)):
-    return mcp_manager.status
+async def mcp_list(ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(McpServer).order_by(McpServer.name))).scalars().all()
+    return [_mcp_out(r) for r in rows]
+
+
+async def _save_mcp(db: AsyncSession, row: McpServer | None, body: McpServerIn, user_id: str) -> McpServer:
+    from ..services import settings_store
+
+    import re
+    name = re.sub(r"[^a-zA-Z0-9_-]", "-", body.name.strip())[:60]
+    if not name:
+        raise HTTPException(400, "Nome non valido")
+    if body.type not in ("stdio", "http") or body.min_role not in ("child", "adult", "admin"):
+        raise HTTPException(400, "Tipo o ruolo non valido")
+    if body.type == "stdio" and not body.command.strip():
+        raise HTTPException(400, "Per un server stdio serve il comando")
+    if body.type == "http" and not body.url.startswith(("http://", "https://")):
+        raise HTTPException(400, "Per un server http serve un URL valido")
+    if row is None:
+        row = McpServer(name=name)
+        db.add(row)
+    elif row.name != name:
+        await mcp_manager.disconnect(row.name)
+        row.name = name
+    row.type, row.command, row.args, row.url = body.type, body.command.strip(), body.args, body.url.strip()
+    row.min_role, row.enabled, row.description = body.min_role, body.enabled, body.description[:300]
+    if body.headers is not None:
+        row.headers_enc = settings_store.encrypt(_json.dumps(body.headers))
+    if body.env is not None:
+        row.env_enc = settings_store.encrypt(_json.dumps(body.env))
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(400, "Esiste gia' un server con questo nome")
+    return row
+
+
+@router.post("/mcp")
+async def mcp_create(body: McpServerIn, request: Request, ctx: AuthContext = Depends(require_admin),
+                     db: AsyncSession = Depends(get_db)):
+    row = await _save_mcp(db, None, body, ctx.user.id)
+    await audit(db, "mcp_created", request, ctx.user, row.name)
+    if row.enabled:
+        await mcp_manager.connect(mcp_manager.config_from_row(row))
+    return _mcp_out(row)
+
+
+@router.put("/mcp/{sid}")
+async def mcp_update(sid: str, body: McpServerIn, request: Request, ctx: AuthContext = Depends(require_admin),
+                     db: AsyncSession = Depends(get_db)):
+    row = await db.get(McpServer, sid)
+    if not row:
+        raise HTTPException(404)
+    row = await _save_mcp(db, row, body, ctx.user.id)
+    await audit(db, "mcp_updated", request, ctx.user, row.name)
+    if row.enabled:
+        await mcp_manager.connect(mcp_manager.config_from_row(row))   # riconnette con la nuova config
+    else:
+        await mcp_manager.disconnect(row.name)
+    return _mcp_out(row)
+
+
+@router.delete("/mcp/{sid}")
+async def mcp_delete(sid: str, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    row = await db.get(McpServer, sid)
+    if not row:
+        raise HTTPException(404)
+    await mcp_manager.disconnect(row.name)
+    await db.delete(row)
+    await db.commit()
+    await audit(db, "mcp_deleted", request, ctx.user, row.name)
+    return {"status": "ok"}
+
+
+@router.post("/mcp/{sid}/connect")
+async def mcp_connect(sid: str, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    row = await db.get(McpServer, sid)
+    if not row:
+        raise HTTPException(404)
+    if not row.enabled:
+        row.enabled = True
+        await db.commit()
+    conn = await mcp_manager.connect(mcp_manager.config_from_row(row))
+    return {**_mcp_out(row), "ok": conn.connected, "error": conn.error}
+
+
+@router.post("/mcp/{sid}/disconnect")
+async def mcp_disconnect(sid: str, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    row = await db.get(McpServer, sid)
+    if not row:
+        raise HTTPException(404)
+    row.enabled = False
+    await db.commit()
+    await mcp_manager.disconnect(row.name)
+    return _mcp_out(row)
+
+
+@router.post("/mcp/{sid}/call")
+async def mcp_call(sid: str, body: dict, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Prova un tool del server dal pannello: {"tool": "nome", "args": {...}}."""
+    from ..tools.registry import get_tool
+    from ..tools.registry import ToolContext as TC
+
+    row = await db.get(McpServer, sid)
+    if not row:
+        raise HTTPException(404)
+    tool = get_tool(f"mcp__{row.name}__{body.get('tool', '')}")
+    if not tool:
+        raise HTTPException(404, "Tool non trovato (server connesso?)")
+    res = await tool.fn(body.get("args") or {}, TC(user=ctx.user, policy=effective_policy(ctx.user), db=db))
+    return {"ok": not res.is_error, "content": res.content[:5000]}
 
 
 # ---- provider AI e chiavi (gestite dal pannello, cifrate nel DB) ----

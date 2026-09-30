@@ -66,6 +66,15 @@ export default function Chat() {
     bottom.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, status])
 
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail
+      setConv((c) => (c && d && c.id === d.id ? { ...c, title: d.title } : c))
+    }
+    window.addEventListener('familai:renamed', h)
+    return () => window.removeEventListener('familai:renamed', h)
+  }, [])
+
   async function ensureConversation(): Promise<Conversation> {
     if (conv) return conv
     const c = await post<Conversation>('/chat/conversations', {})
@@ -200,7 +209,17 @@ export default function Chat() {
     <div className={`chat-layout ${openArtifact ? 'with-panel' : ''}`}>
     <div className="chat">
       <header className="chat-header">
-        <div className="title">{conv?.title ?? 'Nuova chat'} {ownerName && access !== 'owner' && <small className="muted">· di {ownerName}</small>}</div>
+        <div className="title" title={canWrite && conv ? 'Clicca per rinominare' : undefined} style={canWrite && conv ? { cursor: 'text' } : undefined}
+          onClick={async () => {
+            if (!conv || !canWrite) return
+            const title = prompt('Nuovo nome della chat', conv.title)
+            if (!title || title.trim() === conv.title) return
+            const c = await patch<Conversation>(`/chat/conversations/${conv.id}`, { title: title.trim().slice(0, 200) })
+            setConv(c)
+            window.dispatchEvent(new Event('familai:conversations'))
+          }}>
+          {conv?.title ?? 'Nuova chat'} {ownerName && access !== 'owner' && <small className="muted">· di {ownerName}</small>}
+        </div>
         <div className="row">
           {!isChild && me && (
             <select

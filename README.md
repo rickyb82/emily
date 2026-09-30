@@ -99,11 +99,8 @@ Ogni documento caricato in un progetto (o allegato a una chat) viene estratto, s
 
 A ogni messaggio l'assistente riceve automaticamente i `RAG_TOP_K` passaggi più pertinenti (evento `rag` nello stream, mostrato in chat) e dispone del tool `search_documents` per ricerche mirate; i documenti sotto `RAG_INLINE_MAX_CHARS` vengono comunque inseriti per intero. Nella pagina del progetto si vede lo stato dell'indice per file e si può **reindicizzare** (utile dopo aver aggiunto una chiave di embedding). Il permesso è lo stesso di "Documenti" nella policy dell'utente.
 
-### Server MCP (`mcp_servers.json`)
-```json
-{ "servers": { "nome": { "enabled": true, "type": "stdio", "command": "npx", "args": ["-y", "pacchetto"], "min_role": "adult" } } }
-```
-`type` = `stdio` (processo nel container backend) o `http` (Streamable HTTP). `min_role` limita chi può usarli (`child`/`adult`/`admin`). I tool appaiono come `mcp__nome__tool` e sono abilitati dalla voce "Server MCP" nella policy dell'utente. Riavviare il backend dopo le modifiche.
+### Server MCP
+Si gestiscono da **Famiglia → MCP**: aggiungi un server (stdio = comando avviato nel container backend, es. `npx -y @modelcontextprotocol/server-filesystem /data/shared`; http = server Streamable HTTP già in esecuzione), scegli il ruolo minimo (bambini/adulti/admin) e premi **Connetti**: la connessione avviene a caldo, senza riavvio, e i tool compaiono subito come `mcp__<server>__<tool>`. Header e variabili d'ambiente (token, chiavi) sono cifrati nel DB. Dalla tabella puoi provare ogni tool con argomenti JSON. Il file `mcp_servers.json` viene importato solo al primo avvio se il DB è vuoto.
 
 ### Policy per fascia d'età
 Default in `backend/app/policy/permissions.py` (`DEFAULTS` e `SYSTEM_PROMPTS`), sovrascrivibili per singolo utente dal pannello Famiglia (strumenti, provider, quote, orari, filtro, parole bloccate, istruzioni personalizzate).

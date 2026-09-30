@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { del, get, post, type Conversation } from '../lib/api'
+import { del, get, patch, post, type Conversation } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 export default function Shell({ children }: { children: ReactNode }) {
@@ -28,6 +28,14 @@ export default function Shell({ children }: { children: ReactNode }) {
     await load()
     setOpen(false)
     nav(`/c/${c.id}`)
+  }
+
+  async function rename(c: Conversation) {
+    const title = prompt('Nuovo nome della chat', c.title)
+    if (!title || title.trim() === c.title) return
+    await patch(`/chat/conversations/${c.id}`, { title: title.trim().slice(0, 200) })
+    await load()
+    window.dispatchEvent(new CustomEvent('familai:renamed', { detail: { id: c.id, title: title.trim() } }))
   }
 
   async function remove(c: Conversation) {
@@ -58,6 +66,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                 {c.shared ? '🔗 ' : ''}{c.title}
                 {c.shared && <small className="muted"> · {c.owner_name}</small>}
               </NavLink>
+              {!c.shared && <button className="icon" onClick={() => rename(c)} title="Rinomina">✏️</button>}
               {!c.shared && <button className="icon" onClick={() => remove(c)} title="Elimina">🗑</button>}
             </div>
           ))}
