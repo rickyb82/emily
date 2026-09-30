@@ -81,7 +81,7 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **Adulti**: scelgono provider e modello chat per chat dal menu in alto. Cambiando modello in una chat esistente viene proposto di **rigenerare l'ultima risposta** con il nuovo modello (`POST /chat/conversations/{id}/regenerate`); in ogni caso la cronologia viene convertita nel formato del nuovo provider e passata ai messaggi successivi. Il pulsante "↻ Rigenera risposta" è sempre disponibile.
 
 ### Tool
-- **web_search**: Tavily (`TAVILY_API_KEY`) o Brave (`BRAVE_API_KEY`); fallback DuckDuckGo limitato. Ricerca sicura forzata per i bambini.
+- **web_search**: con Claude in chat usa la ricerca web nativa di Anthropic (fonti citate dal modello); altrimenti il tool interroga OpenAI (API Responses, `web_search_preview`) o Gemini (grounding Google) con le chiavi già presenti, oppure Tavily/Brave se configurati; fallback DuckDuckGo. Per i bambini è forzata la ricerca sicura (istruzioni "adatto ai minori", niente tool nativo).
 - **generate_image**: OpenAI `IMAGE_MODEL` (gpt-image-1). Per i bambini il prompt viene prefissato con vincoli "adatto ai bambini".
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.

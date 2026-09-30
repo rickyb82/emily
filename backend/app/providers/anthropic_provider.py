@@ -58,7 +58,14 @@ class AnthropicProvider(BaseProvider):
         kwargs = dict(model=model or self.default_model, system=system, max_tokens=max_tokens,
                       messages=self._convert(messages))
         if tools:
-            kwargs["tools"] = [{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools]
+            spec = []
+            for t in tools:
+                if t.name == "web_search" and t.input_schema.get("x-native"):
+                    # ricerca web lato server di Anthropic: niente esecuzione locale, cita le fonti da se'
+                    spec.append({"type": "web_search_20250305", "name": "web_search", "max_uses": 5})
+                else:
+                    spec.append({"name": t.name, "description": t.description, "input_schema": t.input_schema})
+            kwargs["tools"] = spec
 
         current_tool: dict | None = None
         json_buf = ""
@@ -71,6 +78,9 @@ class AnthropicProvider(BaseProvider):
                     if cb.type == "tool_use":
                         current_tool = {"id": cb.id, "name": cb.name, "input": {}}
                         json_buf = ""
+                    elif cb.type == "server_tool_use":
+                        current_tool = None
+                        yield ProviderEvent("status", text="🔎 Ricerca web (Claude)…")
                 elif et == "content_block_delta":
                     d = ev.delta
                     if d.type == "text_delta":

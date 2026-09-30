@@ -24,15 +24,76 @@ async def web_search(args: dict, ctx: ToolContext) -> ToolResult:
     if not query:
         return ToolResult("Query vuota", is_error=True)
     try:
-        if settings.web_search_provider == "brave" and settings.brave_api_key:
-            return await _brave(query, n, safe)
-        if settings.tavily_api_key:
-            return await _tavily(query, n, safe)
-        if settings.brave_api_key:
-            return await _brave(query, n, safe)
+        pref = (settings.web_search_provider or "auto").lower()
+        order = {"tavily": ["tavily"], "brave": ["brave"], "openai": ["openai"], "gemini": ["gemini"],
+                 "anthropic": ["openai", "gemini", "tavily", "brave"],   # 'anthropic' = nativo in chat; qui il fallback
+                 }.get(pref, ["tavily", "brave", "openai", "gemini"])
+        for backend in order:
+            if backend == "tavily" and settings.tavily_api_key:
+                return await _tavily(query, n, safe)
+            if backend == "brave" and settings.brave_api_key:
+                return await _brave(query, n, safe)
+            if backend == "openai" and settings.openai_api_key:
+                return await _openai(query, n, safe)
+            if backend == "gemini" and settings.gemini_api_key:
+                return await _gemini(query, n, safe)
         return await _duckduckgo(query, n, safe)
     except Exception as e:
         return ToolResult(f"Ricerca fallita: {e}", is_error=True)
+
+
+SAFE_HINT = ("I risultati sono per un bambino: escludi contenuti violenti, sessuali, spaventosi o inadatti ai minori "
+             "e preferisci fonti affidabili e divulgative. ")
+
+
+async def _openai(query: str, n: int, safe: bool) -> ToolResult:
+    """Ricerca web tramite l'API Responses di OpenAI (tool web_search): nessuna chiave aggiuntiva."""
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    prompt = ((SAFE_HINT if safe else "") +
+              f"Cerca sul web: {query}\nRiporta i {n} risultati più utili come elenco: titolo, URL e 1-2 frasi di sintesi "
+              "con le informazioni chiave (date, numeri). Rispondi in italiano.")
+    r = await client.responses.create(model=settings.web_search_model_openai, tools=[{"type": "web_search_preview"}],
+                                      input=prompt)
+    text = getattr(r, "output_text", "") or ""
+    urls = []
+    for item in getattr(r, "output", []) or []:
+        for c in getattr(item, "content", []) or []:
+            for a in getattr(c, "annotations", []) or []:
+                u = getattr(a, "url", None)
+                if u and u not in urls:
+                    urls.append(u)
+    if urls:
+        text += "\n\nFonti:\n" + "\n".join(f"- {u}" for u in urls[:10])
+    return ToolResult(text or "Nessun risultato")
+
+
+async def _gemini(query: str, n: int, safe: bool) -> ToolResult:
+    """Ricerca web tramite Gemini con grounding su Google Search."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    prompt = ((SAFE_HINT if safe else "") +
+              f"Cerca sul web: {query}\nRiporta i {n} risultati più utili come elenco: titolo, URL e 1-2 frasi di sintesi "
+              "con le informazioni chiave (date, numeri). Rispondi in italiano.")
+    r = await client.aio.models.generate_content(
+        model=settings.web_search_model_gemini, contents=prompt,
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]))
+    text = r.text or ""
+    urls = []
+    try:
+        gm = r.candidates[0].grounding_metadata
+        for ch in gm.grounding_chunks or []:
+            u = getattr(getattr(ch, "web", None), "uri", None)
+            if u and u not in urls:
+                urls.append(u)
+    except Exception:
+        pass
+    if urls:
+        text += "\n\nFonti:\n" + "\n".join(f"- {u}" for u in urls[:10])
+    return ToolResult(text or "Nessun risultato")
 
 
 async def _tavily(query: str, n: int, safe: bool) -> ToolResult:

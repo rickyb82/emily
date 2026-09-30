@@ -32,6 +32,7 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "tavily_api_key": ("Chiave API Tavily", True),
     "brave_api_key": ("Chiave API Brave Search", True),
     "web_search_provider": ("Motore di ricerca web", False),
+    "anthropic_native_search": ("Ricerca nativa Anthropic con Claude", False),
     "image_provider": ("Provider immagini (auto/openai/gemini)", False),
     "image_model": ("Modello immagini OpenAI", False),
     "gemini_image_model": ("Modello immagini Gemini (Imagen)", False),

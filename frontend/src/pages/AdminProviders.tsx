@@ -211,7 +211,15 @@ export default function AdminProviders() {
         <div className="grid3">
           <label>Motore ricerca web <small className="muted">({s.web_search_provider.value})</small>
             <select value={draft.web_search_provider ?? s.web_search_provider.value} onChange={(e) => setDraft({ ...draft, web_search_provider: e.target.value })}>
+              <option value="auto">auto (Claude nativo; altrimenti OpenAI o Gemini; Tavily/Brave se hanno la chiave)</option>
+              <option value="openai">OpenAI (web search via API Responses)</option>
+              <option value="gemini">Gemini (grounding Google Search)</option>
               <option value="tavily">Tavily</option><option value="brave">Brave</option>
+            </select>
+          </label>
+          <label>Ricerca nativa di Claude <small className="muted">({s.anthropic_native_search.value})</small>
+            <select value={draft.anthropic_native_search ?? s.anthropic_native_search.value} onChange={(e) => setDraft({ ...draft, anthropic_native_search: e.target.value })}>
+              <option value="true">attiva quando il modello è Claude</option><option value="false">disattiva (usa sempre il motore sopra)</option>
             </select>
           </label>
           <label>Provider immagini <small className="muted">({s.image_provider.value})</small>
@@ -229,7 +237,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

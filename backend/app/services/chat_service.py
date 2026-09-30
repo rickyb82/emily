@@ -229,6 +229,13 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 continue
         tools.append(t.spec)
 
+    # ricerca web nativa di Anthropic (solo con Claude, non in modalita' ricerca sicura per i bambini)
+    if (provider.id == "anthropic" and str(settings.anthropic_native_search).lower() in ("1", "true", "yes")
+            and settings.web_search_provider in ("auto", "anthropic") and not policy.get("safe_search")):
+        from ..providers.base import ToolSpec as _TS
+        tools = [(_TS("web_search", t.description, {**t.input_schema, "x-native": True}) if t.name == "web_search" else t)
+                 for t in tools]
+
     system = await build_system_prompt(user, conv, db)
     # RAG: recupero automatico dei passaggi pertinenti dai documenti del progetto / della chat
     if text.strip():
@@ -258,6 +265,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                     yield sse({"type": "text_delta", "text": ev.text})
                 elif ev.type == "tool_use" and ev.tool_use:
                     tool_uses.append(ev.tool_use)
+                elif ev.type == "status":
+                    yield sse({"type": "status", "text": ev.text})
                 elif ev.type == "usage":
                     total_usage["input_tokens"] += ev.usage.get("input_tokens", 0) or 0
                     total_usage["output_tokens"] += ev.usage.get("output_tokens", 0) or 0

@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     enable_mock_provider: bool = False  # utile per test senza chiavi
 
     # Tool
-    web_search_provider: str = "tavily"
+    web_search_provider: str = "auto"      # auto | anthropic | openai | gemini | tavily | brave
+    web_search_model_openai: str = "gpt-4.1-mini"
+    web_search_model_gemini: str = "gemini-2.5-flash"
+    anthropic_native_search: str = "true"   # con Claude in chat usa il tool di ricerca nativo di Anthropic
     tavily_api_key: str = ""
     brave_api_key: str = ""
     image_provider: str = "auto"          # auto | openai | gemini
