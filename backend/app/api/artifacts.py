@@ -74,6 +74,15 @@ async def update_artifact(aid: str, body: ArtifactUpdate, ctx: AuthContext = Dep
     return artifact_out(a)
 
 
+def _content_disposition(title: str, ext: str) -> str:
+    """Gli header HTTP accettano solo latin-1: titoli con emoji/accenti vanno resi ASCII (+ filename* RFC 5987)."""
+    import re
+    from urllib.parse import quote
+    base = (title or "artifact")[:60]
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]+", "", base.encode("ascii", "ignore").decode()).strip() or "artifact"
+    return f'inline; filename="{ascii_name}.{ext}"; filename*=UTF-8\'\'{quote(base)}.{ext}'
+
+
 @router.get("/{aid}/raw")
 async def raw(aid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Contenuto grezzo per download / apertura in nuova scheda. Servito con CSP sandbox: niente cookie né API."""
@@ -90,6 +99,6 @@ async def raw(aid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSessi
                                    "style-src 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
                                    "font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src * data: blob:; "
                                    "media-src * data: blob:; connect-src 'none'",
-        "Content-Disposition": f'inline; filename="{a.title[:60].replace(chr(34), "")}.{ext}"',
+        "Content-Disposition": _content_disposition(a.title, ext),
         "X-Content-Type-Options": "nosniff",
     })
