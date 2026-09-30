@@ -26,15 +26,21 @@ def _send_sync(to: str, subject: str, text: str, html: str | None) -> None:
     msg.set_content(text)
     if html:
         msg.add_alternative(html, subtype="html")
-    port = int(settings.smtp_port or (465 if settings.smtp_security == "ssl" else 587))
+    security = (settings.smtp_security or "starttls").lower()
+    port = int(settings.smtp_port or (465 if security == "ssl" else 587))
+    # coerenza porta/sicurezza: 465 = SSL implicito, 587/25 = STARTTLS (evita "Connection unexpectedly closed")
+    if port == 465 and security != "ssl":
+        security = "ssl"
+    elif port in (587, 25) and security == "ssl":
+        security = "starttls"
     ctx = ssl.create_default_context()
-    if settings.smtp_security == "ssl":
+    if security == "ssl":
         server = smtplib.SMTP_SSL(settings.smtp_host, port, timeout=20, context=ctx)
     else:
         server = smtplib.SMTP(settings.smtp_host, port, timeout=20)
     with server:
         server.ehlo()
-        if settings.smtp_security == "starttls":
+        if security == "starttls":
             server.starttls(context=ctx)
             server.ehlo()
         if settings.smtp_user:
