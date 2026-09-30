@@ -39,8 +39,12 @@ async def create_member(body: CreateMemberRequest, request: Request, ctx: AuthCo
             raise HTTPException(400, "Per un bambino serve un PIN")
         age_group = AgeGroup(body.age_group) if body.age_group in ("young", "kid", "teen") else AgeGroup.kid
     else:
-        if not body.email or not body.password:
-            raise HTTPException(400, "Per un adulto servono email e password")
+        from ..services import mailer
+
+        if not body.email:
+            raise HTTPException(400, "Per un adulto serve l'email")
+        if not body.password and not mailer.email_enabled():
+            raise HTTPException(400, "Serve una password (oppure configura l'email per inviare un invito)")
         age_group = AgeGroup.adult
     u = User(family_id=ctx.user.family_id, username=body.username.lower(), display_name=body.display_name,
              avatar=body.avatar, role=role, age_group=age_group, birth_year=body.birth_year,
@@ -54,7 +58,51 @@ async def create_member(body: CreateMemberRequest, request: Request, ctx: AuthCo
         await db.rollback()
         raise HTTPException(400, "Username o email già in uso")
     await audit(db, "member_created", request, ctx.user, f"{u.username} ({role.value})")
-    return await user_out(db, u)
+    out = await user_out(db, u)
+    if role != Role.child and u.email:
+        out_extra = await _send_invite(db, u, ctx.user.display_name)
+        return {**out.model_dump(), "invite": out_extra}
+    return out
+
+
+async def _send_invite(db: AsyncSession, u: User, invited_by: str) -> dict:
+    from ..services import email_codes, mailer
+
+    if not mailer.email_enabled():
+        return {"sent": False, "reason": "email non configurata"}
+    try:
+        code = await email_codes.issue(db, u, "invite")
+        await mailer.send_invite(u.email, u.display_name, code, invited_by)
+        return {"sent": True}
+    except Exception as e:
+        return {"sent": False, "reason": str(e)[:200]}
+
+
+@router.post("/members/{uid}/invite")
+async def resend_invite(uid: str, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """(Ri)invia l'email di invito con il link per impostare la password."""
+    u = await db.get(User, uid)
+    if not u or u.family_id != ctx.user.family_id or u.role == Role.child or not u.email:
+        raise HTTPException(404)
+    res = await _send_invite(db, u, ctx.user.display_name)
+    await audit(db, "invite_sent" if res["sent"] else "invite_failed", request, ctx.user, u.email)
+    if not res["sent"]:
+        raise HTTPException(502, f"Invio fallito: {res['reason']}")
+    return {"status": "ok"}
+
+
+@router.post("/email/test")
+async def email_test(request: Request, ctx: AuthContext = Depends(require_admin)):
+    from ..services import mailer
+
+    if not ctx.user.email:
+        raise HTTPException(400, "Il tuo utente non ha un'email")
+    try:
+        await mailer.send_email(ctx.user.email, "FamilAI: email di prova",
+                                "Se leggi questo messaggio la configurazione SMTP funziona. 🎉")
+    except Exception as e:
+        raise HTTPException(502, f"Invio fallito: {type(e).__name__}: {e}")
+    return {"status": "ok", "to": ctx.user.email}
 
 
 @router.patch("/members/{uid}", response_model=UserOut)
@@ -330,7 +378,8 @@ PROVIDER_CARDS = [
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
-OTHER_SETTINGS = ["web_search_provider", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model"]
+OTHER_SETTINGS = ["web_search_provider", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
+                  "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback"]
 
 
 class SettingsUpdate(BaseModel):

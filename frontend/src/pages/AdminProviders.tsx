@@ -112,6 +112,38 @@ export default function AdminProviders() {
       })}
 
       <section className="card stack">
+        <h3 style={{ margin: 0 }}>📧 Email (SMTP)</h3>
+        <p className="muted small">Serve per l'invito ai nuovi membri, "password dimenticata" e il codice via email al posto della passkey. Con Gmail usa una <b>password per le app</b> (Account Google → Sicurezza → Verifica in due passaggi → Password per le app), non la password normale.</p>
+        <div className="row wrap">
+          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.gmail.com', smtp_port: '587', smtp_security: 'starttls', smtp_from_name: 'FamilAI' })}>Preimposta Gmail</button>
+          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.office365.com', smtp_port: '587', smtp_security: 'starttls' })}>Outlook / Microsoft 365</button>
+          <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtps.aruba.it', smtp_port: '465', smtp_security: 'ssl' })}>Aruba</button>
+        </div>
+        <div className="grid3">
+          <label>Server SMTP <small className="muted">({s.smtp_host.value || 'non impostato'})</small><input value={draft.smtp_host ?? ''} placeholder={s.smtp_host.value || 'smtp.gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_host: e.target.value })} /></label>
+          <label>Porta<input value={draft.smtp_port ?? ''} placeholder={s.smtp_port.value || '587'} onChange={(e) => setDraft({ ...draft, smtp_port: e.target.value })} /></label>
+          <label>Sicurezza <small className="muted">({s.smtp_security.value})</small>
+            <select value={draft.smtp_security ?? s.smtp_security.value} onChange={(e) => setDraft({ ...draft, smtp_security: e.target.value })}>
+              <option value="starttls">STARTTLS (587)</option><option value="ssl">SSL (465)</option><option value="none">nessuna</option>
+            </select>
+          </label>
+          <label>Utente (email Google) <small className="muted">({s.smtp_user.value || '—'})</small><input value={draft.smtp_user ?? ''} placeholder={s.smtp_user.value || 'tuo.nome@gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_user: e.target.value, smtp_from: draft.smtp_from ?? e.target.value })} /></label>
+          <label>Password per le app <small className="muted">({s.smtp_password.configured ? 'impostata' : 'non impostata'})</small><input type="password" autoComplete="off" value={draft.smtp_password ?? ''} placeholder="xxxx xxxx xxxx xxxx" onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value.replace(/\s+/g, '') })} /></label>
+          <label>Mittente <small className="muted">({s.smtp_from.value || '—'})</small><input value={draft.smtp_from ?? ''} placeholder={s.smtp_from.value || 'tuo.nome@gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_from: e.target.value })} /></label>
+          <label>Nome mittente<input value={draft.smtp_from_name ?? ''} placeholder={s.smtp_from_name.value} onChange={(e) => setDraft({ ...draft, smtp_from_name: e.target.value })} /></label>
+          <label>Codice email al posto della passkey <small className="muted">({s.email_mfa_fallback.value})</small>
+            <select value={draft.email_mfa_fallback ?? s.email_mfa_fallback.value} onChange={(e) => setDraft({ ...draft, email_mfa_fallback: e.target.value })}>
+              <option value="true">consentito</option><option value="false">solo passkey / codici di recupero</option>
+            </select>
+          </label>
+        </div>
+        <div className="row wrap">
+          <button disabled={busy !== ''} onClick={() => save(['smtp_host', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'email_mfa_fallback'])}>Salva</button>
+          <button className="ghost" disabled={busy !== '' || !s.smtp_host.configured} onClick={async () => { setBusy('mail'); setErr(''); try { const r = await post('/admin/email/test'); setMsg(`Email di prova inviata a ${r.to}`) } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>{busy === 'mail' ? 'Invio…' : '✉️ Invia email di prova a me'}</button>
+        </div>
+      </section>
+
+      <section className="card stack">
         <h3 style={{ margin: 0 }}>Altre impostazioni</h3>
         <div className="grid3">
           <label>Motore ricerca web <small className="muted">({s.web_search_provider.value})</small>

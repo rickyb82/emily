@@ -266,3 +266,99 @@ async def revoke_others(ctx: AuthContext = Depends(require_auth), db: AsyncSessi
     await db.execute(delete(Session).where(Session.user_id == ctx.user.id, Session.id != ctx.session.id))
     await db.commit()
     return {"status": "ok"}
+
+
+# ---------------- email: password dimenticata, invito, codice come secondo fattore ----------------
+from pydantic import BaseModel as _BM  # noqa: E402
+from pydantic import EmailStr  # noqa: E402
+
+from ..services import email_codes, mailer  # noqa: E402
+
+
+class ForgotRequest(_BM):
+    email: EmailStr
+
+
+class ResetRequest(_BM):
+    email: EmailStr
+    code: str
+    new_password: str
+
+
+class CodeRequest(_BM):
+    code: str
+
+
+@router.get("/features")
+async def features():
+    """Funzioni disponibili alla schermata di login (nessuna autenticazione)."""
+    return {"email": mailer.email_enabled(),
+            "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes")}
+
+
+@router.post("/forgot")
+async def forgot_password(body: ForgotRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Invia un codice di reset. Risponde sempre OK per non rivelare quali email esistono."""
+    login_limiter.check("forgot:" + client_ip(request))
+    if not mailer.email_enabled():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Invio email non configurato: chiedi all'amministratore")
+    user = (await db.execute(select(User).where(User.email == body.email.lower()))).scalar_one_or_none()
+    if user and user.is_active and user.role != Role.child:
+        code = await email_codes.issue(db, user, "reset")
+        try:
+            await mailer.send_code(user.email, user.display_name, code, "reset")
+        except Exception as e:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Invio email fallito: {e}")
+        await audit(db, "reset_code_sent", request, user)
+    return {"status": "ok"}
+
+
+@router.post("/reset")
+async def reset_password(body: ResetRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Imposta una nuova password con il codice ricevuto via email (reset o invito)."""
+    login_limiter.check("reset:" + client_ip(request))
+    if len(body.new_password) < 10:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La password deve avere almeno 10 caratteri")
+    user = (await db.execute(select(User).where(User.email == body.email.lower()))).scalar_one_or_none()
+    if not user or not await email_codes.verify(db, user, ("reset", "invite"), body.code):
+        await audit(db, "reset_failed", request, user)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Codice non valido o scaduto")
+    user.password_hash = hash_secret(body.new_password)
+    user.failed_logins, user.locked_until = 0, None
+    await db.execute(delete(Session).where(Session.user_id == user.id))
+    await db.commit()
+    await audit(db, "password_reset", request, user)
+    return {"status": "ok"}
+
+
+@router.post("/mfa/email/send")
+async def mfa_email_send(request: Request, ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Depends(get_db)):
+    """Secondo fattore alternativo alla passkey: codice via email (se abilitato)."""
+    if not (mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes")):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Codice via email non abilitato")
+    login_limiter.check("mfa:" + ctx.user.id)
+    code = await email_codes.issue(db, ctx.user, "mfa")
+    try:
+        await mailer.send_code(ctx.user.email, ctx.user.display_name, code, "mfa")
+    except Exception as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Invio email fallito: {e}")
+    return {"status": "ok", "hint": mask_email(ctx.user.email)}
+
+
+@router.post("/mfa/email/verify")
+async def mfa_email_verify(body: CodeRequest, request: Request, ctx: AuthContext = Depends(require_pre_mfa),
+                           db: AsyncSession = Depends(get_db)):
+    if not await email_codes.verify(db, ctx.user, ("mfa",), body.code):
+        await audit(db, "mfa_email_failed", request, ctx.user)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Codice non valido o scaduto")
+    ctx.session.mfa_verified = True
+    await db.commit()
+    await audit(db, "mfa_email_ok", request, ctx.user)
+    return {"status": "ok"}
+
+
+def mask_email(e: str | None) -> str:
+    if not e or "@" not in e:
+        return ""
+    name, dom = e.split("@", 1)
+    return f"{name[:2]}…@{dom}"

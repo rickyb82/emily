@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
-import { post } from '../lib/api'
+import { get, post } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 /** Pagina mostrata a un adulto che deve registrare (o verificare) la passkey prima di usare l'app. */
@@ -10,6 +10,29 @@ export default function Enroll() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const needsVerify = me && me.user.has_passkey && !me.mfa_verified
+  const [emailMfa, setEmailMfa] = useState(false)
+  const [code, setCode] = useState('')
+  const [sent, setSent] = useState('')
+  useEffect(() => {
+    get('/auth/features').then((f) => setEmailMfa(f.email_mfa)).catch(() => {})
+  }, [])
+  async function emailFlow() {
+    setErr('')
+    setBusy(true)
+    try {
+      if (!sent) {
+        const r = await post('/auth/mfa/email/send')
+        setSent(r.hint)
+      } else {
+        await post('/auth/mfa/email/verify', { code })
+        await refresh()
+      }
+    } catch (e: any) {
+      setErr(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function register() {
     setErr('')
@@ -57,6 +80,12 @@ export default function Enroll() {
             <p>Conferma l'accesso con la tua passkey.</p>
             {err && <div className="error">{err}</div>}
             <button onClick={verify} disabled={busy}>Usa la passkey</button>
+            {emailMfa && (
+              <>
+                {sent && <input placeholder={`Codice inviato a ${sent}`} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" />}
+                <button className="ghost" onClick={emailFlow} disabled={busy}>{sent ? 'Verifica codice' : 'Ricevi un codice via email'}</button>
+              </>
+            )}
           </>
         ) : (
           <>

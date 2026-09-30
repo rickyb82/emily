@@ -86,6 +86,12 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Email: inviti, password dimenticata, codice al posto della passkey
+Configura l'SMTP in **Famiglia → Provider AI → Email** (pulsante "Preimposta Gmail": `smtp.gmail.com:587` STARTTLS; utente = indirizzo Gmail; password = *password per le app* di Google) e verifica con "Invia email di prova". Da quel momento:
+- creando un adulto senza password parte un **invito** con link (valido 48 h) per scegliere la password (pulsante "✉️ Invito" per reinviarlo);
+- al login compare **"Password dimenticata?"**: codice a 6 cifre via email (10 min, 5 tentativi) e nuova password;
+- se `EMAIL_MFA_FALLBACK=true`, al passo passkey si può chiedere **un codice via email** come secondo fattore alternativo (comodo contro i blocchi, leggermente meno sicuro della sola passkey: disattivabile dal pannello).
+
 ### Costi e budget
 **Famiglia → Costi** mostra per il mese corrente la spesa **stimata** per provider e per membro (log di utilizzo × listino prezzi modificabile), un **budget mensile** per provider con rimanente e barra, e, inserendo le chiavi *Admin* di Anthropic/OpenAI, la **spesa reale** letta dai rispettivi report di costo dell'organizzazione. Nessun provider espone il credito residuo a una chiave API normale; Gemini non offre report via API.
 

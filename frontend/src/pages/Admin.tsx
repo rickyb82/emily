@@ -64,7 +64,10 @@ function Members() {
               <td>{{ admin: 'Amministratore', adult: 'Adulto', child: 'Bambino/a' }[m.role]}</td>
               <td>{m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
               <td>{m.role !== 'child' ? (m.has_passkey ? '✅' : '⚠️ no') : '—'}</td>
-              <td><button className="ghost" onClick={() => setEdit(m)}>Modifica</button></td>
+              <td className="row wrap">
+                <button className="ghost" onClick={() => setEdit(m)}>Modifica</button>
+                {m.role !== 'child' && m.email && <button className="ghost" title="Invia l'email con il link per impostare la password" onClick={() => post(`/admin/members/${m.id}/invite`).then(() => alert(`Invito inviato a ${m.email}`)).catch((e) => setErr(e.message))}>✉️ Invito</button>}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -154,7 +157,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
           ) : (
             <>
               {!user && <label>Email<input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} /></label>}
-              <label>Password {user && '(vuota = invariata)'}<input type="password" value={f.password} onChange={(e) => set('password', e.target.value)} /></label>
+              <label>Password {user ? '(vuota = invariata)' : '(vuota = invia un invito via email per sceglierla)'}<input type="password" value={f.password} onChange={(e) => set('password', e.target.value)} /></label>
             </>
           )}
           {user && <label className="row"><input type="checkbox" checked={f.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Attivo</label>}

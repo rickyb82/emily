@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
 
+    # Email (SMTP) — configurabile dal pannello
+    smtp_host: str = ""
+    smtp_port: str = ""               # vuoto = 587 (starttls) / 465 (ssl)
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_from_name: str = "FamilAI"
+    smtp_security: str = "starttls"   # starttls | ssl | none
+    email_mfa_fallback: str = "true"  # consente il codice via email al posto della passkey al login
+
     # Costi e budget (pannello Costi)
     pricing_json: str = ""            # override del listino prezzi (JSON), vedi services/costs.py
     budget_anthropic: str = ""        # budget mensile in USD (vuoto = nessun budget)

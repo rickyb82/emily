@@ -3,6 +3,7 @@ import { useAuth } from './lib/auth'
 import Login from './pages/Login'
 import KidLogin from './pages/KidLogin'
 import Enroll from './pages/Enroll'
+import Reset from './pages/Reset'
 import Shell from './components/Shell'
 import Chat from './pages/Chat'
 import Projects from './pages/Projects'
@@ -19,6 +20,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/kids" element={<KidLogin />} />
+        <Route path="/forgot" element={<Reset />} />
+        <Route path="/reset" element={<Reset />} />
         <Route path="*" element={<Navigate to="/login" replace state={{ from: loc.pathname }} />} />
       </Routes>
     )
@@ -27,6 +30,7 @@ export default function App() {
   if (me.mfa_required) {
     return (
       <Routes>
+        <Route path="/reset" element={<Reset />} />
         <Route path="/enroll" element={<Enroll />} />
         <Route path="*" element={<Navigate to="/enroll" replace />} />
       </Routes>
