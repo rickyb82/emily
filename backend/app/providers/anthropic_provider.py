@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from .base import BaseProvider, ProviderEvent, ToolSpec
+from .base import PROGRESS_STEP, truncated_tool_warning, writing_status, BaseProvider, ProviderEvent, ToolSpec
 
 
 class AnthropicProvider(BaseProvider):
@@ -69,6 +69,8 @@ class AnthropicProvider(BaseProvider):
 
         current_tool: dict | None = None
         json_buf = ""
+        next_report = PROGRESS_STEP
+        stop_reason = None
         usage = {"input_tokens": 0, "output_tokens": 0}
         async with client.messages.stream(**kwargs) as s:
             async for ev in s:
@@ -78,6 +80,8 @@ class AnthropicProvider(BaseProvider):
                     if cb.type == "tool_use":
                         current_tool = {"id": cb.id, "name": cb.name, "input": {}}
                         json_buf = ""
+                        next_report = PROGRESS_STEP
+                        yield ProviderEvent("status", text=writing_status(cb.name, 0))
                     elif cb.type == "server_tool_use":
                         current_tool = None
                         yield ProviderEvent("status", text="🔎 Ricerca web (Claude)…")
@@ -87,16 +91,23 @@ class AnthropicProvider(BaseProvider):
                         yield ProviderEvent("text_delta", text=d.text)
                     elif d.type == "input_json_delta":
                         json_buf += d.partial_json
+                        if len(json_buf) >= next_report and current_tool is not None:
+                            next_report += PROGRESS_STEP
+                            yield ProviderEvent("status", text=writing_status(current_tool["name"], len(json_buf)))
                 elif et == "content_block_stop":
                     if current_tool is not None:
                         try:
                             current_tool["input"] = json.loads(json_buf) if json_buf.strip() else {}
+                            yield ProviderEvent("tool_use", tool_use=current_tool)
                         except json.JSONDecodeError:
-                            current_tool["input"] = {"_raw": json_buf}
-                        yield ProviderEvent("tool_use", tool_use=current_tool)
+                            # input troncato (di solito max_tokens): niente tool, avvisa l'utente in chiaro
+                            yield ProviderEvent("text_delta", text=truncated_tool_warning(current_tool["name"]))
                         current_tool = None
                 elif et == "message_start":
                     usage["input_tokens"] = getattr(ev.message.usage, "input_tokens", 0)
                 elif et == "message_delta":
                     usage["output_tokens"] = getattr(ev.usage, "output_tokens", 0)
+                    stop_reason = getattr(ev.delta, "stop_reason", None) or stop_reason
+        if stop_reason == "max_tokens" and current_tool is None and not json_buf:
+            yield ProviderEvent("text_delta", text="\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare.")
         yield ProviderEvent("usage", usage=usage)

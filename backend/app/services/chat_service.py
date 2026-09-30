@@ -260,7 +260,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tool_uses: list[dict] = []
         yield sse({"type": "status", "text": "Sto pensando…" if _round == 0 else "Sto elaborando i risultati…"})
         try:
-            async for ev in provider.stream(model, system, history, tools):
+            async for ev in provider.stream(model, system, history, tools, max_tokens=settings.max_output_tokens):
                 if ev.type == "text_delta":
                     text_acc += ev.text
                     yield sse({"type": "text_delta", "text": ev.text})

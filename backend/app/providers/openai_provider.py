@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from .base import BaseProvider, ProviderEvent, ToolSpec
+from .base import PROGRESS_STEP, BaseProvider, ProviderEvent, ToolSpec, truncated_tool_warning, writing_status
 
 
 class OpenAIProvider(BaseProvider):
@@ -62,33 +62,42 @@ class OpenAIProvider(BaseProvider):
 
         client = AsyncOpenAI(api_key=self.api_key)
         kwargs = dict(model=model or self.default_model, messages=self._convert(system, messages), stream=True,
-                      stream_options={"include_usage": True})
+                      stream_options={"include_usage": True}, max_completion_tokens=max_tokens)
         if tools:
             kwargs["tools"] = [{"type": "function", "function": {"name": t.name, "description": t.description,
                                                                   "parameters": t.input_schema}} for t in tools]
         pending: dict[int, dict] = {}
         usage = {}
+        finish_reason = None
         async for chunk in await client.chat.completions.create(**kwargs):
             if chunk.usage:
                 usage = {"input_tokens": chunk.usage.prompt_tokens, "output_tokens": chunk.usage.completion_tokens}
             if not chunk.choices:
                 continue
+            finish_reason = chunk.choices[0].finish_reason or finish_reason
             delta = chunk.choices[0].delta
             if delta.content:
                 yield ProviderEvent("text_delta", text=delta.content)
             for tc in delta.tool_calls or []:
-                p = pending.setdefault(tc.index, {"id": "", "name": "", "args": ""})
+                p = pending.setdefault(tc.index, {"id": "", "name": "", "args": "", "next": PROGRESS_STEP})
                 if tc.id:
                     p["id"] = tc.id
                 if tc.function:
                     if tc.function.name:
                         p["name"] += tc.function.name
+                        yield ProviderEvent("status", text=writing_status(p["name"], 0))
                     if tc.function.arguments:
                         p["args"] += tc.function.arguments
+                        if len(p["args"]) >= p["next"]:
+                            p["next"] += PROGRESS_STEP
+                            yield ProviderEvent("status", text=writing_status(p["name"], len(p["args"])))
         for p in pending.values():
             try:
                 args = json.loads(p["args"]) if p["args"].strip() else {}
             except json.JSONDecodeError:
-                args = {"_raw": p["args"]}
+                yield ProviderEvent("text_delta", text=truncated_tool_warning(p["name"]))
+                continue
             yield ProviderEvent("tool_use", tool_use={"id": p["id"], "name": p["name"], "input": args})
+        if finish_reason == "length" and not pending:
+            yield ProviderEvent("text_delta", text="\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare.")
         yield ProviderEvent("usage", usage=usage)

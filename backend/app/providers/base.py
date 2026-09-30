@@ -73,3 +73,25 @@ class BaseProvider:
 
 def text_of(blocks: list[dict]) -> str:
     return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+
+
+# ---- progresso e troncamenti durante lo streaming dei tool ----
+WRITING_LABELS = {
+    "create_artifact": "l'app", "update_artifact": "le modifiche all'app", "run_code": "il codice da eseguire",
+    "generate_image": "la richiesta di immagine", "generate_video": "la richiesta di video",
+}
+PROGRESS_STEP = 2500   # caratteri di input tool tra un aggiornamento di stato e l'altro
+
+
+def writing_status(tool_name: str, nchars: int) -> str:
+    what = WRITING_LABELS.get(tool_name, f"i dati per {tool_name}")
+    kb = nchars / 1024
+    size = f"{kb:.0f} KB" if kb >= 1 else f"{nchars} caratteri"
+    return f"✍️ Sto scrivendo {what} ({size})…"
+
+
+def truncated_tool_warning(tool_name: str) -> str:
+    what = WRITING_LABELS.get(tool_name, tool_name)
+    return (f"\n\n⚠️ Ho superato la lunghezza massima della risposta mentre scrivevo {what}, quindi non e' stato "
+            "completato. Chiedimi una versione piu' semplice o di procedere a pezzi (per esempio: \"fai prima la "
+            "struttura, poi aggiungiamo un mini-gioco alla volta\").")

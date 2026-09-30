@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     openai_default_model: str = "gpt-4.1"
     gemini_default_model: str = "gemini-2.5-flash"
     enable_mock_provider: bool = False  # utile per test senza chiavi
+    max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)
 
     # Tool
     web_search_provider: str = "auto"      # auto | anthropic | openai | gemini | tavily | brave
