@@ -247,8 +247,14 @@ export default function Chat() {
               ))}
             </select>
           )}
-          {artifacts.length > 0 && !openArtifact && (
-            <button className="ghost" onClick={() => setOpenArtifact(artifacts[artifacts.length - 1])} title="Apri l'ultimo artifact">📦 {artifacts.length}</button>
+          {artifacts.length === 1 && !openArtifact && (
+            <button className="ghost" onClick={() => setOpenArtifact(artifacts[0])} title={artifacts[0].title}>📦 {artifacts[0].title.slice(0, 24)}</button>
+          )}
+          {artifacts.length > 1 && !openArtifact && (
+            <select className="ghost-select" value="" title="Apri un artifact" onChange={(e) => { const a = artifacts.find((x) => x.id === e.target.value); if (a) setOpenArtifact(a) }}>
+              <option value="" disabled>📦 {artifacts.length} artifact…</option>
+              {artifacts.map((a, i) => <option key={a.id} value={a.id}>{i + 1}. {a.title}</option>)}
+            </select>
           )}
           {conv && access === 'owner' && <button className="ghost" onClick={() => setShare(true)}>🔗 Condividi</button>}
         </div>
@@ -326,7 +332,7 @@ export default function Chat() {
       {share && conv && <ShareDialog type="conversation" id={conv.id} onClose={() => setShare(false)} />}
     </div>
     {openArtifact && (
-      <ArtifactPanel artifact={openArtifact} canEdit={canWrite} onClose={() => setOpenArtifact(null)} onChange={(a) => upsertArtifact(a)} />
+      <ArtifactPanel artifact={openArtifact} all={artifacts} canEdit={canWrite} onClose={() => setOpenArtifact(null)} onChange={(a) => upsertArtifact(a)} onSelect={(a) => setOpenArtifact(a)} />
     )}
     </div>
   )

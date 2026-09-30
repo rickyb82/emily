@@ -25,8 +25,9 @@ function previewDoc(a: ArtifactData): string {
   return ''
 }
 
-export default function ArtifactPanel({ artifact, canEdit, onClose, onChange }: {
-  artifact: ArtifactData; canEdit: boolean; onClose: () => void; onChange: (a: ArtifactData) => void
+export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, onChange, onSelect }: {
+  artifact: ArtifactData; all?: ArtifactData[]; canEdit: boolean; onClose: () => void; onChange: (a: ArtifactData) => void
+  onSelect?: (a: ArtifactData) => void
 }) {
   const [tab, setTab] = useState<'preview' | 'code'>(CAN_PREVIEW.has(artifact.kind) ? 'preview' : 'code')
   const [editing, setEditing] = useState(false)
@@ -68,7 +69,14 @@ export default function ArtifactPanel({ artifact, canEdit, onClose, onChange }: 
   return (
     <aside className="artifact-panel">
       <header className="artifact-header">
-        <div className="title" title={shown.title}>📦 {shown.title}</div>
+        {all.length > 1 && onSelect ? (
+          <select className="title-select" value={artifact.id} title="Scegli quale artifact vedere"
+            onChange={(e) => { const a = all.find((x) => x.id === e.target.value); if (a) onSelect(a) }}>
+            {all.map((a, i) => <option key={a.id} value={a.id}>📦 {i + 1}. {a.title}</option>)}
+          </select>
+        ) : (
+          <div className="title" title={shown.title}>📦 {shown.title}</div>
+        )}
         <div className="row">
           {versions.length > 1 && (
             <select value={shown.version} onChange={(e) => showVersion(Number(e.target.value))} title="Versione">
