@@ -7,7 +7,13 @@ from .config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, echo=False, future=True)
+def _json_dumps(o) -> str:
+    """Le colonne JSON accettano anche datetime/Path ecc. (serializzati come stringa) invece di far fallire l'INSERT."""
+    import json
+    return json.dumps(o, ensure_ascii=False, default=str)
+
+
+engine = create_async_engine(settings.database_url, echo=False, future=True, json_serializer=_json_dumps)
 
 if settings.database_url.startswith("sqlite"):
     from sqlalchemy import event

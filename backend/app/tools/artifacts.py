@@ -13,7 +13,8 @@ KINDS = ["html", "svg", "markdown", "code", "mermaid"]
 
 def artifact_out(a: Artifact) -> dict:
     return {"id": a.id, "title": a.title, "kind": a.kind, "language": a.language, "version": a.version,
-            "content": a.content, "conversation_id": a.conversation_id, "updated_at": a.updated_at}
+            "content": a.content, "conversation_id": a.conversation_id,
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None}
 
 
 @register(
