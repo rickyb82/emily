@@ -63,9 +63,8 @@ class OpenAIProvider(BaseProvider):
         return out
 
     async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
-        from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
+        client = self._client()
         # OpenAI mette in cache automaticamente il prefisso (>=1024 token) identico tra richieste: basta tenere la parte
         # stabile per prima e quella variabile in coda al system.
         full_system = system + (("\n\n" + system_dynamic) if system_dynamic else "")
