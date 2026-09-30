@@ -66,7 +66,8 @@ class BaseProvider:
                 self.default_model = found[0]["id"]
 
     async def stream(self, model: str, system: str, messages: list[dict], tools: list[ToolSpec],
-                     max_tokens: int = 4096) -> AsyncIterator[ProviderEvent]:
+                     max_tokens: int = 4096, system_dynamic: str = "") -> AsyncIterator[ProviderEvent]:
+        """`system` e' la parte stabile del prompt (cacheabile), `system_dynamic` quella che cambia a ogni turno."""
         raise NotImplementedError
         yield  # pragma: no cover
 

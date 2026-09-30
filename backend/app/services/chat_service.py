@@ -246,6 +246,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                  for t in tools]
 
     system = await build_system_prompt(user, conv, db)
+    # Parte variabile (data/ora, estratti RAG): va DOPO il punto di cache, cosi' il prefisso stabile
+    # (tool + prompt di sistema) viene riusato dalla cache del provider a ogni turno.
+    from ..policy.permissions import dynamic_context
+    system_dynamic = dynamic_context()
     # RAG: recupero automatico dei passaggi pertinenti dai documenti del progetto / della chat
     if text.strip():
         try:
@@ -253,7 +257,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                                     project_ids=[conv.project_id] if conv.project_id else None,
                                     conversation_ids=[conv.id])
             if hits:
-                system += ("\n\n# Estratti dai documenti dell'utente pertinenti alla richiesta corrente\n"
+                system_dynamic += ("\n\n# Estratti dai documenti dell'utente pertinenti alla richiesta corrente\n"
                            "Usali se rispondono alla domanda e cita il nome del file; se non bastano usa search_documents.\n\n"
                            + rag.format_hits(hits))
                 yield sse({"type": "rag", "hits": [{"file_id": h.file_id, "filename": h.filename, "idx": h.idx,
@@ -262,14 +266,15 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             log.warning("RAG non disponibile: %s", e)
     history = await build_history(conv, db)
     ctx = ToolContext(user=user, policy=policy, db=db, conversation_id=conv.id, project_id=conv.project_id)
-    total_usage = {"input_tokens": 0, "output_tokens": 0}
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
 
     for _round in range(MAX_TOOL_ROUNDS + 1):
         text_acc = ""
         tool_uses: list[dict] = []
         yield sse({"type": "status", "text": "Sto pensando…" if _round == 0 else "Sto elaborando i risultati…"})
         try:
-            async for ev in provider.stream(model, system, history, tools, max_tokens=settings.max_output_tokens):
+            async for ev in provider.stream(model, system, history, tools, max_tokens=settings.max_output_tokens,
+                                            system_dynamic=system_dynamic):
                 if ev.type == "text_delta":
                     text_acc += ev.text
                     yield sse({"type": "text_delta", "text": ev.text})
@@ -278,8 +283,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 elif ev.type == "status":
                     yield sse({"type": "status", "text": ev.text})
                 elif ev.type == "usage":
-                    total_usage["input_tokens"] += ev.usage.get("input_tokens", 0) or 0
-                    total_usage["output_tokens"] += ev.usage.get("output_tokens", 0) or 0
+                    for k in total_usage:
+                        total_usage[k] += int(ev.usage.get(k, 0) or 0)
         except Exception as e:
             log.exception("Errore provider")
             err = f"Errore del provider {provider.label}: {e}"
@@ -307,7 +312,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                     amsg.flagged, amsg.flag_reason = True, "output: " + out_safety.reason
             amsg.usage = total_usage
             await db.commit()
-            await log_usage(db, user, "message", provider.id, model, total_usage["input_tokens"], total_usage["output_tokens"])
+            await log_usage(db, user, "message", provider.id, model, total_usage["input_tokens"], total_usage["output_tokens"],
+                            cache_read_tokens=total_usage["cache_read_tokens"], cache_write_tokens=total_usage["cache_write_tokens"])
             yield sse({"type": "done", "message": _msg_out(amsg)})
             return
 

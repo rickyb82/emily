@@ -86,6 +86,9 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Prompt caching (costi)
+Il prompt di sistema e i tool sono costruiti in modo da restare **identici** tra una richiesta e l'altra (data/ora ed estratti RAG vanno in una parte separata, dopo il punto di cache). Con Claude vengono inviati i `cache_control` espliciti (fine del system e ultimo messaggio utente: cache incrementale della conversazione, letture al 10% del prezzo); OpenAI e Gemini 2.5 mettono in cache automaticamente il prefisso identico (25–50%). Nella pagina **Costi** ogni provider mostra la quota di input servita dalla cache e il risparmio stimato; i token in cache sono conteggiati a parte nel log di utilizzo.
+
 ### Voce naturale (TTS)
 Con una chiave OpenAI (o Gemini) FamilAI legge i messaggi ad alta voce (pulsante 🔊 sotto ogni risposta) e mette a disposizione dei giochi/app negli artifact la funzione `FamilAI.speak(testo)`, che Claude usa al posto della sintesi vocale del browser: voci umane, in italiano, con stile configurabile in **Provider AI → Altre impostazioni** (provider, voce, istruzioni di stile). L'audio è messo in cache in `data/tts/`, quindi una frase già generata non costa più nulla. Endpoint: `POST /api/tts {text, voice?, style?}`.
 

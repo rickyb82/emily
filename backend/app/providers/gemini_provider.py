@@ -76,12 +76,14 @@ class GeminiProvider(BaseProvider):
                 contents.append(types.Content(role=role, parts=parts))
         return contents
 
-    async def stream(self, model, system, messages, tools, max_tokens=4096) -> AsyncIterator[ProviderEvent]:
+    async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
         from google import genai
         from google.genai import types
 
         client = genai.Client(api_key=self.api_key)
-        cfg = types.GenerateContentConfig(system_instruction=system or None, max_output_tokens=max_tokens)
+        # Gemini 2.5: caching implicito automatico sul prefisso identico (parte stabile prima, variabile dopo).
+        full_system = system + (("\n\n" + system_dynamic) if system_dynamic else "")
+        cfg = types.GenerateContentConfig(system_instruction=full_system or None, max_output_tokens=max_tokens)
         if tools:
             cfg.tools = [types.Tool(function_declarations=[
                 types.FunctionDeclaration(name=t.name, description=t.description,
@@ -92,7 +94,8 @@ class GeminiProvider(BaseProvider):
             model=model or self.default_model, contents=self._convert(messages), config=cfg)
         async for chunk in stream:
             if chunk.usage_metadata:
-                usage = {"input_tokens": chunk.usage_metadata.prompt_token_count or 0,
+                cached = chunk.usage_metadata.cached_content_token_count or 0
+                usage = {"input_tokens": (chunk.usage_metadata.prompt_token_count or 0) - cached, "cache_read_tokens": cached,
                          "output_tokens": chunk.usage_metadata.candidates_token_count or 0}
             for cand in chunk.candidates or []:
                 if not cand.content or not cand.content.parts:

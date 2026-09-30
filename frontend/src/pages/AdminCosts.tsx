@@ -4,7 +4,7 @@ import { get, put } from '../lib/api'
 interface Prov {
   provider: string; configured: boolean; estimated_usd: number; budget_usd: number; remaining_usd: number | null
   percent: number | null; real: { ok: boolean; usd?: number; error?: string; via?: string } | null
-  stats: { messages?: number; input_tokens?: number; output_tokens?: number; images?: number; videos?: number; searches?: number }
+  stats: { messages?: number; input_tokens?: number; output_tokens?: number; images?: number; videos?: number; searches?: number; cache_read_tokens?: number; cache_write_tokens?: number; cache_saved?: number }
 }
 interface Report {
   since: string; providers: Prov[]; users: { name: string; cost: number; messages: number; images: number; videos: number; tokens: number }[]
@@ -70,6 +70,11 @@ export default function AdminCosts() {
               )}
             </div>
             <small className="muted">{p.stats.messages ?? 0} msg · {((p.stats.input_tokens ?? 0) + (p.stats.output_tokens ?? 0)).toLocaleString()} token · {p.stats.images ?? 0} img · {p.stats.videos ?? 0} video</small>
+            {(p.stats.cache_read_tokens ?? 0) > 0 && (
+              <small className="muted" title="Token di input serviti dalla cache del provider (prompt caching): costano dal 10% al 50% del prezzo pieno">
+                💾 cache: {Math.round(100 * (p.stats.cache_read_tokens ?? 0) / Math.max(1, p.stats.input_tokens ?? 1))}% dell'input in cache · risparmiati ≈ {usd(p.stats.cache_saved ?? 0)}
+              </small>
+            )}
             <label>Budget mensile (USD)
               <input type="number" min={0} step={1} placeholder={s[`budget_${p.provider}`]?.value || '0'} value={draft[`budget_${p.provider}`] ?? ''} onChange={(e) => setDraft({ ...draft, [`budget_${p.provider}`]: e.target.value })} />
             </label>

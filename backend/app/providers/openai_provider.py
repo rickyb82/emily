@@ -57,11 +57,14 @@ class OpenAIProvider(BaseProvider):
                         out.append({"role": "tool", "tool_call_id": b["tool_use_id"], "content": b["content"]})
         return out
 
-    async def stream(self, model, system, messages, tools, max_tokens=4096) -> AsyncIterator[ProviderEvent]:
+    async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=self.api_key)
-        kwargs = dict(model=model or self.default_model, messages=self._convert(system, messages), stream=True,
+        # OpenAI mette in cache automaticamente il prefisso (>=1024 token) identico tra richieste: basta tenere la parte
+        # stabile per prima e quella variabile in coda al system.
+        full_system = system + (("\n\n" + system_dynamic) if system_dynamic else "")
+        kwargs = dict(model=model or self.default_model, messages=self._convert(full_system, messages), stream=True,
                       stream_options={"include_usage": True}, max_completion_tokens=max_tokens)
         if tools:
             kwargs["tools"] = [{"type": "function", "function": {"name": t.name, "description": t.description,
@@ -71,7 +74,9 @@ class OpenAIProvider(BaseProvider):
         finish_reason = None
         async for chunk in await client.chat.completions.create(**kwargs):
             if chunk.usage:
-                usage = {"input_tokens": chunk.usage.prompt_tokens, "output_tokens": chunk.usage.completion_tokens}
+                cached = getattr(getattr(chunk.usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+                usage = {"input_tokens": (chunk.usage.prompt_tokens or 0) - cached, "cache_read_tokens": cached,
+                         "output_tokens": chunk.usage.completion_tokens or 0}
             if not chunk.choices:
                 continue
             finish_reason = chunk.choices[0].finish_reason or finish_reason

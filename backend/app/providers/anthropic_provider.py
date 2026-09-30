@@ -51,12 +51,22 @@ class AnthropicProvider(BaseProvider):
                 out.append({"role": role, "content": blocks})
         return out
 
-    async def stream(self, model, system, messages, tools, max_tokens=4096) -> AsyncIterator[ProviderEvent]:
+    async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
         from anthropic import AsyncAnthropic
 
         client = AsyncAnthropic(api_key=self.api_key)
-        kwargs = dict(model=model or self.default_model, system=system, max_tokens=max_tokens,
-                      messages=self._convert(messages))
+        # Prompt caching: breakpoint alla fine della parte stabile del system (copre anche i tool, che la precedono)
+        # e sull'ultimo messaggio utente (cache incrementale della conversazione). La parte dinamica viene dopo.
+        cache = {"type": "ephemeral"}
+        sys_blocks = [{"type": "text", "text": system or " ", "cache_control": cache}]
+        if system_dynamic:
+            sys_blocks.append({"type": "text", "text": system_dynamic})
+        msgs = self._convert(messages)
+        for m in reversed(msgs):
+            if m["role"] == "user":
+                m["content"][-1] = {**m["content"][-1], "cache_control": cache}
+                break
+        kwargs = dict(model=model or self.default_model, system=sys_blocks, max_tokens=max_tokens, messages=msgs)
         if tools:
             spec = []
             for t in tools:
@@ -71,7 +81,7 @@ class AnthropicProvider(BaseProvider):
         json_buf = ""
         next_report = PROGRESS_STEP
         stop_reason = None
-        usage = {"input_tokens": 0, "output_tokens": 0}
+        usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
         async with client.messages.stream(**kwargs) as s:
             async for ev in s:
                 et = ev.type
@@ -104,7 +114,10 @@ class AnthropicProvider(BaseProvider):
                             yield ProviderEvent("text_delta", text=truncated_tool_warning(current_tool["name"]))
                         current_tool = None
                 elif et == "message_start":
-                    usage["input_tokens"] = getattr(ev.message.usage, "input_tokens", 0)
+                    u = ev.message.usage
+                    usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0          # esclude i token in cache
+                    usage["cache_read_tokens"] = getattr(u, "cache_read_input_tokens", 0) or 0
+                    usage["cache_write_tokens"] = getattr(u, "cache_creation_input_tokens", 0) or 0
                 elif et == "message_delta":
                     usage["output_tokens"] = getattr(ev.usage, "output_tokens", 0)
                     stop_reason = getattr(ev.delta, "stop_reason", None) or stop_reason

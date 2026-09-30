@@ -13,7 +13,7 @@ class MockProvider(BaseProvider):
     id = "mock"
     label = "Mock (test)"
 
-    async def stream(self, model, system, messages, tools, max_tokens=4096) -> AsyncIterator[ProviderEvent]:
+    async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
         last = messages[-1]
         tool_names = {t.name for t in tools}
         if last["role"] == "tool":

@@ -133,9 +133,15 @@ def system_prompt_for(user: User, tz: str = "Europe/Rome") -> str:
     if user.birth_year:
         age = str(datetime.now().year - user.birth_year)
     base = SYSTEM_PROMPTS[group].replace("{age}", age or "?")
-    now = datetime.now(ZoneInfo(tz)).strftime("%A %d %B %Y, %H:%M")
     extra = (user.policy or {}).get("custom_instructions", "")
-    return f"{base}\n\nL'utente si chiama {user.display_name}. Data e ora attuali: {now}.\n{extra}".strip()
+    # NB: niente data/ora qui: questa parte deve restare identica tra una richiesta e l'altra per il prompt caching.
+    return f"{base}\n\nL'utente si chiama {user.display_name}.\n{extra}".strip()
+
+
+def dynamic_context(tz: str = "Europe/Rome") -> str:
+    """Parte variabile del prompt (dopo il punto di cache): data e ora correnti."""
+    now = datetime.now(ZoneInfo(tz)).strftime("%A %d %B %Y, %H:%M")
+    return f"Data e ora attuali: {now}."
 
 
 TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei documenti
@@ -184,7 +190,9 @@ async def check_daily_quota(db: AsyncSession, user: User, policy: dict, kind: st
 
 
 async def log_usage(db: AsyncSession, user: User, kind: str, provider: str = "", model: str = "",
-                    input_tokens: int = 0, output_tokens: int = 0, detail: str = "") -> None:
+                    input_tokens: int = 0, output_tokens: int = 0, detail: str = "",
+                    cache_read_tokens: int = 0, cache_write_tokens: int = 0) -> None:
     db.add(UsageLog(family_id=user.family_id, user_id=user.id, kind=kind, provider=provider, model=model,
-                    input_tokens=input_tokens, output_tokens=output_tokens, detail=detail[:300]))
+                    input_tokens=input_tokens, output_tokens=output_tokens, detail=detail[:300],
+                    cache_read_tokens=cache_read_tokens, cache_write_tokens=cache_write_tokens))
     await db.commit()

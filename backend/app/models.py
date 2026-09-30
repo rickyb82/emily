@@ -238,8 +238,10 @@ class UsageLog(Base):
     kind: Mapped[str] = mapped_column(String(30))  # message | image | video | web_search | tool
     provider: Mapped[str] = mapped_column(String(40), default="")
     model: Mapped[str] = mapped_column(String(80), default="")
-    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)     # token di input NON in cache
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)   # token di input letti dalla cache (scontati)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0)  # token scritti in cache (Anthropic: +25%)
     detail: Mapped[str] = mapped_column(String(300), default="")
 
 

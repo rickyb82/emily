@@ -57,11 +57,26 @@ def _model_price(table: dict, provider: str, model: str) -> dict:
     return best
 
 
-def estimate_cost(table: dict, provider: str, model: str, kind: str, input_tokens: int, output_tokens: int, count: int = 1) -> float:
+def cache_factors(provider: str, model: str) -> tuple[float, float]:
+    """(moltiplicatore lettura cache, moltiplicatore scrittura cache) rispetto al prezzo di input."""
+    if provider == "anthropic":
+        return 0.10, 1.25
+    if provider == "openai":
+        return (0.25 if (model or "").startswith(("gpt-4.1", "gpt-5", "o3", "o4")) else 0.50), 1.0
+    if provider == "gemini":
+        return 0.25, 1.0
+    return 1.0, 1.0
+
+
+def estimate_cost(table: dict, provider: str, model: str, kind: str, input_tokens: int, output_tokens: int, count: int = 1,
+                  cache_read_tokens: int = 0, cache_write_tokens: int = 0) -> float:
     prov = table.get(provider, {})
     if kind == "message":
         p = _model_price(table, provider, model or "")
-        return (input_tokens * float(p.get("in", 0)) + output_tokens * float(p.get("out", 0))) / 1_000_000
+        rf, wf = cache_factors(provider, model or "")
+        pin = float(p.get("in", 0))
+        return (input_tokens * pin + cache_read_tokens * pin * rf + cache_write_tokens * pin * wf
+                + output_tokens * float(p.get("out", 0))) / 1_000_000
     if kind == "image":
         # immagini: generate da OpenAI o Gemini a seconda della configurazione; usiamo il prezzo del provider immagini
         img_prov = "openai" if settings.openai_api_key and settings.image_provider in ("auto", "openai") else "gemini"
@@ -75,22 +90,30 @@ async def local_report(db: AsyncSession, family_id: str, since: datetime) -> dic
     table = pricing_table()
     rows = (await db.execute(
         select(UsageLog.user_id, UsageLog.provider, UsageLog.model, UsageLog.kind, func.count(),
-               func.sum(UsageLog.input_tokens), func.sum(UsageLog.output_tokens))
+               func.sum(UsageLog.input_tokens), func.sum(UsageLog.output_tokens),
+               func.sum(UsageLog.cache_read_tokens), func.sum(UsageLog.cache_write_tokens))
         .where(UsageLog.family_id == family_id, UsageLog.created_at >= since)
         .group_by(UsageLog.user_id, UsageLog.provider, UsageLog.model, UsageLog.kind))).all()
     users = {u.id: u.display_name for u in (await db.execute(select(User).where(User.family_id == family_id))).scalars()}
     by_provider: dict[str, dict] = {}
     by_user: dict[str, dict] = {}
-    for uid, prov, model, kind, n, tin, tout in rows:
+    for uid, prov, model, kind, n, tin, tout, tcr, tcw in rows:
         prov = prov or "?"
-        cost = estimate_cost(table, prov, model or "", kind, int(tin or 0), int(tout or 0), int(n))
-        p = by_provider.setdefault(prov, {"cost": 0.0, "messages": 0, "input_tokens": 0, "output_tokens": 0, "images": 0, "videos": 0, "searches": 0})
+        tin, tout, tcr, tcw = int(tin or 0), int(tout or 0), int(tcr or 0), int(tcw or 0)
+        cost = estimate_cost(table, prov, model or "", kind, tin, tout, int(n), tcr, tcw)
+        p = by_provider.setdefault(prov, {"cost": 0.0, "messages": 0, "input_tokens": 0, "output_tokens": 0, "images": 0, "videos": 0, "searches": 0,
+                                          "cache_read_tokens": 0, "cache_write_tokens": 0, "cache_saved": 0.0})
         u = by_user.setdefault(uid, {"name": users.get(uid, uid), "cost": 0.0, "messages": 0, "images": 0, "videos": 0, "tokens": 0})
         p["cost"] += cost
         u["cost"] += cost
         if kind == "message":
             p["messages"] += n; u["messages"] += n
-            p["input_tokens"] += int(tin or 0); p["output_tokens"] += int(tout or 0); u["tokens"] += int((tin or 0) + (tout or 0))
+            p["input_tokens"] += tin + tcr + tcw; p["output_tokens"] += tout; u["tokens"] += tin + tcr + tcw + tout
+            p["cache_read_tokens"] += tcr; p["cache_write_tokens"] += tcw
+            if kind == "message" and tcr:
+                # risparmio = quanto sarebbero costati i token letti dalla cache a prezzo pieno, meno quanto sono costati
+                pin = float(_model_price(table, prov, model or "").get("in", 0))
+                p["cache_saved"] += tcr * pin * (1 - cache_factors(prov, model or "")[0]) / 1_000_000
         elif kind == "image":
             p["images"] += n; u["images"] += n
         elif kind == "video":
