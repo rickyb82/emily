@@ -4,6 +4,9 @@
 #   ./familai.sh prod       avvia in produzione (HTTPS con il dominio del .env)
 #   ./familai.sh update     aggiorna: git pull + rebuild + riavvio (solo i servizi cambiati) + backup automatico
 #   ./familai.sh stop|logs|status|backup|restore <file>|shell
+#   ./familai.sh reset-passkey EMAIL     emergenza: rimuove le passkey di un utente (rientri con la password)
+#   ./familai.sh set-password EMAIL PASS emergenza: nuova password per un utente
+#   ./familai.sh users                   elenca gli utenti
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -89,5 +92,9 @@ case "${1:-}" in
     [ -f "${2:-}" ] || { echo "uso: ./familai.sh restore backups/<file>.tar.gz"; exit 1; }
     compose down; tar xzf "$2"; compose up -d; echo ">> Ripristinato $2";;
   shell)   compose exec backend bash;;
-  *) sed -n '2,7p' "$0";;
+  reset-passkey) compose exec backend python -m app.cli reset-passkey "${2:?email}";;
+  set-password)  compose exec backend python -m app.cli set-password "${2:?email}" "${3:?password}";;
+  unlock)        compose exec backend python -m app.cli unlock "${2:?email}";;
+  users)         compose exec backend python -m app.cli list-users;;
+  *) sed -n '2,10p' "$0";;
 esac
