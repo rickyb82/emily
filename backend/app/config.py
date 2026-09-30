@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     smtp_from_name: str = "FamilAI"
     smtp_security: str = "starttls"   # starttls | ssl | none
     email_mfa_fallback: str = "true"  # consente il codice via email al posto della passkey al login
+    mail_transport: str = "auto"      # auto | gmail_oauth | smtp  (auto = Gmail OAuth se collegato, altrimenti SMTP)
+    gmail_oauth_refresh_token: str = ""   # ottenuto con "Collega account Google" (cifrato nel DB)
+    gmail_oauth_email: str = ""
 
     # Accesso con Google (OAuth client 'Web application' su console.cloud.google.com)
     google_client_id: str = ""

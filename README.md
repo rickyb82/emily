@@ -87,7 +87,7 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
 ### Email: inviti, password dimenticata, codice al posto della passkey
-Configura l'SMTP in **Famiglia → Provider AI → Email** (pulsante "Preimposta Gmail": `smtp.gmail.com:587` STARTTLS; utente = indirizzo Gmail; password = *password per le app* di Google) e verifica con "Invia email di prova". Da quel momento:
+In **Famiglia → Provider AI → Email** puoi **collegare un account Google** (OAuth, scope `gmail.send`: nessuna password per le app; usa il client della scheda "Accesso con Google" e richiede anche l'URI `/api/admin/email/google/callback`; finché l'app Google è in modalità Test aggiungi l'account fra gli utenti di test) oppure configurare l'SMTP classico (pulsante "Preimposta Gmail": `smtp.gmail.com:587` STARTTLS; utente = indirizzo Gmail; password = *password per le app* di Google) e verifica con "Invia email di prova". Da quel momento:
 - creando un adulto senza password parte un **invito** con link (valido 48 h) per scegliere la password (pulsante "✉️ Invito" per reinviarlo);
 - al login compare **"Password dimenticata?"**: codice a 6 cifre via email (10 min, 5 tentativi) e nuova password;
 - se `EMAIL_MFA_FALLBACK=true`, al passo passkey si può chiedere **un codice via email** come secondo fattore alternativo (comodo contro i blocchi, leggermente meno sicuro della sola passkey: disattivabile dal pannello).

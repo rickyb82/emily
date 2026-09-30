@@ -397,7 +397,7 @@ PROVIDER_CARDS = [
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
 OTHER_SETTINGS = ["web_search_provider", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
-                  "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret"]
+                  "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]
 
 
 class SettingsUpdate(BaseModel):
@@ -451,3 +451,95 @@ async def costs_report(ctx: AuthContext = Depends(require_admin), db: AsyncSessi
     rep["settings"] = {k: st[k] for k in ("pricing_json", "budget_anthropic", "budget_openai", "budget_gemini",
                                           "anthropic_admin_key", "openai_admin_key")}
     return rep
+
+
+# ---- Gmail via OAuth ("Collega account Google" per l'invio email) ----
+import secrets as _secrets  # noqa: E402
+import time as _time  # noqa: E402
+from urllib.parse import urlencode as _urlencode  # noqa: E402
+
+import httpx as _httpx  # noqa: E402
+from fastapi.responses import RedirectResponse as _Redirect  # noqa: E402
+
+_gmail_pending: dict[str, tuple[str, float]] = {}  # state -> (admin user id, scadenza)
+
+
+def gmail_redirect_uri() -> str:
+    return f"{settings.webauthn_origin.rstrip('/')}/api/admin/email/google/callback"
+
+
+@router.get("/email/google/start")
+async def gmail_oauth_start(ctx: AuthContext = Depends(require_admin)):
+    """Avvia il consenso Google per inviare email dall'account di famiglia (scope gmail.send)."""
+    if not (settings.google_client_id and settings.google_client_secret):
+        raise HTTPException(400, "Configura prima Client ID e secret nella scheda 'Accesso con Google'")
+    now = _time.time()
+    for k in [k for k, (_, exp) in _gmail_pending.items() if exp < now]:
+        _gmail_pending.pop(k, None)
+    state = _secrets.token_urlsafe(32)
+    _gmail_pending[state] = (ctx.user.id, now + 600)
+    params = {"client_id": settings.google_client_id, "redirect_uri": gmail_redirect_uri(), "response_type": "code",
+              "scope": "https://www.googleapis.com/auth/gmail.send openid email",
+              "access_type": "offline", "prompt": "consent select_account", "state": state}
+    return {"url": f"https://accounts.google.com/o/oauth2/v2/auth?{_urlencode(params)}"}
+
+
+@router.get("/email/google/callback")
+async def gmail_oauth_callback(request: Request, code: str = "", state: str = "", error: str = "",
+                               db: AsyncSession = Depends(get_db)):
+    """Callback di Google: salva il refresh token (cifrato) e l'indirizzo collegato."""
+    def back(status_: str) -> _Redirect:
+        return _Redirect(f"/admin?tab=providers&gmail={status_}", status_code=302)
+
+    if error:
+        return back("annullato")
+    item = _gmail_pending.pop(state, None)
+    if not item or item[1] < _time.time():
+        return back("scaduto")
+    admin_id = item[0]
+    try:
+        async with _httpx.AsyncClient(timeout=20) as c:
+            tok = await c.post("https://oauth2.googleapis.com/token", data={
+                "code": code, "client_id": settings.google_client_id, "client_secret": settings.google_client_secret,
+                "redirect_uri": gmail_redirect_uri(), "grant_type": "authorization_code"})
+            tok.raise_for_status()
+            data = tok.json()
+            info = (await c.get("https://openidconnect.googleapis.com/v1/userinfo",
+                                headers={"Authorization": f"Bearer {data['access_token']}"})).json()
+    except Exception:
+        return back("errore")
+    refresh = data.get("refresh_token")
+    if not refresh:
+        return back("norefresh")
+    await settings_store.set_value(db, "gmail_oauth_refresh_token", refresh, admin_id)
+    await settings_store.set_value(db, "gmail_oauth_email", (info.get("email") or "").lower(), admin_id)
+    if not settings.smtp_from:
+        await settings_store.set_value(db, "smtp_from", (info.get("email") or "").lower(), admin_id)
+    await settings_store.apply(db)
+    db.add(AuditLog(family_id=None, user_id=admin_id, event="gmail_oauth_linked", detail=info.get("email", ""), ip=client_ip_safe(request)))
+    await db.commit()
+    return back("ok")
+
+
+def client_ip_safe(request: Request) -> str:
+    from ..security.sessions import client_ip
+
+    return client_ip(request)
+
+
+@router.post("/email/google/unlink")
+async def gmail_oauth_unlink(request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    await settings_store.set_value(db, "gmail_oauth_refresh_token", "", ctx.user.id)
+    await settings_store.set_value(db, "gmail_oauth_email", "", ctx.user.id)
+    await settings_store.apply(db)
+    await audit(db, "gmail_oauth_unlinked", request, ctx.user)
+    return {"status": "ok"}
+
+
+@router.get("/email/status")
+async def email_status(ctx: AuthContext = Depends(require_admin)):
+    from ..services import mailer
+
+    return {"transport": mailer.transport(), "sender": mailer.sender_address(),
+            "gmail_linked": bool(settings.gmail_oauth_refresh_token), "gmail_email": settings.gmail_oauth_email,
+            "gmail_redirect_uri": gmail_redirect_uri(), "google_client_ready": bool(settings.google_client_id and settings.google_client_secret)}

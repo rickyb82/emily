@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, put } from '../lib/api'
+import { useSearchParams } from 'react-router-dom'
 
 interface KeyState { label: string; secret: boolean; configured: boolean; source: 'admin' | 'env' | 'none'; value: string }
 interface Card {
@@ -18,11 +19,18 @@ export default function AdminProviders() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const [mailTo, setMailTo] = useState('')
+  const [mail, setMail] = useState<{ transport: string; sender: string; gmail_linked: boolean; gmail_email: string; gmail_redirect_uri: string; google_client_ready: boolean } | null>(null)
+  const [params] = useSearchParams()
+  const GMAIL_MSG: Record<string, string> = { ok: 'Account Google collegato: da ora le email partono tramite Gmail.', annullato: 'Collegamento Google annullato.', scaduto: 'Sessione scaduta, riprova.', errore: 'Google non ha completato il collegamento, riprova.', norefresh: 'Google non ha rilasciato il permesso permanente: rimuovi FamilAI da myaccount.google.com/permissions e ricollega.' }
+  const loadMail = () => get('/admin/email/status').then(setMail).catch(() => {})
   const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = () => get<Status>('/admin/providers').then(setSt)
   useEffect(() => {
     load()
+    loadMail()
+    const g = params.get('gmail')
+    if (g) setMailResult({ ok: g === 'ok', text: GMAIL_MSG[g] ?? g })
   }, [])
 
   async function save(keys: string[]) {
@@ -114,8 +122,25 @@ export default function AdminProviders() {
       })}
 
       <section className="card stack">
-        <h3 style={{ margin: 0 }}>📧 Email (SMTP)</h3>
-        <p className="muted small">Serve per l'invito ai nuovi membri, "password dimenticata" e il codice via email al posto della passkey. Con Gmail usa una <b>password per le app</b> (Account Google → Sicurezza → Verifica in due passaggi → Password per le app), non la password normale.</p>
+        <h3 style={{ margin: 0 }}>📧 Email</h3>
+        <p className="muted small">Serve per l'invito ai nuovi membri, "password dimenticata" e il codice via email al posto della passkey.</p>
+        {mailResult && <div className={mailResult.ok ? 'ok' : 'error'}>{mailResult.text}</div>}
+        <div className="card stack" style={{ background: 'var(--bg)' }}>
+          <b>Opzione 1 (consigliata): collega un account Google</b>
+          {mail?.gmail_linked ? (
+            <div className="row wrap">
+              <span>🟢 Collegato: <b>{mail.gmail_email}</b>{mail.transport === 'gmail_oauth' && <small className="muted"> · canale attivo</small>}</span>
+              <button className="ghost danger" disabled={busy !== ''} onClick={async () => { setBusy('gm'); try { await post('/admin/email/google/unlink'); await loadMail() } finally { setBusy('') } }}>Scollega</button>
+            </div>
+          ) : (
+            <div className="stack">
+              <small className="muted">Accedi con l'account Gmail di famiglia e concedi il permesso di invio: niente password per le app. Richiede Client ID/secret nella scheda "Accesso con Google" e, nel client Google, anche questo URI di reindirizzamento: <code>{mail?.gmail_redirect_uri}</code>. Finché l'app Google è in modalità "Test", aggiungi l'account tra gli utenti di test della schermata di consenso.</small>
+              <div><button disabled={busy !== '' || !mail?.google_client_ready} title={!mail?.google_client_ready ? 'Prima configura Accesso con Google' : ''} onClick={async () => { const r = await get('/admin/email/google/start'); window.location.href = r.url }}>Collega account Google</button></div>
+            </div>
+          )}
+        </div>
+        <b>Opzione 2: SMTP classico</b>
+        <p className="muted small">Con Gmail serve una <b>password per le app</b> (Account Google → Sicurezza → Verifica in due passaggi → Password per le app), non la password normale.</p>
         <div className="row wrap">
           <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.gmail.com', smtp_port: '587', smtp_security: 'starttls', smtp_from_name: 'FamilAI' })}>Preimposta Gmail</button>
           <button className="ghost" onClick={() => setDraft({ ...draft, smtp_host: 'smtp.office365.com', smtp_port: '587', smtp_security: 'starttls' })}>Outlook / Microsoft 365</button>
@@ -133,6 +158,11 @@ export default function AdminProviders() {
           <label>Password per le app <small className="muted">({s.smtp_password.configured ? 'impostata' : 'non impostata'})</small><input type="password" autoComplete="off" value={draft.smtp_password ?? ''} placeholder="xxxx xxxx xxxx xxxx" onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value.replace(/\s+/g, '') })} /></label>
           <label>Mittente <small className="muted">({s.smtp_from.value || '—'})</small><input value={draft.smtp_from ?? ''} placeholder={s.smtp_from.value || 'tuo.nome@gmail.com'} onChange={(e) => setDraft({ ...draft, smtp_from: e.target.value })} /></label>
           <label>Nome mittente<input value={draft.smtp_from_name ?? ''} placeholder={s.smtp_from_name.value} onChange={(e) => setDraft({ ...draft, smtp_from_name: e.target.value })} /></label>
+          <label>Canale di invio <small className="muted">({mail?.transport === 'none' ? 'nessuno configurato' : mail?.transport === 'gmail_oauth' ? 'Gmail collegato' : mail?.transport})</small>
+            <select value={draft.mail_transport ?? s.mail_transport.value} onChange={(e) => setDraft({ ...draft, mail_transport: e.target.value })}>
+              <option value="auto">auto (Gmail collegato se presente, altrimenti SMTP)</option><option value="gmail_oauth">solo Gmail collegato</option><option value="smtp">solo SMTP</option>
+            </select>
+          </label>
           <label>Codice email al posto della passkey <small className="muted">({s.email_mfa_fallback.value})</small>
             <select value={draft.email_mfa_fallback ?? s.email_mfa_fallback.value} onChange={(e) => setDraft({ ...draft, email_mfa_fallback: e.target.value })}>
               <option value="true">consentito</option><option value="false">solo passkey / codici di recupero</option>
@@ -140,18 +170,17 @@ export default function AdminProviders() {
           </label>
         </div>
         <div className="row wrap">
-          <button disabled={busy !== ''} onClick={() => save(['smtp_host', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'email_mfa_fallback'])}>Salva</button>
+          <button disabled={busy !== ''} onClick={() => save(['smtp_host', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'email_mfa_fallback', 'mail_transport']).then(loadMail)}>Salva</button>
           <input style={{ width: 260 }} type="email" placeholder="destinatario di prova (default: la tua email)" value={mailTo} onChange={(e) => setMailTo(e.target.value)} />
-          <button className="ghost" disabled={busy !== '' || !s.smtp_host.configured || !s.smtp_from.configured} title={!s.smtp_host.configured || !s.smtp_from.configured ? 'Prima compila Server e Mittente e premi Salva' : ''}
+          <button className="ghost" disabled={busy !== '' || !mail || mail.transport === 'none'} title={!mail || mail.transport === 'none' ? 'Collega Google oppure compila Server SMTP e Mittente e premi Salva' : `Canale: ${mail.transport}`}
             onClick={async () => { setBusy('mail'); setMailResult(null); try { const r = await post('/admin/email/test', { to: mailTo || undefined }); setMailResult({ ok: true, text: `Email inviata a ${r.to}: controlla la casella (anche lo spam).` }) } catch (e: any) { setMailResult({ ok: false, text: e.message }) } finally { setBusy('') } }}>{busy === 'mail' ? 'Invio…' : '✉️ Invia email di prova'}</button>
         </div>
-        {mailResult && <div className={mailResult.ok ? 'ok' : 'error'}>{mailResult.text}</div>}
-        {(!s.smtp_host.configured || !s.smtp_from.configured) && <small className="muted">Il pulsante si attiva dopo aver salvato Server SMTP e Mittente.</small>}
+        {mail && mail.transport === 'none' && <small className="muted">Il pulsante si attiva quando un canale (Google collegato o SMTP salvato) è disponibile.</small>}
       </section>
 
       <section className="card stack">
         <h3 style={{ margin: 0 }}>🔑 Accesso con Google</h3>
-        <p className="muted small">Permette ai membri adulti di entrare con il proprio account Google (l'email Google deve coincidere con quella del membro). È indipendente dall'account Gmail usato per l'SMTP. Crea un client OAuth "Applicazione web" su <b>console.cloud.google.com → API e servizi → Credenziali</b> e inserisci come URI di reindirizzamento autorizzato: <code>{st.google_redirect_uri}</code></p>
+        <p className="muted small">Permette ai membri adulti di entrare con il proprio account Google (l'email Google deve coincidere con quella del membro). È indipendente dall'account Gmail usato per l'SMTP. Crea un client OAuth "Applicazione web" su <b>console.cloud.google.com → API e servizi → Credenziali</b> e inserisci come URI di reindirizzamento autorizzati sia <code>{st.google_redirect_uri}</code> (login) sia <code>{mail?.gmail_redirect_uri}</code> (invio email).</p>
         <div className="grid2">
           <label>Client ID <small className="muted">({s.google_client_id.value || 'non impostato'})</small><input value={draft.google_client_id ?? ''} placeholder={s.google_client_id.value || '…apps.googleusercontent.com'} onChange={(e) => setDraft({ ...draft, google_client_id: e.target.value })} /></label>
           <label>Client secret <small className="muted">({s.google_client_secret.configured ? 'impostato' : 'non impostato'})</small><input type="password" autoComplete="off" value={draft.google_client_secret ?? ''} placeholder="GOCSPX-…" onChange={(e) => setDraft({ ...draft, google_client_secret: e.target.value })} /></label>

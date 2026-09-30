@@ -14,8 +14,60 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def gmail_oauth_ready() -> bool:
+    return bool(settings.gmail_oauth_refresh_token and settings.google_client_id and settings.google_client_secret)
+
+
+def transport() -> str:
+    t = (settings.mail_transport or "auto").lower()
+    if t == "gmail_oauth":
+        return "gmail_oauth" if gmail_oauth_ready() else "none"
+    if t == "smtp":
+        return "smtp" if settings.smtp_host and settings.smtp_from else "none"
+    if gmail_oauth_ready():
+        return "gmail_oauth"
+    return "smtp" if settings.smtp_host and settings.smtp_from else "none"
+
+
 def email_enabled() -> bool:
-    return bool(settings.smtp_host and settings.smtp_from)
+    return transport() != "none"
+
+
+def sender_address() -> str:
+    return settings.gmail_oauth_email if transport() == "gmail_oauth" else settings.smtp_from
+
+
+async def _gmail_access_token() -> str:
+    import httpx
+
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.post("https://oauth2.googleapis.com/token", data={
+            "client_id": settings.google_client_id, "client_secret": settings.google_client_secret,
+            "refresh_token": settings.gmail_oauth_refresh_token, "grant_type": "refresh_token"})
+        if r.status_code != 200:
+            raise RuntimeError(f"Google ha rifiutato il token ({r.status_code}): {r.text[:200]}. Ricollega l'account Gmail dal pannello.")
+        return r.json()["access_token"]
+
+
+async def _send_gmail_api(to: str, subject: str, text: str, html: str | None) -> None:
+    import base64
+
+    import httpx
+
+    msg = EmailMessage()
+    msg["From"] = formataddr((settings.smtp_from_name or "FamilAI", settings.gmail_oauth_email))
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(text)
+    if html:
+        msg.add_alternative(html, subtype="html")
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    token = await _gmail_access_token()
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                         headers={"Authorization": f"Bearer {token}"}, json={"raw": raw})
+        if r.status_code >= 300:
+            raise RuntimeError(f"Gmail API {r.status_code}: {r.text[:300]}")
 
 
 def _send_sync(to: str, subject: str, text: str, html: str | None) -> None:
@@ -49,10 +101,14 @@ def _send_sync(to: str, subject: str, text: str, html: str | None) -> None:
 
 
 async def send_email(to: str, subject: str, text: str, html: str | None = None) -> None:
-    if not email_enabled():
-        raise RuntimeError("Email non configurata: imposta il server SMTP in Famiglia → Provider AI → Email")
-    await asyncio.to_thread(_send_sync, to, subject, text, html)
-    log.info("Email inviata a %s: %s", to, subject)
+    t = transport()
+    if t == "none":
+        raise RuntimeError("Email non configurata: collega un account Google o imposta l'SMTP in Famiglia → Provider AI → Email")
+    if t == "gmail_oauth":
+        await _send_gmail_api(to, subject, text, html)
+    else:
+        await asyncio.to_thread(_send_sync, to, subject, text, html)
+    log.info("Email inviata a %s via %s: %s", to, t, subject)
 
 
 def _wrap(title: str, body_html: str) -> str:

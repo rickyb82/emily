@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
 import AdminMcp from './AdminMcp'
@@ -12,7 +12,8 @@ const PROVIDERS = ['anthropic', 'openai', 'gemini']
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
 export default function Admin() {
-  const [tab, setTab] = useState<Tab>('members')
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'members')
   const [version, setVersion] = useState('')
   useEffect(() => {
     get('/health').then((h) => setVersion(h.version)).catch(() => {})
