@@ -274,6 +274,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 except Exception as e:
                     log.exception("Errore tool %s", tu["name"])
                     res_content, is_err, artifacts = f"Errore: {e}", True, None
+            if not (res_content or "").strip():
+                res_content = "(il tool non ha restituito alcun dettaglio)" if is_err else "(nessun output)"
+            if is_err:
+                log.warning("Tool %s fallito per %s: %s", tu["name"], user.username, res_content[:500])
             block = {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": res_content[:50_000],
                      "is_error": is_err, "artifacts": artifacts or []}
             results.append(block)

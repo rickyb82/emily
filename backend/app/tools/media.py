@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import uuid
 
 from ..config import get_settings
@@ -10,6 +11,7 @@ from ..models import FileAsset
 from .registry import ToolContext, ToolResult, register
 
 settings = get_settings()
+log = logging.getLogger(__name__)
 
 CHILD_PROMPT_PREFIX = ("Illustrazione adatta ai bambini, allegra, colorata, senza violenza né contenuti spaventosi "
                        "o inadatti ai minori. ")
@@ -37,25 +39,53 @@ async def _save_generated(ctx: ToolContext, data: bytes, ext: str, mime: str, la
     usage_kind="image",
 )
 async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
-    if not settings.openai_api_key:
-        return ToolResult("Generazione immagini non configurata (manca OPENAI_API_KEY)", is_error=True)
     prompt = str(args.get("prompt", "")).strip()
     if ctx.policy.get("moderation"):
         prompt = CHILD_PROMPT_PREFIX + prompt
-    try:
-        from openai import AsyncOpenAI
+    size = args.get("size") or "1024x1024"
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        r = await client.images.generate(model=settings.image_model, prompt=prompt,
-                                         size=args.get("size") or "1024x1024", n=1)
-        b64 = r.data[0].b64_json
-        if not b64:
-            return ToolResult("Il provider non ha restituito l'immagine", is_error=True)
-        asset = await _save_generated(ctx, base64.b64decode(b64), "png", "image/png", "immagine")
+    # scelta del provider: impostazione esplicita oppure auto (OpenAI se c'e' la chiave, altrimenti Gemini)
+    pref = settings.image_provider
+    if pref == "openai" or (pref == "auto" and settings.openai_api_key):
+        backend = "openai" if settings.openai_api_key else None
+    elif pref == "gemini" or (pref == "auto" and settings.gemini_api_key):
+        backend = "gemini" if settings.gemini_api_key else None
+    else:
+        backend = None
+    if not backend:
+        return ToolResult("Generazione immagini non disponibile: serve una chiave OpenAI (gpt-image-1) oppure Gemini (Imagen). "
+                          "Un amministratore puo' inserirla in Famiglia → Provider AI.", is_error=True)
+    try:
+        if backend == "openai":
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            r = await client.images.generate(model=settings.image_model, prompt=prompt, size=size, n=1)
+            b64 = r.data[0].b64_json
+            if not b64:
+                return ToolResult("Il provider non ha restituito l'immagine", is_error=True)
+            data = base64.b64decode(b64)
+            model_used = settings.image_model
+        else:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=settings.gemini_api_key)
+            ratio = {"1024x1536": "3:4", "1536x1024": "4:3"}.get(size, "1:1")
+            r = await client.aio.models.generate_images(
+                model=settings.gemini_image_model, prompt=prompt,
+                config=types.GenerateImagesConfig(number_of_images=1, aspect_ratio=ratio,
+                                                  person_generation="allow_adult"))
+            if not r.generated_images:
+                return ToolResult("Il provider non ha restituito l'immagine (prompt rifiutato dai filtri?)", is_error=True)
+            data = r.generated_images[0].image.image_bytes
+            model_used = settings.gemini_image_model
+        asset = await _save_generated(ctx, data, "png", "image/png", "immagine")
     except Exception as e:
-        return ToolResult(f"Generazione immagine fallita: {e}", is_error=True)
+        log.exception("Generazione immagine fallita")
+        return ToolResult(f"Generazione immagine fallita ({backend}): {type(e).__name__}: {e}", is_error=True)
     url = f"/files/{asset.id}"
-    return ToolResult(f"Immagine generata e mostrata all'utente (id {asset.id}). Descrivila brevemente.",
+    return ToolResult(f"Immagine generata con {model_used} e mostrata all'utente (id {asset.id}). Descrivila brevemente.",
                       artifacts=[{"type": "image", "file_id": asset.id, "url": url, "mime": "image/png"}])
 
 
@@ -95,6 +125,7 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
             data = video.video_bytes
         asset = await _save_generated(ctx, data, "mp4", "video/mp4", "video")
     except Exception as e:
-        return ToolResult(f"Generazione video fallita: {e}", is_error=True)
+        log.exception("Generazione video fallita")
+        return ToolResult(f"Generazione video fallita: {type(e).__name__}: {e}", is_error=True)
     return ToolResult(f"Video generato e mostrato all'utente (id {asset.id}).",
                       artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}])

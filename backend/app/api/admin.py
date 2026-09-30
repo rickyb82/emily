@@ -190,7 +190,7 @@ PROVIDER_CARDS = [
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
-OTHER_SETTINGS = ["web_search_provider", "image_model", "video_model", "embedding_provider", "embedding_model"]
+OTHER_SETTINGS = ["web_search_provider", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model"]
 
 
 class SettingsUpdate(BaseModel):

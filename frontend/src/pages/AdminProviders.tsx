@@ -119,7 +119,13 @@ export default function AdminProviders() {
               <option value="tavily">Tavily</option><option value="brave">Brave</option>
             </select>
           </label>
-          <label>Modello immagini<input placeholder={s.image_model.value} value={draft.image_model ?? ''} onChange={(e) => setDraft({ ...draft, image_model: e.target.value })} /></label>
+          <label>Provider immagini <small className="muted">({s.image_provider.value})</small>
+            <select value={draft.image_provider ?? s.image_provider.value} onChange={(e) => setDraft({ ...draft, image_provider: e.target.value })}>
+              <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini / Imagen</option>
+            </select>
+          </label>
+          <label>Modello immagini OpenAI<input placeholder={s.image_model.value} value={draft.image_model ?? ''} onChange={(e) => setDraft({ ...draft, image_model: e.target.value })} /></label>
+          <label>Modello immagini Gemini<input placeholder={s.gemini_image_model.value} value={draft.gemini_image_model ?? ''} onChange={(e) => setDraft({ ...draft, gemini_image_model: e.target.value })} /></label>
           <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
           <label>Embedding (RAG) <small className="muted">({s.embedding_provider.value})</small>
             <select value={draft.embedding_provider ?? s.embedding_provider.value} onChange={(e) => setDraft({ ...draft, embedding_provider: e.target.value })}>
@@ -128,7 +134,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'image_model', 'video_model', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

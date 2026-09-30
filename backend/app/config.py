@@ -42,7 +42,9 @@ class Settings(BaseSettings):
     web_search_provider: str = "tavily"
     tavily_api_key: str = ""
     brave_api_key: str = ""
+    image_provider: str = "auto"          # auto | openai | gemini
     image_model: str = "gpt-image-1"
+    gemini_image_model: str = "imagen-4.0-generate-001"
     video_model: str = "veo-3.0-generate-001"
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
