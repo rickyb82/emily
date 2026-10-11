@@ -21,6 +21,16 @@ class OllamaProvider(OpenAIProvider):
     def __init__(self, base_url: str, default_model: str):
         super().__init__("ollama", default_model)
         self.base_url = base_url.rstrip("/")
+        self.param_sizes: dict[str, float] = {}   # modello -> miliardi di parametri (da /api/tags)
+
+    def is_small(self, model: str | None) -> bool:
+        """Modelli piccoli (< 20B) reggono meglio un set ridotto di tool; i grandi (gpt-oss:120b, qwen3:235b...) li usano tutti."""
+        size = self.param_sizes.get((model or self.default_model or "").lower())
+        if size is None:
+            import re
+            m = re.search(r"(\d+(?:\.\d+)?)\s*b\b", (model or "").lower())
+            size = float(m.group(1)) if m else None
+        return size is None or size < 20
 
     def _client(self):
         from openai import AsyncOpenAI
@@ -39,6 +49,10 @@ class OllamaProvider(OpenAIProvider):
                 continue
             size_gb = (m.get("size") or 0) / 1e9
             fam = (m.get("details") or {}).get("parameter_size", "")
+            try:
+                self.param_sizes[name.lower()] = float(str(fam).upper().rstrip("B").replace(",", "."))
+            except (ValueError, AttributeError):
+                pass
             out.append({"id": name, "label": f"{name} ({fam or f'{size_gb:.1f} GB'})"})
         out.sort(key=lambda x: (x["id"] != self.default_model, x["id"]))
         return out

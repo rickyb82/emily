@@ -277,9 +277,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                 continue
         tools.append(t.spec)
 
-    if provider.id == "ollama":
-        # Modelli locali (Qwen3 & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
+    if provider.id == "ollama" and getattr(provider, "is_small", lambda m: True)(model):
+        # Modelli locali piccoli (Qwen3 8B & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
         # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
+        # I modelli grandi (es. gpt-oss:120b) ricevono tutti i tool.
         tools = [t for t in tools if t.name in LOCAL_TOOLS]
 
     # ricerca web nativa di Anthropic (solo con Claude, non in modalita' ricerca sicura per i bambini)
