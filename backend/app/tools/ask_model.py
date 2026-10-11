@@ -54,8 +54,10 @@ def _resolve(provider: str, model: str | None, allowed: list[str]) -> tuple[str,
 
 @register(
     "ask_model",
-    "Chiedi qualcosa a UN ALTRO modello/provider AI (Claude di Anthropic, GPT di OpenAI, Gemini di Google) e ricevi la sua "
-    "risposta testuale. Usalo quando l'utente chiede esplicitamente di coinvolgere, consultare o confrontare un altro "
+    "Chiedi qualcosa a UN ALTRO modello/provider AI (Claude di Anthropic, GPT di OpenAI, Gemini di Google, oppure i modelli "
+    "LOCALI di casa: 'ollama'/'locale' e il server LLM 'custom') e ricevi la sua risposta testuale. I modelli locali sono "
+    "raggiungibili da questo server: non dire mai all'utente che non puoi usarli. Con with_web_search=true il modello "
+    "consultato puo' cercare sul web (es. 'fai la ricerca con il modello locale'). Usalo quando l'utente chiede esplicitamente di coinvolgere, consultare o confrontare un altro "
     "modello ('chiedi a Gemini', 'cosa ne pensa GPT', 'fai rispondere anche Claude', 'confronta le risposte'), oppure per "
     "una seconda opinione su un punto delicato. Riporta la risposta all'utente indicando chiaramente quale modello l'ha "
     "data; se l'utente vuole un confronto, aggiungi il tuo parere. Per default il modello riceve anche gli ultimi "
@@ -66,6 +68,7 @@ def _resolve(provider: str, model: str | None, allowed: list[str]) -> tuple[str,
          "model": {"type": "string", "description": "Modello specifico (opzionale; default: quello predefinito del provider)"},
          "prompt": {"type": "string", "description": "La domanda o il compito da sottoporre, completo e autonomo"},
          "include_context": {"type": "boolean", "description": "Allega gli ultimi messaggi della chat come contesto (default true)"},
+         "with_web_search": {"type": "boolean", "description": "Dai al modello consultato il tool di ricerca web (SearXNG/altro) per rispondere con dati aggiornati"},
      },
      "required": ["provider", "prompt"]},
     usage_kind="tool",
@@ -103,12 +106,45 @@ async def ask_model(args: dict, ctx: ToolContext) -> ToolResult:
     messages = [{"role": "user", "content": [{"type": "text", "text": user_text}]}]
 
     text, usage = "", {}
+    tools_spec = []
+    if args.get("with_web_search"):
+        from .registry import get_tool
+        ws = get_tool("web_search")
+        if ws:
+            tools_spec = [ws.spec]
+            system += (" Hai a disposizione il tool web_search: usalo per informazioni aggiornate o verificabili e cita le fonti "
+                       "(titolo e URL). Non inventare dettagli su persone: riporta solo cio' che trovi.")
+    used_tools: list[str] = []
     try:
-        async for ev in provider.stream(model, system, messages, [], max_tokens=min(settings.max_output_tokens, 8192)):
-            if ev.type == "text_delta":
-                text += ev.text
-            elif ev.type == "usage":
-                usage = ev.usage or {}
+        for _round in range(3):
+            round_text, tool_uses = "", []
+            async for ev in provider.stream(model, system, messages, tools_spec, max_tokens=min(settings.max_output_tokens, 8192)):
+                if ev.type == "text_delta":
+                    round_text += ev.text
+                elif ev.type == "tool_use" and ev.tool_use:
+                    tool_uses.append(ev.tool_use)
+                elif ev.type == "usage":
+                    u = ev.usage or {}
+                    for k, v in u.items():
+                        usage[k] = int(usage.get(k, 0) or 0) + int(v or 0)
+            text = round_text
+            if not tool_uses or not tools_spec:
+                break
+            # esegui le ricerche richieste e rimanda i risultati
+            blocks = ([{"type": "text", "text": round_text}] if round_text else []) + [{"type": "tool_use", **tu} for tu in tool_uses]
+            messages.append({"role": "assistant", "content": blocks})
+            results = []
+            from .registry import get_tool
+            for tu in tool_uses:
+                tool = get_tool(tu["name"])
+                if not tool:
+                    results.append({"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": "tool non disponibile", "is_error": True})
+                    continue
+                r = await tool.fn(tu["input"] or {}, ctx)
+                used_tools.append(f"{tu['name']}({(tu['input'] or {}).get('query', '')})")
+                results.append({"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": r.content[:20000], "is_error": r.is_error})
+            messages.append({"role": "tool", "content": results})
+            tools_spec = tools_spec if _round < 1 else []   # ultimo giro: solo risposta
     except Exception as e:
         log.exception("ask_model %s/%s", pid, model)
         return ToolResult(f"Errore dal provider {provider.label} ({model}): {e}", is_error=True)
@@ -117,7 +153,7 @@ async def ask_model(args: dict, ctx: ToolContext) -> ToolResult:
                         int(usage.get("output_tokens", 0) or 0), detail="ask_model",
                         cache_read_tokens=int(usage.get("cache_read_tokens", 0) or 0),
                         cache_write_tokens=int(usage.get("cache_write_tokens", 0) or 0))
-    header = f"Risposta di {provider.label} ({model}):\n\n"
+    header = f"Risposta di {provider.label} ({model})" + (f" dopo {len(used_tools)} ricerche web" if used_tools else "") + ":\n\n"
     return ToolResult(header + (text.strip() or "(nessuna risposta)"))
 
 

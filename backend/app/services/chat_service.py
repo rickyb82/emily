@@ -114,6 +114,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
                 parts.append("File del progetto (cerca con search_documents, oppure leggi per intero con read_document):\n" +
                              "\n".join(f"- {f.filename} (id: {f.id}, {f.chunk_count} parti indicizzate)" for f in files))
     parts.append("\nQuando generi un'immagine o un video, l'utente lo vede automaticamente: non inventare link.")
+    parts.append("\nI tool elencati sono realmente disponibili su questo server (es. web_search cerca davvero su internet): "
+                 "non dire mai di non avere internet o di non poter accedere a servizi di casa se il tool corrispondente esiste; "
+                 "usalo. Se un tool non e' nell'elenco, spiega semplicemente che qui non e' attivo.")
     parts.append(
         "\n# Coding\n"
         "- Per pagine web, giochi, app HTML/CSS/JS, grafica SVG, diagrammi o programmi completi usa create_artifact: "
@@ -131,9 +134,11 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             parts.append(
                 "\n# Altri modelli\n"
                 f"Con il tool ask_model puoi consultare altri modelli: {avail}. Fallo quando l'utente lo chiede "
-                "(es. 'chiedi a Gemini', 'cosa direbbe GPT', 'confrontate') o per una seconda opinione utile; riporta "
-                "sempre chi ha risposto. Se l'utente vuole invece che d'ora in poi risponda un altro modello, ricordagli che "
-                "puo' cambiarlo dal menu in alto nella chat.")
+                "(es. 'chiedi a Gemini', 'cosa direbbe GPT', 'confrontate', 'fai la ricerca con il modello locale') o per una "
+                "seconda opinione utile; riporta sempre chi ha risposto. I modelli locali (ollama/custom) girano su server di "
+                "casa raggiungibili da qui: puoi interrogarli, anche con with_web_search=true perche' cerchino sul web. "
+                "Non proporre script da eseguire a mano al posto di usare il tool. Se l'utente vuole invece che d'ora in poi "
+                "risponda un altro modello, ricordagli che puo' cambiarlo dal menu in alto nella chat.")
     from .memory import enabled as memory_enabled
     if memory_enabled():
         parts.append(
