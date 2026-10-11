@@ -7,6 +7,7 @@
 #   ./familai.sh reset-passkey EMAIL     emergenza: rimuove le passkey di un utente (rientri con la password)
 #   ./familai.sh set-password EMAIL PASS emergenza: nuova password per un utente
 #   ./familai.sh users                   elenca gli utenti
+#   ./familai.sh deploy [user@host]      dal Mac: git push + "update" sulla macchina Ubuntu via SSH (host anche in .deploy)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -97,5 +98,19 @@ case "${1:-}" in
   set-password)  compose exec backend python -m app.cli set-password "${2:?email}" "${3:?password}";;
   unlock)        compose exec backend python -m app.cli unlock "${2:?email}";;
   users)         compose exec backend python -m app.cli list-users;;
+  deploy)
+    # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
+    # Destinazione: argomento (user@host[:dir]) oppure file .deploy con una riga  user@host[:dir]
+    target="${2:-$(cat .deploy 2>/dev/null || true)}"
+    [ -n "$target" ] || { echo "uso: ./familai.sh deploy user@host[:/percorso/FamilAI]   (oppure scrivi la destinazione nel file .deploy)"; exit 1; }
+    rhost="${target%%:*}"; rdir="${target#*:}"; [ "$rdir" = "$target" ] && rdir="FamilAI"
+    if [ -d .git ] && git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+      echo ">> git push"; git push
+    else
+      echo ">> (nessun remote git: copio i file via rsync)"
+      rsync -az --delete --exclude data --exclude backups --exclude .env --exclude .familai-mode --exclude node_modules --exclude .git ./ "$rhost:$rdir/"
+    fi
+    echo ">> update su $rhost:$rdir"
+    ssh -t "$rhost" "cd '$rdir' && ./familai.sh update";;
   *) sed -n '2,10p' "$0";;
 esac

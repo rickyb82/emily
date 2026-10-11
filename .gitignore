@@ -8,3 +8,4 @@ frontend/dist/
 backups/
 .familai-mode
 _to_delete/
+.deploy
