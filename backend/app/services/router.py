@@ -29,8 +29,13 @@ va inoltrata a un modello cloud potente. Rispondi SOLO con JSON: {"route":"local
 Scegli "local" per: saluti e chiacchiere, domande semplici di cultura generale, definizioni, traduzioni brevi, riformulazioni,
 riassunti di testo gia' presente, aiuto compiti elementari, storie brevi, consigli generici.
 Scegli "cloud" per: programmazione o debug, matematica non banale, ragionamento a piu' passi, testi lunghi o creativi
-elaborati, richieste che richiedono informazioni recenti o ricerca, immagini/video/file, analisi di documenti, richieste
-ambigue o delicate (salute, legale, sicurezza), qualsiasi cosa in cui un errore costerebbe caro."""
+elaborati, immagini/video/file, analisi di documenti, richieste ambigue o delicate (salute, legale, sicurezza), qualsiasi
+cosa in cui un errore costerebbe caro.
+{SEARCH_RULE}"""
+
+SEARCH_RULE_LOCAL = ("IMPORTANTE: il modello locale HA lo strumento di ricerca web (motore SearXNG in casa) e legge le pagine: "
+                     "ricerche su aziende, persone, notizie, meteo, prezzi e informazioni aggiornate vanno in 'local'.")
+SEARCH_RULE_CLOUD = "Il modello locale NON ha accesso al web: richieste che richiedono informazioni recenti o ricerca vanno in 'cloud'."
 
 
 @dataclass
@@ -111,7 +116,8 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         ctx = ("\n".join(history_tail[-4:]))[-1500:]
         prompt = (f"Ultimi scambi (contesto):\n{ctx}\n\n" if ctx else "") + f"Richiesta da classificare:\n{text[:2000]}"
         out = ""
-        async for ev in prov.stream(router_model, ROUTER_SYSTEM,
+        router_system = ROUTER_SYSTEM.replace("{SEARCH_RULE}", SEARCH_RULE_LOCAL if settings.searxng_url else SEARCH_RULE_CLOUD)
+        async for ev in prov.stream(router_model, router_system,
                                     [{"role": "user", "content": [{"type": "text", "text": prompt}]}], [], max_tokens=120):
             if ev.type == "text_delta":
                 out += ev.text
