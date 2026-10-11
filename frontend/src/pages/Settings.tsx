@@ -14,9 +14,11 @@ export default function Settings() {
   const [pw, setPw] = useState({ current_password: '', new_password: '' })
   const [deviceName, setDeviceName] = useState('')
   const [totpSetup, setTotpSetup] = useState(false)
+  const [mem, setMem] = useState<any[]>([])
   const isChild = me?.user.role === 'child'
 
   async function load() {
+    get('/auth/memory/me').then(setMem).catch(() => {})
     if (isChild) return
     setCreds(await get('/auth/webauthn/credentials'))
     setSessions(await get('/auth/sessions'))
@@ -91,6 +93,20 @@ export default function Settings() {
           <button className="ghost" onClick={() => run(async () => setCodes((await post('/auth/recovery-codes/regenerate')).recovery_codes), 'Nuovi codici generati')}>Rigenera codici di recupero</button>
         </div>
         {codes && <pre className="codes">{codes.join('\n')}</pre>}
+      </section>
+
+      <section className="card stack">
+        <h3>🧠 Cosa ricorda di te e della famiglia</h3>
+        <p className="muted">Fatti che l'assistente usa per personalizzare le risposte. Puoi cancellare quelli che ti riguardano; l'amministratore gestisce tutto dalla pagina Famiglia → Memoria. In chat puoi dire "ricordati che…" o "dimentica…".</p>
+        {mem.length === 0 ? <small className="muted">Ancora nulla.</small> : (
+          <ul className="file-list">
+            {mem.map((m) => (
+              <li key={m.id}>{m.text} <small className="muted">({m.scope === 'family' ? 'famiglia' : 'solo tu'}{m.status === 'pending' ? ' · in attesa di approvazione' : ''})</small>
+                {(m.mine || me?.user.role === 'admin') && <button className="icon" title="Cancella" onClick={() => run(() => del(`/auth/memory/${m.id}`), 'Voce cancellata')}>🗑</button>}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="card stack">

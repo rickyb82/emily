@@ -33,7 +33,7 @@ from ..tools.registry import ToolContext, all_tools, get_tool
 log = logging.getLogger(__name__)
 settings = get_settings()
 MAX_TOOL_ROUNDS = 8
-LOCAL_TOOLS = {"create_artifact", "update_artifact", "list_artifacts", "delete_artifact", "search_documents", "read_document", "ask_model"}
+LOCAL_TOOLS = {"create_artifact", "update_artifact", "list_artifacts", "delete_artifact", "search_documents", "read_document", "ask_model", "remember", "forget"}
 INLINE_DOC_CHARS = settings.rag_inline_max_chars
 
 
@@ -134,6 +134,13 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
                 "(es. 'chiedi a Gemini', 'cosa direbbe GPT', 'confrontate') o per una seconda opinione utile; riporta "
                 "sempre chi ha risposto. Se l'utente vuole invece che d'ora in poi risponda un altro modello, ricordagli che "
                 "puo' cambiarlo dal menu in alto nella chat.")
+    from .memory import enabled as memory_enabled
+    if memory_enabled():
+        parts.append(
+            "\n# Memoria\n"
+            "Quando l'utente dice esplicitamente di ricordare qualcosa ('ricordati che…', 'segnati che…') usa il tool remember; "
+            "quando chiede di dimenticare usa forget. Non salvare dati sanitari, finanziari, credenziali o opinioni politiche/religiose. "
+            "Le voci della 'Memoria di famiglia' nel contesto sono fatti verificati: usali per personalizzare, senza recitarli.")
     from .tts import enabled as tts_enabled
     if tts_enabled():
         parts.append(
@@ -296,6 +303,16 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     # (tool + prompt di sistema) viene riusato dalla cache del provider a ogni turno.
     from ..policy.permissions import dynamic_context
     system_dynamic = dynamic_context()
+    # Memoria di famiglia: fatti approvati pertinenti (sempre quelli fissati)
+    try:
+        from . import memory as _memory
+        mem_items = await _memory.recall(db, user, text or "")
+        if mem_items:
+            system_dynamic += "\n\n" + _memory.format_for_prompt(mem_items)
+            for it in mem_items:
+                it.used_count = (it.used_count or 0) + 1
+    except Exception as e:
+        log.warning("Memoria non disponibile: %s", e)
     # RAG: recupero automatico dei passaggi pertinenti dai documenti del progetto / della chat
     if text.strip():
         try:
@@ -362,6 +379,12 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             await log_usage(db, user, "message", provider.id, model, total_usage["input_tokens"], total_usage["output_tokens"],
                             cache_read_tokens=total_usage["cache_read_tokens"], cache_write_tokens=total_usage["cache_write_tokens"])
             yield sse({"type": "done", "message": _msg_out(amsg)})
+            try:
+                import asyncio as _aio
+                from . import memory as _memory
+                _aio.get_event_loop().create_task(_memory.maybe_extract(conv.id, user.id))
+            except Exception:
+                pass
             return
 
         # ---- esecuzione tool ----

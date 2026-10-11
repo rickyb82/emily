@@ -442,7 +442,7 @@ PROVIDER_CARDS = [
 ]
 OTHER_SETTINGS = ["openai_reasoning_effort", "web_search_provider", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
                   "tts_provider", "tts_model_openai", "tts_voice_openai", "tts_model_gemini", "tts_voice_gemini", "tts_style",
-                  "router_model", "router_cloud_provider", "router_mode", "router_local_provider", "custom_llm_key", "custom_llm_label",
+                  "router_model", "router_cloud_provider", "router_mode", "memory_enabled", "memory_auto_approve", "memory_model", "router_local_provider", "custom_llm_key", "custom_llm_label",
                   "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]
 
 
@@ -660,3 +660,171 @@ async def backup_import(request: Request, file: _UploadFile = _File(...), passwo
 async def backup_cancel(ctx: AuthContext = Depends(require_admin)):
     _backup.cancel_pending()
     return {"status": "ok"}
+
+
+# ---- memoria di famiglia: coda di approvazione e gestione ----
+from ..models import MemoryItem as _MemoryItem  # noqa: E402
+from ..services import memory as _memory  # noqa: E402
+
+
+class MemoryEdit(BaseModel):
+    text: str | None = None
+    category: str | None = None
+    scope: str | None = None
+    pinned: bool | None = None
+    subject_user_id: str | None = None
+
+
+class MemoryCreate(BaseModel):
+    text: str
+    category: str = "altro"
+    scope: str = "family"
+    subject_user_id: str | None = None
+    pinned: bool = False
+
+
+def _mem_out(m: _MemoryItem, names: dict[str, str]) -> dict:
+    return {"id": m.id, "text": m.text, "category": m.category, "scope": m.scope, "status": m.status, "pinned": m.pinned,
+            "confidence": m.confidence, "created_at": m.created_at, "used_count": m.used_count,
+            "author": names.get(m.user_id, "?"), "subject": names.get(m.subject_user_id or "", None),
+            "subject_user_id": m.subject_user_id, "source_conversation_id": m.source_conversation_id}
+
+
+@router.get("/memory")
+async def memory_list(status_: str = "pending", q: str = "", ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    names = {u.id: u.display_name for u in (await db.execute(select(User).where(User.family_id == ctx.user.family_id))).scalars()}
+    stmt = select(_MemoryItem).where(_MemoryItem.family_id == ctx.user.family_id)
+    if status_ != "all":
+        stmt = stmt.where(_MemoryItem.status == status_)
+    rows = (await db.execute(stmt.order_by(_MemoryItem.pinned.desc(), _MemoryItem.created_at.desc()))).scalars().all()
+    if q.strip():
+        ql = q.lower()
+        rows = [r for r in rows if ql in r.text.lower()]
+    counts = {}
+    for st in ("pending", "approved", "rejected"):
+        counts[st] = (await db.execute(select(func.count()).select_from(_MemoryItem).where(
+            _MemoryItem.family_id == ctx.user.family_id, _MemoryItem.status == st))).scalar_one()
+    return {"items": [_mem_out(r, names) for r in rows[:500]], "counts": counts,
+            "enabled": _memory.enabled(), "members": [{"id": k, "name": v} for k, v in names.items()],
+            "categories": _memory.CATEGORIES}
+
+
+@router.post("/memory")
+async def memory_create(body: MemoryCreate, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    why = _memory.firewall(body.text)
+    if why:
+        raise HTTPException(400, f"Voce non consentita dal filtro ({why})")
+    item = _MemoryItem(family_id=ctx.user.family_id, user_id=ctx.user.id, subject_user_id=body.subject_user_id if body.scope == "user" else None,
+                       scope=body.scope, category=body.category if body.category in _memory.CATEGORIES else "altro",
+                       text=body.text.strip()[:400], confidence=5, status="approved", pinned=body.pinned,
+                       reviewed_by=ctx.user.id, reviewed_at=datetime.now(timezone.utc))
+    db.add(item)
+    await db.flush()
+    await _memory.embed_items([item])
+    await db.commit()
+    await audit(db, "memory_added", request, ctx.user, item.text[:120])
+    return {"status": "ok", "id": item.id}
+
+
+@router.post("/memory/{mid}/{action}")
+async def memory_review(mid: str, action: str, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    m = await db.get(_MemoryItem, mid)
+    if not m or m.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    if action not in ("approve", "reject", "pin", "unpin"):
+        raise HTTPException(400, "azione sconosciuta")
+    if action == "approve":
+        m.status = "approved"
+    elif action == "reject":
+        m.status = "rejected"
+    else:
+        m.pinned = action == "pin"
+        if m.pinned:
+            m.status = "approved"
+    m.reviewed_by, m.reviewed_at = ctx.user.id, datetime.now(timezone.utc)
+    if m.status == "approved" and not m.embedding:
+        await _memory.embed_items([m])
+    await db.commit()
+    await audit(db, f"memory_{action}", request, ctx.user, m.text[:120])
+    return {"status": "ok"}
+
+
+@router.post("/memory/bulk/{action}")
+async def memory_bulk(action: str, body: dict, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    ids = list(body.get("ids") or [])
+    if action not in ("approve", "reject", "delete"):
+        raise HTTPException(400, "azione sconosciuta")
+    rows = (await db.execute(select(_MemoryItem).where(_MemoryItem.family_id == ctx.user.family_id, _MemoryItem.id.in_(ids)))).scalars().all()
+    for m in rows:
+        if action == "delete":
+            await db.delete(m)
+        else:
+            m.status = "approved" if action == "approve" else "rejected"
+            m.reviewed_by, m.reviewed_at = ctx.user.id, datetime.now(timezone.utc)
+            if m.status == "approved" and not m.embedding:
+                await _memory.embed_items([m])
+    await db.commit()
+    await audit(db, f"memory_bulk_{action}", request, ctx.user, f"{len(rows)} voci")
+    return {"status": "ok", "count": len(rows)}
+
+
+@router.patch("/memory/{mid}")
+async def memory_edit(mid: str, body: MemoryEdit, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    m = await db.get(_MemoryItem, mid)
+    if not m or m.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    if body.text is not None:
+        why = _memory.firewall(body.text)
+        if why:
+            raise HTTPException(400, f"Voce non consentita dal filtro ({why})")
+        m.text = body.text.strip()[:400]
+        m.embedding = None
+        await _memory.embed_items([m])
+    if body.category in _memory.CATEGORIES:
+        m.category = body.category
+    if body.scope in ("family", "user"):
+        m.scope = body.scope
+        m.subject_user_id = body.subject_user_id if body.scope == "user" else None
+    if body.pinned is not None:
+        m.pinned = body.pinned
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.delete("/memory/{mid}")
+async def memory_delete(mid: str, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    m = await db.get(_MemoryItem, mid)
+    if not m or m.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    await db.delete(m)
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/memory/extract/{cid}")
+async def memory_extract_now(cid: str, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Forza l'estrazione su una conversazione (utile per riempire la memoria dalle chat passate)."""
+    conv = await db.get(Conversation, cid)
+    if not conv or conv.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    conv.settings = {**(conv.settings or {}), "memory": {"user_count": 0}}
+    await db.commit()
+    before = (await db.execute(select(func.count()).select_from(_MemoryItem).where(_MemoryItem.family_id == ctx.user.family_id))).scalar_one()
+    await _memory.maybe_extract(cid, conv.owner_id)
+    after = (await db.execute(select(func.count()).select_from(_MemoryItem).where(_MemoryItem.family_id == ctx.user.family_id))).scalar_one()
+    return {"status": "ok", "new_items": int(after - before)}
+
+
+@router.post("/memory/extract-all")
+async def memory_extract_all(ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Estrazione su tutte le chat della famiglia non ancora processate (in background)."""
+    import asyncio
+    convs = (await db.execute(select(Conversation).where(Conversation.family_id == ctx.user.family_id))).scalars().all()
+    todo = [c for c in convs if not (c.settings or {}).get("memory")]
+
+    async def run():
+        for c in todo:
+            await _memory.maybe_extract(c.id, c.owner_id)
+
+    asyncio.get_event_loop().create_task(run())
+    return {"status": "scheduled", "conversations": len(todo)}

@@ -230,3 +230,12 @@ button.small { font-size: 13px; padding: 4px 10px; }
 
 .google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); text-decoration: none; font-weight: 500; }
 .google-btn:hover { background: var(--bg); }
+
+/* memoria di famiglia */
+.mem-item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+.mem-item.pinned { border-color: var(--primary); }
+.mem-item > input[type=checkbox] { margin-top: 4px; }
+.mem-body { flex: 1; min-width: 0; }
+.mem-text { line-height: 1.4; }
+.mem-item select { width: auto; padding: 4px 6px; font-size: 12px; }
+.mem-item button.small { padding: 4px 8px; }

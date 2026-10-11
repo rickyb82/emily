@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     sandbox_timeout: int = 60
     artifact_max_history: int = 20
 
+    # Memoria di famiglia (fatti estratti dalle chat, con approvazione)
+    memory_enabled: str = "true"
+    memory_auto_approve: str = "false"    # true = le voci sicure (confidenza alta, autore adulto) entrano senza approvazione
+    memory_model: str = "auto"            # modello per l'estrazione: auto | provider/modello (es. openai/gpt-4.1-mini)
+    memory_top_k: int = 8
+
     # RAG (ricerca semantica sui file di progetto)
     embedding_provider: str = "auto"      # auto | openai | gemini | none (none = solo ricerca per parole chiave)
     embedding_model: str = ""             # vuoto = default del provider

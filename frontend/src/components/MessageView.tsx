@@ -15,6 +15,8 @@ const TOOL_LABELS: Record<string, string> = {
   delete_artifact: '🗑 Eliminazione artifact',
   run_code: '⚙️ Esecuzione codice',
   ask_model: '🤝 Consulto un altro modello',
+  remember: '🧠 Memorizzo',
+  forget: '🧠 Dimentico',
 }
 export const toolLabel = (n: string) => TOOL_LABELS[n] ?? (n.startsWith('mcp__') ? `🔌 ${n.split('__').slice(1).join(' / ')}` : `🛠 ${n}`)
 
@@ -100,6 +102,8 @@ function inputSummary(name: string, input: any): string {
   if (name === 'update_artifact' || name === 'delete_artifact') return input.title ?? input.artifact_id ?? ''
   if (name === 'run_code') return `${input.language ?? ''}${input.code ? ` · ${String(input.code).split('\n').length} righe` : ''}`
   if (name === 'read_document' || name === 'search_documents') return input.query ? `"${input.query}"` : (input.file_id ?? '')
+  if (name === 'remember') return `"${String(input.text ?? '').slice(0, 120)}"`
+  if (name === 'forget') return `"${input.query ?? ''}"`
   if (name === 'ask_model') return `→ ${input.provider ?? ''}${input.model ? ` (${input.model})` : ''}: "${String(input.prompt ?? '').slice(0, 100)}"`
   const first = Object.entries(input)[0]
   return first ? `${first[0]}: ${String(first[1]).slice(0, 100)}` : ''

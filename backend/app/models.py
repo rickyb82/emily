@@ -162,6 +162,7 @@ class Conversation(Base):
     messages: Mapped[list[Message]] = relationship(
         back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at"
     )
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)   # stato per-chat (es. estrazione memoria)
 
 
 class Message(Base):
@@ -255,6 +256,28 @@ class AuditLog(Base):
     event: Mapped[str] = mapped_column(String(60))
     detail: Mapped[str] = mapped_column(String(500), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
+
+
+class MemoryItem(Base):
+    """Memoria di famiglia: un fatto durevole estratto dalle chat (o dettato), filtrato e approvato."""
+    __tablename__ = "memory_items"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    family_id: Mapped[str] = mapped_column(ForeignKey("families.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))           # chi l'ha generata
+    subject_user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)             # se riguarda solo un membro
+    scope: Mapped[str] = mapped_column(String(10), default="family")                           # family | user
+    category: Mapped[str] = mapped_column(String(20), default="altro")
+    text: Mapped[str] = mapped_column(String(400))
+    confidence: Mapped[int] = mapped_column(Integer, default=3)
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)             # pending | approved | rejected
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)                               # sempre nel prompt
+    source_conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding_model: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    reviewed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class AppSetting(Base):

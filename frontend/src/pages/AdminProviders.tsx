@@ -299,6 +299,19 @@ export default function AdminProviders() {
           <label className="wide">Stile della voce <small className="muted">(istruzioni in linguaggio naturale; vuoto = voce calda e chiara, adatta ai bambini)</small>
             <input placeholder="es. Parla lentamente e con allegria, come una maestra" value={draft.tts_style ?? s.tts_style.value} onChange={(e) => setDraft({ ...draft, tts_style: e.target.value })} />
           </label>
+          <label>Memoria di famiglia <small className="muted">({s.memory_enabled.value})</small>
+            <select value={draft.memory_enabled ?? s.memory_enabled.value} onChange={(e) => setDraft({ ...draft, memory_enabled: e.target.value })}>
+              <option value="true">attiva (estrazione dalle chat + approvazione)</option><option value="false">disattivata</option>
+            </select>
+          </label>
+          <label>Memoria: approvazione automatica <small className="muted">({s.memory_auto_approve.value})</small>
+            <select value={draft.memory_auto_approve ?? s.memory_auto_approve.value} onChange={(e) => setDraft({ ...draft, memory_auto_approve: e.target.value })}>
+              <option value="false">no: approvo tutto io (consigliato all'inizio)</option><option value="true">sì per le voci sicure degli adulti (fiducia alta); i bambini restano in coda</option>
+            </select>
+          </label>
+          <label>Memoria: modello per l'estrazione <small className="muted">({s.memory_model.value})</small>
+            <input placeholder="auto (locale se c'è, altrimenti il più economico) — oppure es. openai/gpt-4.1-mini" value={draft.memory_model ?? ''} onChange={(e) => setDraft({ ...draft, memory_model: e.target.value })} />
+          </label>
           <label>Embedding (RAG) <small className="muted">({s.embedding_provider.value})</small>
             <select value={draft.embedding_provider ?? s.embedding_provider.value} onChange={(e) => setDraft({ ...draft, embedding_provider: e.target.value })}>
               <option value="auto">auto</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">solo parole chiave</option>
@@ -306,7 +319,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

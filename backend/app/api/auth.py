@@ -437,3 +437,31 @@ async def totp_disable(request: Request, ctx: AuthContext = Depends(require_adul
     await db.commit()
     await audit(db, "totp_disabled", request, ctx.user)
     return {"status": "ok"}
+
+
+# ---------------- memoria: cosa l'assistente sa di me (trasparenza e controllo) ----------------
+@router.get("/memory/me")
+async def my_memory(ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    from ..models import MemoryItem
+    rows = (await db.execute(select(MemoryItem).where(MemoryItem.family_id == ctx.user.family_id,
+                                                       MemoryItem.status.in_(["approved", "pending"]))
+                             .order_by(MemoryItem.created_at.desc()))).scalars().all()
+    mine = [r for r in rows if r.user_id == ctx.user.id or r.subject_user_id == ctx.user.id or
+            (r.scope == "family" and ctx.user.role != Role.child)]
+    return [{"id": r.id, "text": r.text, "category": r.category, "scope": r.scope, "status": r.status,
+             "mine": r.user_id == ctx.user.id or r.subject_user_id == ctx.user.id, "created_at": r.created_at} for r in mine]
+
+
+@router.delete("/memory/{mid}")
+async def delete_my_memory(mid: str, request: Request, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Ognuno puo' cancellare le voci che lo riguardano (i bambini solo le proprie)."""
+    from ..models import MemoryItem
+    m = await db.get(MemoryItem, mid)
+    if not m or m.family_id != ctx.user.family_id:
+        raise HTTPException(404)
+    if not (m.user_id == ctx.user.id or m.subject_user_id == ctx.user.id or ctx.user.role == Role.admin):
+        raise HTTPException(403, "Puoi cancellare solo le voci che ti riguardano")
+    await db.delete(m)
+    await db.commit()
+    await audit(db, "memory_self_deleted", request, ctx.user, m.text[:120])
+    return {"status": "ok"}

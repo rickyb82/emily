@@ -13,12 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AgeGroup, Role, UsageLog, User
 
-ALL_TOOLS = ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "mcp", "ask_model"]
+ALL_TOOLS = ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "mcp", "ask_model", "memory"]
 
 DEFAULTS: dict[str, dict] = {
     AgeGroup.young.value: {
         "label": "Bambino piccolo (5-8 anni)",
-        "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts"],
+        "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts", "memory"],
         "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 40,
         "daily_image_limit": 5,
@@ -36,7 +36,7 @@ DEFAULTS: dict[str, dict] = {
     },
     AgeGroup.kid.value: {
         "label": "Bambino (9-12 anni)",
-        "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts", "run_code"],
+        "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts", "run_code", "memory"],
         "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 80,
         "daily_image_limit": 10,
@@ -54,7 +54,7 @@ DEFAULTS: dict[str, dict] = {
     },
     AgeGroup.teen.value: {
         "label": "Ragazzo (13-17 anni)",
-        "allowed_tools": ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code"],
+        "allowed_tools": ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "memory"],
         "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 200,
         "daily_image_limit": 20,
@@ -151,7 +151,8 @@ def dynamic_context(tz: str = "Europe/Rome") -> str:
 
 TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei documenti
                 "create_artifact": "artifacts", "update_artifact": "artifacts",
-                "list_artifacts": "artifacts", "delete_artifact": "artifacts"}
+                "list_artifacts": "artifacts", "delete_artifact": "artifacts",
+                "remember": "memory", "forget": "memory"}
 
 
 def tool_allowed(policy: dict, tool_name: str) -> bool:
