@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
+import AdminBackup from './AdminBackup'
 import { useAuth } from '../lib/auth'
 import AdminMcp from './AdminMcp'
 import AdminCosts from './AdminCosts'
 
-type Tab = 'members' | 'providers' | 'costs' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp'
+type Tab = 'members' | 'providers' | 'costs' | 'supervision' | 'usage' | 'devices' | 'audit' | 'mcp' | 'backup'
 const TOOLS = ['web_search', 'generate_image', 'generate_video', 'read_document', 'artifacts', 'run_code', 'mcp', 'ask_model']
 const TOOL_IT: Record<string, string> = { web_search: 'Ricerca web', generate_image: 'Immagini', generate_video: 'Video', read_document: 'Documenti (lettura + ricerca)', artifacts: 'Artifact (pagine/app/codice con anteprima)', run_code: 'Esecuzione codice (sandbox)', mcp: 'Server MCP', ask_model: 'Consultare altri modelli AI (ask_model)' }
 const PROVIDERS = ['anthropic', 'openai', 'gemini', 'ollama', 'auto']
@@ -23,14 +24,15 @@ export default function Admin() {
     <div className="page stack">
       <h2>👪 Famiglia <small className="muted">FamilAI v{version}</small></h2>
       <div className="tabs">
-        {(['members', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp'] as Tab[]).map((t) => (
+        {(['members', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp', 'backup'] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-            {{ members: 'Membri', providers: 'Provider AI', costs: 'Costi', supervision: 'Supervisione', usage: 'Utilizzo', devices: 'Dispositivi', audit: 'Eventi', mcp: 'MCP' }[t]}
+            {{ members: 'Membri', providers: 'Provider AI', costs: 'Costi', supervision: 'Supervisione', usage: 'Utilizzo', devices: 'Dispositivi', audit: 'Eventi', mcp: 'MCP', backup: 'Backup' }[t]}
           </button>
         ))}
       </div>
       {tab === 'members' && <Members />}
       {tab === 'providers' && <AdminProviders />}
+      {tab === 'backup' && <AdminBackup />}
       {tab === 'costs' && <AdminCosts />}
       {tab === 'supervision' && <Supervision />}
       {tab === 'usage' && <Usage />}

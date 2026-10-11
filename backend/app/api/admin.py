@@ -593,3 +593,68 @@ async def email_status(ctx: AuthContext = Depends(require_admin)):
     return {"transport": mailer.transport(), "sender": mailer.sender_address(),
             "gmail_linked": bool(settings.gmail_oauth_refresh_token), "gmail_email": settings.gmail_oauth_email,
             "gmail_redirect_uri": gmail_redirect_uri(), "google_client_ready": bool(settings.google_client_id and settings.google_client_secret)}
+
+
+# ---- backup completo e ripristino ----
+from fastapi import File as _File, Form as _Form, UploadFile as _UploadFile  # noqa: E402
+from fastapi.responses import FileResponse as _FileResponse  # noqa: E402
+
+from ..services import backup as _backup  # noqa: E402
+
+
+class BackupRequest(BaseModel):
+    password: str
+
+
+@router.get("/backup/info")
+async def backup_info(ctx: AuthContext = Depends(require_admin)):
+    try:
+        return _backup.info()
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/backup/export")
+async def backup_export(body: BackupRequest, request: Request, ctx: AuthContext = Depends(require_admin),
+                        db: AsyncSession = Depends(get_db)):
+    """Archivio cifrato con tutto: utenti, chat, progetti, file, impostazioni e chiavi API (in chiaro dentro, cifrate fuori)."""
+    import asyncio
+    from ..main import _VERSION
+    try:
+        path = await asyncio.to_thread(_backup.create, body.password, _VERSION)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Backup fallito: {e}")
+    await audit(db, "backup_exported", request, ctx.user, path.name)
+    return _FileResponse(path, media_type="application/octet-stream", filename=path.name)
+
+
+@router.post("/backup/import")
+async def backup_import(request: Request, file: _UploadFile = _File(...), password: str = _Form(...),
+                        ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Prepara il ripristino e riavvia il backend: al riavvio DB e file vengono sostituiti e i segreti ricifrati.
+    Tutte le sessioni vengono chiuse: dopo bisogna accedere di nuovo con le credenziali del backup."""
+    import asyncio
+    import os
+    data = await file.read()
+    try:
+        manifest = await asyncio.to_thread(_backup.stage, data, password)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Ripristino fallito: {e}")
+    await audit(db, "backup_import_scheduled", request, ctx.user, f"{file.filename} ({manifest.get('created_at')})")
+
+    async def _restart():
+        await asyncio.sleep(1.5)
+        os._exit(0)   # il container ha restart: unless-stopped → riparte e applica il ripristino
+
+    asyncio.get_event_loop().create_task(_restart())
+    return {"status": "scheduled", "manifest": manifest}
+
+
+@router.delete("/backup/pending")
+async def backup_cancel(ctx: AuthContext = Depends(require_admin)):
+    _backup.cancel_pending()
+    return {"status": "ok"}

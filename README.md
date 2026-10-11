@@ -86,6 +86,9 @@ Le chiavi si inseriscono da **Famiglia → Provider AI** (salvate cifrate nel DB
 - **generate_video**: Gemini/Veo `VIDEO_MODEL`.
 - **read_document**: PDF, DOCX, XLSX, testo; i documenti piccoli vengono inseriti direttamente nel contesto.
 
+### Backup completo e ripristino (pannello)
+In **Famiglia → Backup** si scarica un unico file `.fab` cifrato con una password a scelta: contiene il database (membri, permessi, chat, progetti, artifact, server MCP, impostazioni), i file caricati/generati e i segreti in chiaro (chiavi API, SMTP, token Gmail, authenticator), che nel DB sono cifrati con una chiave derivata da `SECRET_KEY`. Per reinstallare da zero: avvia FamilAI, entra con l'amministratore iniziale del `.env`, vai in Backup e carica il file con la sua password. Il backend si riavvia, sostituisce dati e file (copia dei precedenti in `data/pre-restore-…`), ricifra i segreti con la nuova `SECRET_KEY` e chiude tutte le sessioni. Le passkey tornano a funzionare solo se `PUBLIC_HOST`/`WEBAUTHN_*` sono gli stessi; altrimenti si entra con app authenticator o codice di recupero.
+
 ### Modello locale (Ollama) e router "Auto"
 FamilAI può usare un modello open source locale (provider **Locale (Ollama)**), gratis e senza far uscire i dati di casa. Consigliati con 16–24 GB di memoria: `qwen3:8b` per le risposte e `qwen3:4b` come router (entrambi multilingua, con tool). Sul **Mac** Ollama va installato nativo (`brew install ollama`, `ollama pull qwen3:8b`, `ollama pull qwen3:4b`): dentro Docker non userebbe la GPU. Poi in **Famiglia → Provider AI → Modello locale** metti `http://host.docker.internal:11434` e prova la connessione. Sulla **Ubuntu** puoi avviarlo nel compose con `COMPOSE_PROFILES=ollama` nel `.env` e indirizzo `http://ollama:11434` (scarica i modelli con `docker compose exec ollama ollama pull qwen3:8b`).
 

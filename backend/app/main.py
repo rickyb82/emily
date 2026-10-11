@@ -34,6 +34,11 @@ async def bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from .services import backup as _backup
+    try:
+        _backup.apply_pending()   # ripristino richiesto dal pannello: va fatto prima di aprire il DB
+    except Exception:
+        log.exception("Ripristino del backup fallito: continuo con i dati attuali")
     await init_db()
     await bootstrap_admin()
     async with SessionLocal() as db:
