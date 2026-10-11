@@ -8,10 +8,10 @@
 #
 #   Opzioni: --repo URL  --dir /percorso (default ~/FamilAI)  --host DOMINIO  --email EMAIL_ACME
 #            --admin-email EMAIL --admin-password PASS  --ollama (avvia anche il modello locale nel compose)
-#            --dev (anteprima http://IP:8080 senza dominio/certificati)
+#            --dev (anteprima http://IP:8080 senza dominio/certificati)  --portainer (pannello web Docker su :9443)
 set -euo pipefail
 
-REPO=""; DIR="$HOME/FamilAI"; HOST=""; EMAIL=""; ADMIN_EMAIL=""; ADMIN_PASS=""; OLLAMA=0; DEV=0
+REPO=""; DIR="$HOME/FamilAI"; HOST=""; EMAIL=""; ADMIN_EMAIL=""; ADMIN_PASS=""; OLLAMA=0; DEV=0; PORTAINER=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2;;
@@ -22,6 +22,7 @@ while [ $# -gt 0 ]; do
     --admin-password) ADMIN_PASS="$2"; shift 2;;
     --ollama) OLLAMA=1; shift;;
     --dev) DEV=1; shift;;
+    --portainer) PORTAINER=1; shift;;
     *) echo "opzione sconosciuta: $1"; exit 1;;
   esac
 done
@@ -96,6 +97,21 @@ if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active";
   say "Apro le porte 80/443 (ufw)"
   sudo ufw allow 80/tcp >/dev/null; sudo ufw allow 443/tcp >/dev/null
   [ "$DEV" = 1 ] && sudo ufw allow 8080/tcp >/dev/null
+  [ "$PORTAINER" = 1 ] && sudo ufw allow from 192.168.0.0/16 to any port 9443 proto tcp >/dev/null
+fi
+
+# ---------- porte occupate? (es. Pi-hole usa la 80 per la sua interfaccia) ----------
+if [ "$DEV" = 0 ]; then
+  for port in 80 443; do
+    if (command -v ss >/dev/null && ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"); then
+      echo "!! La porta $port e' gia' occupata su questa macchina (controlla con: sudo ss -ltnp | grep ':$port')."
+      echo "   Caddy (HTTPS di FamilAI) ne ha bisogno. Se e' Pi-hole: sposta la sua interfaccia web su un'altra porta"
+      echo "   (Pi-hole in Docker: cambia il mapping '80:80' in '8081:80' nel suo compose e riavvialo;"
+      echo "    Pi-hole nativo v6: 'sudo pihole-FTL --config webserver.port 8081'; v5: /etc/lighttpd/external.conf server.port = 8081)."
+      echo "   Poi rilancia questo script."
+      exit 1
+    fi
+  done
 fi
 
 # ---------- avvio ----------
@@ -113,6 +129,11 @@ if [ "$OLLAMA" = 1 ]; then
   docker compose exec -T ollama ollama pull qwen3:4b || true
 fi
 
+if [ "$PORTAINER" = 1 ]; then
+  say "Avvio Portainer (pannello Docker)"
+  if [ "$NEWGRP" = 1 ]; then sg docker -c "./familai.sh portainer up"; else ./familai.sh portainer up; fi
+fi
+
 say "Fatto."
 if [ "$DEV" = 1 ]; then
   echo "   Apri http://$(hostname -I | awk '{print $1}'):8080"
@@ -120,5 +141,6 @@ else
   echo "   Apri https://${HOST:-<PUBLIC_HOST>}  (le porte 80 e 443 del router devono puntare a questa macchina e il DNS al tuo IP pubblico)"
 fi
 echo "   Aggiornamenti: cd $DIR && ./familai.sh update"
+[ "$PORTAINER" = 1 ] && echo "   Pannello Docker: https://$(hostname -I | awk '{print $1}'):9443  (apri subito e crea l'utente admin: dopo 5 minuti va riavviato con ./familai.sh portainer down && ./familai.sh portainer up)"
 [ "$NEWGRP" = 1 ] && echo "   Nota: esci e rientra nella shell (o 'newgrp docker') per usare docker senza sudo."
 exit 0

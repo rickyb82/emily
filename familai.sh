@@ -8,6 +8,7 @@
 #   ./familai.sh set-password EMAIL PASS emergenza: nuova password per un utente
 #   ./familai.sh users                   elenca gli utenti
 #   ./familai.sh deploy [user@host]      dal Mac: git push + "update" sulla macchina Ubuntu via SSH (host anche in .deploy)
+#   ./familai.sh portainer up|down|logs  pannello web Docker (Portainer) su https://<ip>:9443 per gestire altri container
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -98,6 +99,14 @@ case "${1:-}" in
   set-password)  compose exec backend python -m app.cli set-password "${2:?email}" "${3:?password}";;
   unlock)        compose exec backend python -m app.cli unlock "${2:?email}";;
   users)         compose exec backend python -m app.cli list-users;;
+  portainer)
+    case "${2:-up}" in
+      up)   $DC -f extras/portainer.yml up -d; echo ">> Portainer: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):9443  (crea l'amministratore entro 5 minuti dal primo avvio)";;
+      down) $DC -f extras/portainer.yml down;;
+      logs) $DC -f extras/portainer.yml logs -f --tail=100;;
+      update) $DC -f extras/portainer.yml pull && $DC -f extras/portainer.yml up -d;;
+      *) echo "uso: ./familai.sh portainer up|down|logs|update"; exit 1;;
+    esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
     # Destinazione: argomento (user@host[:dir]) oppure file .deploy con una riga  user@host[:dir]
