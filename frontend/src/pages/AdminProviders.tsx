@@ -226,10 +226,19 @@ export default function AdminProviders() {
         <div className="grid3">
           <label>Motore ricerca web <small className="muted">({s.web_search_provider.value})</small>
             <select value={draft.web_search_provider ?? s.web_search_provider.value} onChange={(e) => setDraft({ ...draft, web_search_provider: e.target.value })}>
-              <option value="auto">auto (Claude nativo; altrimenti OpenAI o Gemini; Tavily/Brave se hanno la chiave)</option>
+              <option value="auto">auto (SearXNG in casa se attivo; Claude nativo con Claude; poi OpenAI/Gemini/Tavily/Brave)</option>
+              <option value="searxng">SearXNG (in casa: Google/Bing/DDG aggregati, nessuna chiave)</option>
               <option value="openai">OpenAI (web search via API Responses)</option>
               <option value="gemini">Gemini (grounding Google Search)</option>
               <option value="tavily">Tavily</option><option value="brave">Brave</option>
+            </select>
+          </label>
+          <label>Indirizzo SearXNG <small className="muted">({s.searxng_url.value || 'non attivo'})</small>
+            <input placeholder="http://searxng:8080 (servizio del compose)" value={draft.searxng_url ?? ''} onChange={(e) => setDraft({ ...draft, searxng_url: e.target.value.trim() })} />
+          </label>
+          <label>Ricerca web: lettura pagine <small className="muted">({s.web_search_summarize.value})</small>
+            <select value={draft.web_search_summarize ?? s.web_search_summarize.value} onChange={(e) => setDraft({ ...draft, web_search_summarize: e.target.value })}>
+              <option value="auto">leggi le prime pagine e riassumile con il modello locale (se c'è)</option><option value="none">solo titoli e snippet</option>
             </select>
           </label>
           <label>Ragionamento OpenAI <small className="muted">({s.openai_reasoning_effort.value})</small>
@@ -319,7 +328,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

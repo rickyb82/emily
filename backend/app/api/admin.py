@@ -440,7 +440,7 @@ PROVIDER_CARDS = [
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
-OTHER_SETTINGS = ["openai_reasoning_effort", "web_search_provider", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
+OTHER_SETTINGS = ["openai_reasoning_effort", "web_search_provider", "searxng_url", "web_search_summarize", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "embedding_provider", "embedding_model",
                   "tts_provider", "tts_model_openai", "tts_voice_openai", "tts_model_gemini", "tts_voice_gemini", "tts_style",
                   "router_model", "router_cloud_provider", "router_mode", "memory_enabled", "memory_auto_approve", "memory_model", "router_local_provider", "custom_llm_key", "custom_llm_label",
                   "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]

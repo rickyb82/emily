@@ -77,7 +77,11 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         return to_cloud("richiesta molto lunga")
     m = CLOUD_HINTS.search(text)
     if m:
-        return to_cloud(f"richiede strumenti/capacita' avanzate ('{m.group(0)[:30]}')")
+        hit = m.group(0).lower()
+        # con SearXNG la ricerca web la fa anche il modello locale: non e' piu' un motivo per andare al cloud
+        is_search = any(w in hit for w in ("cerca", "notizie", "meteo", "quanto costa", "prezzo"))
+        if not (is_search and settings.searxng_url):
+            return to_cloud(f"richiede strumenti/capacita' avanzate ('{m.group(0)[:30]}')")
 
     mode = (settings.router_mode or "balanced").lower()
     route, conf, reason = "local", 3, "classificazione non disponibile"

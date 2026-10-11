@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      - SEARXNG_URL=${SEARXNG_URL:-http://searxng:8080}
       - DATA_DIR=/data
       - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
       - SANDBOX_URL=http://sandbox:8080
@@ -77,6 +78,22 @@ services:
       - backend
       - frontend
 
+  # Ricerca web in casa: SearXNG (Google/Bing/DDG/Wikipedia via API JSON, nessuna chiave). Raggiungibile solo dal backend.
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+      - SEARXNG_SECRET=${SECRET_KEY:-cambiami}
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng_cache:/var/cache/searxng
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    logging:
+      driver: json-file
+      options: { max-size: "1m", max-file: "1" }
+
   # Modello locale (opzionale, per la Ubuntu/Linux): attiva con COMPOSE_PROFILES=ollama nel .env e OLLAMA_URL=http://ollama:11434.
   # Sul Mac NON usarlo: Docker non vede la GPU; installa Ollama nativo e usa OLLAMA_URL=http://host.docker.internal:11434.
   ollama:
@@ -97,6 +114,7 @@ networks:
     internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
 
 volumes:
+  searxng_cache:
   ollama_models:
   caddy_data:
   caddy_config:

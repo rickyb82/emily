@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)
 
     # Tool
-    web_search_provider: str = "auto"      # auto | anthropic | openai | gemini | tavily | brave
+    web_search_provider: str = "auto"      # auto | searxng | anthropic | openai | gemini | tavily | brave
+    searxng_url: str = ""                  # es. http://searxng:8080 (servizio nel compose): ricerca web in casa, senza chiavi
+    web_search_read_pages: int = 3         # pagine da leggere per arricchire i risultati SearXNG (0 = solo snippet)
+    web_search_summarize: str = "auto"     # auto (modello locale se c'e') | none: riassunto delle pagine lette
     web_search_model_openai: str = "gpt-4.1-mini"
     web_search_model_gemini: str = "gemini-2.5-flash"
     anthropic_native_search: str = "true"   # con Claude in chat usa il tool di ricerca nativo di Anthropic
