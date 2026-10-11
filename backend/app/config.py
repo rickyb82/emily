@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     anthropic_default_model: str = "claude-sonnet-4-5"
     openai_default_model: str = "gpt-4.1"
+    openai_reasoning_effort: str = "auto"   # auto | none | low | medium | high (modelli OpenAI con ragionamento)
     gemini_default_model: str = "gemini-2.5-flash"
     enable_mock_provider: bool = False  # utile per test senza chiavi
     # Modello locale (Ollama). Vuoto = disabilitato. Mac: http://host.docker.internal:11434 (Ollama nativo, usa la GPU);

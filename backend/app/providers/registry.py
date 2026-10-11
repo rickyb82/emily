@@ -36,6 +36,7 @@ def _providers() -> dict[str, BaseProvider]:
         out["anthropic"] = AnthropicProvider(s.anthropic_api_key, s.anthropic_default_model)
     if s.openai_api_key:
         out["openai"] = OpenAIProvider(s.openai_api_key, s.openai_default_model)
+        out["openai"].reasoning_effort = s.openai_reasoning_effort
     if s.gemini_api_key:
         out["gemini"] = GeminiProvider(s.gemini_api_key, s.gemini_default_model)
     if s.ollama_url:

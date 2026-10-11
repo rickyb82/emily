@@ -232,6 +232,11 @@ export default function AdminProviders() {
               <option value="tavily">Tavily</option><option value="brave">Brave</option>
             </select>
           </label>
+          <label>Ragionamento OpenAI <small className="muted">({s.openai_reasoning_effort.value})</small>
+            <select value={draft.openai_reasoning_effort ?? s.openai_reasoning_effort.value} onChange={(e) => setDraft({ ...draft, openai_reasoning_effort: e.target.value })}>
+              <option value="auto">auto (si adatta al modello)</option><option value="none">nessuno (più veloce ed economico)</option><option value="low">basso</option><option value="medium">medio</option><option value="high">alto (più lento)</option>
+            </select>
+          </label>
           <label>Ricerca nativa di Claude <small className="muted">({s.anthropic_native_search.value})</small>
             <select value={draft.anthropic_native_search ?? s.anthropic_native_search.value} onChange={(e) => setDraft({ ...draft, anthropic_native_search: e.target.value })}>
               <option value="true">attiva quando il modello è Claude</option><option value="false">disattiva (usa sempre il motore sopra)</option>
@@ -301,7 +306,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

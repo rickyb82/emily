@@ -13,6 +13,8 @@ class OpenAIProvider(BaseProvider):
     fallback_models = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o4-mini"]
 
     image_models: list[str] = []
+    reasoning_effort: str = "auto"
+    _needs_no_reasoning: set[str] = set()   # modelli che vogliono reasoning_effort='none' con i tool
 
     def _client(self):
         from openai import AsyncOpenAI
@@ -73,10 +75,31 @@ class OpenAIProvider(BaseProvider):
         if tools:
             kwargs["tools"] = [{"type": "function", "function": {"name": t.name, "description": t.description,
                                                                   "parameters": t.input_schema}} for t in tools]
+        # Modelli con ragionamento: alcuni (es. gpt-6.x) accettano i tool su /chat/completions solo con reasoning_effort
+        # 'none'. Impostazione OPENAI_REASONING_EFFORT: auto (prova e si adatta) | none | low | medium | high.
+        effort = (getattr(self, "reasoning_effort", "auto") or "auto").lower()
+        mkey = kwargs["model"]
+        if effort != "auto":
+            kwargs["reasoning_effort"] = effort
+        elif mkey in self._needs_no_reasoning and tools:
+            kwargs["reasoning_effort"] = "none"
         pending: dict[int, dict] = {}
         usage = {}
         finish_reason = None
-        async for chunk in await client.chat.completions.create(**kwargs):
+        try:
+            response = await client.chat.completions.create(**kwargs)
+        except Exception as e:
+            msg = str(e)
+            if tools and "reasoning_effort" in msg and "reasoning_effort" not in kwargs:
+                self._needs_no_reasoning.add(mkey)
+                kwargs["reasoning_effort"] = "none"
+                response = await client.chat.completions.create(**kwargs)
+            elif "reasoning_effort" in msg and "Unsupported" in msg and "reasoning_effort" in kwargs:
+                kwargs.pop("reasoning_effort")       # modello senza ragionamento: il parametro non e' accettato
+                response = await client.chat.completions.create(**kwargs)
+            else:
+                raise
+        async for chunk in response:
             if chunk.usage:
                 cached = getattr(getattr(chunk.usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
                 usage = {"input_tokens": (chunk.usage.prompt_tokens or 0) - cached, "cache_read_tokens": cached,

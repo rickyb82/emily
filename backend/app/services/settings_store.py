@@ -27,6 +27,7 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "anthropic_default_model": ("Modello di default Claude", False),
     "openai_api_key": ("Chiave API OpenAI", True),
     "openai_default_model": ("Modello di default OpenAI", False),
+    "openai_reasoning_effort": ("Sforzo di ragionamento OpenAI (auto/none/low/medium/high)", False),
     "gemini_api_key": ("Chiave API Gemini", True),
     "gemini_default_model": ("Modello di default Gemini", False),
     "ollama_url": ("Indirizzo Ollama (modello locale)", False),
