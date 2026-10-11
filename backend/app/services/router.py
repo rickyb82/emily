@@ -71,6 +71,13 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
     def to_cloud(reason: str) -> Route:
         return Route(cloud, cloud_model, False, reason)
 
+    # richiesta esplicita dell'utente: vince su tutto
+    low = text.lower()
+    if re.search(r"\b(in locale|modello locale|modello di casa|ollama|qwen|gemma|gpt-oss|llama|server di casa|senza cloud|offline)\b", low):
+        return Route(local_id, local_model, True, "richiesto dall'utente il modello locale")
+    if re.search(r"\b(con claude|usa claude|chiedi a claude|con gpt|usa gpt|chatgpt|con gemini|usa gemini|nel cloud|modello cloud)\b", low):
+        return to_cloud("richiesto dall'utente un modello cloud")
+
     if has_files:
         return to_cloud("allegati presenti")
     if len(text) > 4000:
