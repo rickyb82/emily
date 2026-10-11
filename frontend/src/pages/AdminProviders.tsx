@@ -125,16 +125,23 @@ export default function AdminProviders() {
               )}
               {c.model_key && c.model_state && (
                 <label>
-                  Modello di default <small className="muted">({c.model_state.value})</small>
-                  <input list={`models-${c.id}`} placeholder={c.model_state.value}
-                    value={draft[c.model_key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })} />
-                  <datalist id={`models-${c.id}`}>{c.models.map((m) => <option key={m.id} value={m.id} />)}</datalist>
+                  Modello di default <small className="muted">({c.model_state.value || 'primo disponibile'}{c.models.length ? ` · ${c.models.length} trovati` : ' · elenco non ancora letto'})</small>
+                  {c.models.length > 0 ? (
+                    <select value={draft[c.model_key] ?? c.model_state.value ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })}>
+                      {!c.models.some((m) => m.id === (c.model_state!.value || '')) && <option value={c.model_state.value || ''}>{c.model_state.value || '— primo disponibile —'}</option>}
+                      {c.models.map((m) => <option key={m.id} value={m.id}>{m.label || m.id}</option>)}
+                    </select>
+                  ) : (
+                    <input placeholder={c.model_state.value || 'es. openai/gpt-oss-120b'}
+                      value={draft[c.model_key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })} />
+                  )}
                 </label>
               )}
             </div>
             <div className="row wrap">
               <button disabled={busy !== '' || !(c.key in draft || (c.model_key && c.model_key in draft))} onClick={() => save([c.key, ...(c.model_key ? [c.model_key] : [])])}>Salva</button>
               {c.testable && <button className="ghost" disabled={busy !== '' || !c.key_state.configured} onClick={() => test(c.id)}>{busy === 'test-' + c.id ? 'Verifica…' : '🔌 Prova connessione'}</button>}
+              {c.model_key && c.key_state.configured && <button className="ghost" disabled={busy !== ''} title="Rilegge l'elenco dei modelli dal provider" onClick={async () => { setBusy('save'); try { setSt(await put<Status>('/admin/providers', { values: {} })); setMsg(`Elenco modelli di ${c.label} aggiornato`) } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>🔄 Modelli</button>}
               {c.key_state.source === 'admin' && <button className="ghost danger" disabled={busy !== ''} onClick={() => remove(c.key)}>{c.kind === 'url' ? 'Disattiva' : 'Rimuovi chiave'}</button>}
               {t && <span className={t.ok ? 'ok' : 'error'}>{t.ok ? `✓ OK (${t.latency_ms} ms) — ${t.detail}` : `✗ ${t.detail}`}</span>}
             </div>

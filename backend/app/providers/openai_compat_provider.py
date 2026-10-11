@@ -2,7 +2,13 @@
 Esempio: http://192.168.4.2:8000 che serve openai/gpt-oss-120b. Chiave API opzionale."""
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+
+from .base import ProviderEvent
 from .ollama_provider import OllamaProvider
+
+log = logging.getLogger(__name__)
 
 
 class OpenAICompatProvider(OllamaProvider):
@@ -13,8 +19,30 @@ class OpenAICompatProvider(OllamaProvider):
     def __init__(self, base_url: str, default_model: str, api_key: str = "", label: str = ""):
         super().__init__(base_url, default_model)
         self.custom_key = api_key or "none"
+        self.tools_supported: bool | None = None   # None = non ancora verificato
         if label:
             self.label = label
+
+    async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
+        """Come OpenAI, ma se il server rifiuta i tool (es. vLLM senza --enable-auto-tool-choice) riprova senza e lo ricorda."""
+        use_tools = tools if self.tools_supported is not False else []
+        try:
+            got_any = False
+            async for ev in super().stream(model, system, messages, use_tools, max_tokens=max_tokens, system_dynamic=system_dynamic):
+                got_any = True
+                yield ev
+            if use_tools and self.tools_supported is None:
+                self.tools_supported = True
+        except Exception as e:
+            msg = str(e).lower()
+            if use_tools and not got_any and ("tool" in msg or "function" in msg) and ("400" in msg or "invalid" in msg or "not support" in msg or "unsupported" in msg):
+                log.warning("%s: il server non accetta i tool (%s). Da ora rispondo senza tool.", self.label, str(e)[:200])
+                self.tools_supported = False
+                yield ProviderEvent("status", text=f"⚠️ {self.label} non supporta i tool: rispondo senza strumenti")
+                async for ev in super().stream(model, system, messages, [], max_tokens=max_tokens, system_dynamic=system_dynamic):
+                    yield ev
+            else:
+                raise
 
     def _client(self):
         from openai import AsyncOpenAI
