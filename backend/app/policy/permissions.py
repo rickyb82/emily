@@ -138,7 +138,9 @@ def system_prompt_for(user: User, tz: str = "Europe/Rome") -> str:
     base = SYSTEM_PROMPTS[group].replace("{age}", age or "?")
     extra = (user.policy or {}).get("custom_instructions", "")
     # NB: niente data/ora qui: questa parte deve restare identica tra una richiesta e l'altra per il prompt caching.
-    return f"{base}\n\nL'utente si chiama {user.display_name}.\n{extra}".strip()
+    fmt = ("Formattazione: Markdown. Per frecce e simboli usa i caratteri Unicode (→ × ≤ ° %), NON comandi LaTeX "
+           "come $\\rightarrow$; riserva $...$ e $$...$$ alle vere formule matematiche.")
+    return f"{base}\n\n{fmt}\n\nL'utente si chiama {user.display_name}.\n{extra}".strip()
 
 
 def dynamic_context(tz: str = "Europe/Rome") -> str:

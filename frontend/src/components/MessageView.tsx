@@ -1,5 +1,4 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import Markdown from './Markdown'
 import type { Message } from '../lib/api'
 import { useEffect, useState } from 'react'
 import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
@@ -41,7 +40,7 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
         <div className="bubble">{text}</div>
       ) : (
         <div className="markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          <Markdown className="">{text}</Markdown>
           {m.streaming && <span className="cursor">▍</span>}
         </div>
       )}

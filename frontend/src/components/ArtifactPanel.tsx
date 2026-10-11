@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import Markdown from './Markdown'
 import { get, patch } from '../lib/api'
 import { fetchSpeech } from '../lib/speech'
 
@@ -165,7 +164,7 @@ export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, on
 
       <div className="artifact-body">
         {tab === 'preview' && shown.kind === 'markdown' && (
-          <div className="markdown pad"><ReactMarkdown remarkPlugins={[remarkGfm]}>{shown.content}</ReactMarkdown></div>
+          <Markdown className="markdown pad">{shown.content}</Markdown>
         )}
         {tab === 'preview' && shown.kind !== 'markdown' && (
           <iframe
