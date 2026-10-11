@@ -211,7 +211,9 @@ async def full_report(db: AsyncSession, family_id: str) -> dict:
                     "percent": round(min(100.0, used / b * 100), 1) if b > 0 else None,
                     "stats": local["providers"].get(prov, {})})
     # modello locale: nessun costo, ma mostriamo quanto lavoro ha assorbito e cosa sarebbe costato nel cloud
-    lo = local["providers"].get("ollama", {})
+    lo_parts = [local["providers"].get(k, {}) for k in ("ollama", "custom")]
+    lo = {"messages": sum(p.get("messages", 0) for p in lo_parts), "input_tokens": sum(p.get("input_tokens", 0) for p in lo_parts),
+          "output_tokens": sum(p.get("output_tokens", 0) for p in lo_parts)} if any(lo_parts) else {}
     local_tokens_in = lo.get("input_tokens", 0)
     local_tokens_out = lo.get("output_tokens", 0)
     cloud_msgs = sum(local["providers"].get(p, {}).get("messages", 0) for p in ("anthropic", "openai", "gemini"))
@@ -219,7 +221,9 @@ async def full_report(db: AsyncSession, family_id: str) -> dict:
         next((p for p in ("anthropic", "openai", "gemini") if getattr(settings, f"{p}_api_key", "")), "anthropic")
     ref_model = getattr(settings, f"{ref_prov}_default_model", "")
     avoided = estimate_cost(pricing_table(), ref_prov, ref_model, "message", local_tokens_in, local_tokens_out) if lo else 0.0
-    local_info = {"configured": bool(settings.ollama_url), "model": settings.ollama_default_model,
+    local_models = [m for m in ((settings.custom_llm_model or (settings.custom_llm_label if settings.custom_llm_url else "")),
+                                (settings.ollama_default_model if settings.ollama_url else "")) if m]
+    local_info = {"configured": bool(settings.ollama_url or settings.custom_llm_url), "model": " + ".join(local_models),
                   "messages": lo.get("messages", 0), "input_tokens": local_tokens_in, "output_tokens": local_tokens_out,
                   "cloud_messages": cloud_msgs, "avoided_usd": round(avoided, 4), "reference": f"{ref_prov} / {ref_model}"}
     return {"since": since.isoformat(), "providers": out, "users": local["users"], "pricing": pricing_table(), "local": local_info}

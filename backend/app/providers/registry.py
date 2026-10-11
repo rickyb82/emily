@@ -8,7 +8,24 @@ from .base import BaseProvider
 from .gemini_provider import GeminiProvider
 from .mock_provider import MockProvider
 from .ollama_provider import OllamaProvider
+from .openai_compat_provider import OpenAICompatProvider
 from .openai_provider import OpenAIProvider
+
+
+LOCAL_IDS = {"ollama", "custom"}   # provider "di casa": gratis, dati che non escono
+
+
+def local_provider_id() -> str | None:
+    """Il provider locale che risponde con il router Auto."""
+    s = get_settings()
+    provs = _providers()
+    pref = (s.router_local_provider or "auto").lower()
+    if pref in provs and pref in LOCAL_IDS:
+        return pref
+    for k in ("custom", "ollama"):
+        if k in provs:
+            return k
+    return None
 
 
 @lru_cache
@@ -23,6 +40,8 @@ def _providers() -> dict[str, BaseProvider]:
         out["gemini"] = GeminiProvider(s.gemini_api_key, s.gemini_default_model)
     if s.ollama_url:
         out["ollama"] = OllamaProvider(s.ollama_url, s.ollama_default_model)
+    if s.custom_llm_url:
+        out["custom"] = OpenAICompatProvider(s.custom_llm_url, s.custom_llm_model, s.custom_llm_key, s.custom_llm_label)
     if s.enable_mock_provider or not out:
         out["mock"] = MockProvider("", "mock-1")
     return out
@@ -55,7 +74,7 @@ def available_providers() -> list[dict]:
     out = [{"id": p.id, "label": p.label, "models": p.models(), "default_model": p.default_model}
            for p in _providers().values()]
     s = get_settings()
-    if "ollama" in _providers() and (s.router_mode or "balanced").lower() != "off" and len(_providers()) > 1:
+    if LOCAL_IDS & set(_providers()) and (s.router_mode or "balanced").lower() != "off" and len(_providers()) > 1:
         # pseudo-provider: il router decide a ogni messaggio tra locale e cloud
         out.insert(0, {"id": "auto", "label": "Auto (locale + cloud)",
                        "models": [{"id": "auto", "label": "decide il router"}], "default_model": "auto"})

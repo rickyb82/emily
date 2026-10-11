@@ -113,7 +113,7 @@ export default function AdminProviders() {
               {c.kind === 'url' ? (
                 <label>
                   Indirizzo del server <small className="muted">({c.key_state.configured ? c.key_state.value : 'non configurato'})</small>
-                  <input type="url" autoComplete="off" placeholder="http://host.docker.internal:11434"
+                  <input type="url" autoComplete="off" placeholder={c.id === 'custom' ? 'http://192.168.4.2:8000' : 'http://host.docker.internal:11434'}
                     value={draft[c.key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value.trim() })} />
                 </label>
               ) : (
@@ -253,6 +253,15 @@ export default function AdminProviders() {
           <label>Modello locale del router <small className="muted">({s.router_model.value})</small>
             <input list="models-ollama" placeholder={s.router_model.value} value={draft.router_model ?? ''} onChange={(e) => setDraft({ ...draft, router_model: e.target.value })} />
           </label>
+          <label>Provider locale del router <small className="muted">({s.router_local_provider.value})</small>
+            <select value={draft.router_local_provider ?? s.router_local_provider.value} onChange={(e) => setDraft({ ...draft, router_local_provider: e.target.value })}>
+              <option value="auto">auto (server LLM di casa se presente, altrimenti Ollama)</option><option value="custom">Server LLM di casa</option><option value="ollama">Ollama</option>
+            </select>
+          </label>
+          <label>Nome del server LLM di casa<input placeholder={s.custom_llm_label.value} value={draft.custom_llm_label ?? ''} onChange={(e) => setDraft({ ...draft, custom_llm_label: e.target.value })} /></label>
+          <label>Chiave API server LLM di casa <small className="muted">({s.custom_llm_key.configured ? 'impostata' : 'non necessaria se il server non la richiede'})</small>
+            <input type="password" autoComplete="off" value={draft.custom_llm_key ?? ''} onChange={(e) => setDraft({ ...draft, custom_llm_key: e.target.value.trim() })} />
+          </label>
           <label>Provider cloud del router <small className="muted">({s.router_cloud_provider.value})</small>
             <select value={draft.router_cloud_provider ?? s.router_cloud_provider.value} onChange={(e) => setDraft({ ...draft, router_cloud_provider: e.target.value })}>
               <option value="auto">auto (Claude, poi OpenAI, poi Gemini)</option><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option>
@@ -285,7 +294,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['web_search_provider', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

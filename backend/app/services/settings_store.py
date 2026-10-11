@@ -31,6 +31,11 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "gemini_default_model": ("Modello di default Gemini", False),
     "ollama_url": ("Indirizzo Ollama (modello locale)", False),
     "ollama_default_model": ("Modello locale di default", False),
+    "custom_llm_url": ("Indirizzo server LLM di casa (API OpenAI)", False),
+    "custom_llm_key": ("Chiave API server LLM di casa", True),
+    "custom_llm_model": ("Modello server LLM di casa", False),
+    "custom_llm_label": ("Nome del server LLM di casa", False),
+    "router_local_provider": ("Provider locale del router Auto", False),
     "router_model": ("Modello locale per il router Auto", False),
     "router_cloud_provider": ("Provider cloud del router Auto", False),
     "router_mode": ("Modalita' router Auto", False),
@@ -188,6 +193,17 @@ async def test_provider(pid: str) -> dict:
                         "latency_ms": int((time.perf_counter() - t0) * 1000)}
             missing = [m for m in (settings.ollama_default_model, settings.router_model) if m not in names]
             detail = f"{len(names)} modelli: {', '.join(names[:8])}" + (f" — mancano: {', '.join(missing)} (ollama pull …)" if missing else "")
+        elif pid == "custom":
+            from openai import AsyncOpenAI
+
+            base = settings.custom_llm_url.rstrip("/")
+            base = base if base.endswith("/v1") else base + "/v1"
+            c = AsyncOpenAI(api_key=settings.custom_llm_key or "none", base_url=base, timeout=30)
+            page = await c.models.list()
+            names = [m.id for m in page.data]
+            model = settings.custom_llm_model or (names[0] if names else "")
+            r = await c.chat.completions.create(model=model, max_tokens=16, messages=[{"role": "user", "content": "Rispondi solo: OK"}])
+            detail = f"{len(names)} modelli ({', '.join(names[:5])}); {model}: {r.choices[0].message.content!r}"
         elif pid == "tavily":
             import httpx
 

@@ -19,7 +19,7 @@ DEFAULTS: dict[str, dict] = {
     AgeGroup.young.value: {
         "label": "Bambino piccolo (5-8 anni)",
         "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts"],
-        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "auto"],
+        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 40,
         "daily_image_limit": 5,
         "daily_video_limit": 0,
@@ -37,7 +37,7 @@ DEFAULTS: dict[str, dict] = {
     AgeGroup.kid.value: {
         "label": "Bambino (9-12 anni)",
         "allowed_tools": ["web_search", "generate_image", "read_document", "artifacts", "run_code"],
-        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "auto"],
+        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 80,
         "daily_image_limit": 10,
         "daily_video_limit": 1,
@@ -55,7 +55,7 @@ DEFAULTS: dict[str, dict] = {
     AgeGroup.teen.value: {
         "label": "Ragazzo (13-17 anni)",
         "allowed_tools": ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code"],
-        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "auto"],
+        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 200,
         "daily_image_limit": 20,
         "daily_video_limit": 3,
@@ -73,7 +73,7 @@ DEFAULTS: dict[str, dict] = {
     AgeGroup.adult.value: {
         "label": "Adulto",
         "allowed_tools": ALL_TOOLS,
-        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "auto"],
+        "allowed_providers": ["anthropic", "openai", "gemini", "ollama", "custom", "auto"],
         "daily_message_limit": 0,   # 0 = illimitato
         "daily_image_limit": 0,
         "daily_video_limit": 0,
@@ -126,7 +126,7 @@ def effective_policy(user: User) -> dict:
     pol["age_group"] = group
     if user.role != Role.child:
         # gli adulti possono sempre usare il modello locale e il router Auto (anche con una policy salvata prima che esistessero)
-        pol["allowed_providers"] = list(dict.fromkeys(list(pol.get("allowed_providers", [])) + ["ollama", "auto"]))
+        pol["allowed_providers"] = list(dict.fromkeys(list(pol.get("allowed_providers", [])) + ["ollama", "custom", "auto"]))
     return pol
 
 

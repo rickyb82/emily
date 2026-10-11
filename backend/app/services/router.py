@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 
 from ..config import get_settings
-from ..providers.registry import _providers, get_provider
+from ..providers.registry import LOCAL_IDS, _providers, get_provider, local_provider_id
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -42,11 +42,10 @@ class Route:
 
 
 def enabled(policy: dict | None = None) -> bool:
-    if not settings.ollama_url or (settings.router_mode or "balanced").lower() == "off":
+    if (settings.router_mode or "balanced").lower() == "off" or not local_provider_id():
         return False
-    if "ollama" not in _providers():
-        return False
-    return True if policy is None else (AUTO_ID in policy.get("allowed_providers", []) or "ollama" in policy.get("allowed_providers", []))
+    allowed = set(policy.get("allowed_providers", [])) if policy is not None else None
+    return True if allowed is None else bool({AUTO_ID, *LOCAL_IDS} & allowed)
 
 
 def cloud_provider(policy: dict) -> str | None:
@@ -62,10 +61,11 @@ def cloud_provider(policy: dict) -> str | None:
 
 
 async def decide(text: str, has_files: bool, policy: dict, history_tail: list[str]) -> Route:
-    local_model = settings.ollama_default_model
+    local_id = local_provider_id() or "ollama"
+    local_model = get_provider(local_id).default_model
     cloud = cloud_provider(policy)
     if not cloud:
-        return Route("ollama", local_model, True, "nessun provider cloud disponibile")
+        return Route(local_id, local_model, True, "nessun provider cloud disponibile")
     cloud_model = get_provider(cloud).default_model
 
     def to_cloud(reason: str) -> Route:
@@ -82,11 +82,13 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
     mode = (settings.router_mode or "balanced").lower()
     route, conf, reason = "local", 3, "classificazione non disponibile"
     try:
-        prov = _providers()["ollama"]
+        # il classificatore gira su Ollama (modello piccolo, veloce) se c'e', altrimenti sul server locale stesso
+        prov = _providers().get("ollama") or _providers()[local_id]
+        router_model = settings.router_model if prov.id == "ollama" else local_model
         ctx = ("\n".join(history_tail[-4:]))[-1500:]
         prompt = (f"Ultimi scambi (contesto):\n{ctx}\n\n" if ctx else "") + f"Richiesta da classificare:\n{text[:2000]}"
         out = ""
-        async for ev in prov.stream(settings.router_model or local_model, ROUTER_SYSTEM,
+        async for ev in prov.stream(router_model, ROUTER_SYSTEM,
                                     [{"role": "user", "content": [{"type": "text", "text": prompt}]}], [], max_tokens=120):
             if ev.type == "text_delta":
                 out += ev.text
@@ -105,4 +107,4 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         go_local = route == "local" and conf >= 4
     else:
         go_local = route == "local"
-    return Route("ollama", local_model, True, reason) if go_local else to_cloud(reason)
+    return Route(local_id, local_model, True, reason) if go_local else to_cloud(reason)

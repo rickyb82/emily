@@ -41,8 +41,14 @@ class Settings(BaseSettings):
     # Linux con profilo compose 'ollama': http://ollama:11434
     ollama_url: str = ""
     ollama_default_model: str = "qwen3:8b"
+    # Server LLM di casa con API compatibile OpenAI (vLLM, llama.cpp, LM Studio...): es. http://192.168.4.2:8000
+    custom_llm_url: str = ""
+    custom_llm_key: str = ""              # opzionale
+    custom_llm_model: str = ""            # vuoto = primo modello esposto da /v1/models
+    custom_llm_label: str = "Server LLM di casa"
     # Router "Auto": un modello locale piccolo decide se rispondere in locale o passare al cloud
     router_model: str = "qwen3:4b"        # modello locale usato per decidere (e per le risposte rapide se uguale al default)
+    router_local_provider: str = "auto"   # chi risponde in locale: auto (custom se presente, altrimenti ollama) | ollama | custom
     router_cloud_provider: str = "auto"   # provider cloud a cui inoltrare: auto | anthropic | openai | gemini
     router_mode: str = "balanced"         # off | economico (locale quando possibile) | balanced | qualita (cloud se dubbio)
     max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)

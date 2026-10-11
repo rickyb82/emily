@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 
 ALIASES = {"claude": "anthropic", "anthropic": "anthropic", "gpt": "openai", "chatgpt": "openai", "openai": "openai",
-           "gemini": "gemini", "google": "gemini", "ollama": "ollama", "locale": "ollama", "local": "ollama", "qwen": "ollama", "gemma": "ollama"}
+           "gemini": "gemini", "google": "gemini", "ollama": "ollama", "locale": "ollama", "local": "ollama", "qwen": "ollama", "gemma": "ollama",
+           "custom": "custom", "server": "custom", "casa": "custom", "gpt-oss": "custom", "vllm": "custom"}
 MAX_CONTEXT_MESSAGES = 12
 MAX_CONTEXT_CHARS = 12_000
 
@@ -26,6 +27,7 @@ def _resolve(provider: str, model: str | None, allowed: list[str]) -> tuple[str,
     if not pid:
         # accetta anche un id di modello al posto del provider (es. "gpt-4.1", "gemini-2.5-pro", "claude-...")
         for prefix, p in (("claude", "anthropic"), ("gpt", "openai"), ("o1", "openai"), ("o3", "openai"), ("o4", "openai"), ("gemini", "gemini"),
+                          ("gpt-oss", "custom"), ("openai/", "custom"),
                           ("qwen", "ollama"), ("gemma", "ollama"), ("llama", "ollama"), ("mistral", "ollama")):
             if key.startswith(prefix):
                 pid, model = p, model or key
