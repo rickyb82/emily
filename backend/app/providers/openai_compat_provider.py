@@ -44,11 +44,21 @@ class OpenAICompatProvider(OllamaProvider):
             else:
                 raise
 
+    @staticmethod
+    def normalize_base(url: str) -> str:
+        """Accetta http://host:8000, http://host:8000/v1 o anche l'URL completo .../v1/chat/completions."""
+        u = url.strip().rstrip("/")
+        if not u.startswith(("http://", "https://")):
+            u = "http://" + u
+        i = u.find("/v1")
+        if i >= 0:
+            u = u[:i]
+        return u + "/v1"
+
     def _client(self):
         from openai import AsyncOpenAI
 
-        base = self.base_url if self.base_url.rstrip("/").endswith("/v1") else self.base_url.rstrip("/") + "/v1"
-        return AsyncOpenAI(api_key=self.custom_key, base_url=base, timeout=300)
+        return AsyncOpenAI(api_key=self.custom_key, base_url=self.normalize_base(self.base_url), timeout=300)
 
     async def discover_models(self) -> list[dict]:
         page = await self._client().models.list()

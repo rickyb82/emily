@@ -194,11 +194,28 @@ async def test_provider(pid: str) -> dict:
             missing = [m for m in (settings.ollama_default_model, settings.router_model) if m not in names]
             detail = f"{len(names)} modelli: {', '.join(names[:8])}" + (f" — mancano: {', '.join(missing)} (ollama pull …)" if missing else "")
         elif pid == "custom":
+            import httpx
             from openai import AsyncOpenAI
+            from ..providers.openai_compat_provider import OpenAICompatProvider
 
-            base = settings.custom_llm_url.rstrip("/")
-            base = base if base.endswith("/v1") else base + "/v1"
-            c = AsyncOpenAI(api_key=settings.custom_llm_key or "none", base_url=base, timeout=30)
+            base = OpenAICompatProvider.normalize_base(settings.custom_llm_url)
+            # prima un GET "nudo" per distinguere problemi di rete da problemi di API
+            try:
+                async with httpx.AsyncClient(timeout=8) as h:
+                    r = await h.get(base + "/models", headers={"Authorization": f"Bearer {settings.custom_llm_key}"} if settings.custom_llm_key else {})
+            except httpx.ConnectError as e:
+                return {"ok": False, "latency_ms": int((time.perf_counter() - t0) * 1000),
+                        "detail": f"Il backend (nel container Docker) non raggiunge {base}: {e}. Verifica che dall'host 'curl {base}/models' "
+                                  "funzioni, che il server LLM ascolti su 0.0.0.0 (non solo 127.0.0.1) e che il firewall lasci passare la porta."}
+            except httpx.TimeoutException:
+                return {"ok": False, "latency_ms": int((time.perf_counter() - t0) * 1000),
+                        "detail": f"Timeout verso {base}: indirizzo/porta errati, server fermo o rete non instradata dal container Docker."}
+            if r.status_code in (401, 403):
+                return {"ok": False, "detail": f"Il server richiede una chiave API valida (HTTP {r.status_code}): impostala in 'Altre impostazioni'.",
+                        "latency_ms": int((time.perf_counter() - t0) * 1000)}
+            if r.status_code >= 400:
+                return {"ok": False, "detail": f"HTTP {r.status_code} da {base}/models: {r.text[:200]}", "latency_ms": int((time.perf_counter() - t0) * 1000)}
+            c = AsyncOpenAI(api_key=settings.custom_llm_key or "none", base_url=base, timeout=60)
             page = await c.models.list()
             names = [m.id for m in page.data]
             model = settings.custom_llm_model or (names[0] if names else "")
