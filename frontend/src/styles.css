@@ -118,6 +118,21 @@ code { font-size: 13px; }
 .markdown table { border-collapse: collapse; }
 .markdown td, .markdown th { border: 1px solid var(--border); padding: 4px 8px; }
 .msg.tool details { font-size: 13px; color: var(--muted); }
+.step { border: 1px solid var(--border); border-radius: 10px; margin: 6px 0; background: var(--panel); overflow: hidden; }
+.step.running { border-color: var(--primary); }
+.step.error { border-color: #f59e0b; }
+.step-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 10px; font-size: 13px; color: var(--text); border-radius: 0; }
+.step-head:hover { background: var(--bg); }
+.step-icon { width: 18px; text-align: center; color: var(--ok); flex-shrink: 0; }
+.step.error .step-icon { color: #f59e0b; }
+.step-label { font-weight: 600; white-space: nowrap; }
+.step-summary { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.step-caret { color: var(--muted); flex-shrink: 0; }
+.step-body { padding: 0 10px 10px; font-size: 13px; }
+.step-body pre { max-height: 240px; overflow: auto; margin: 6px 0 0; white-space: pre-wrap; }
+.step .gen-image, .step .gen-video, .step .artifact-card { margin: 4px 10px 10px; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .msg.tool pre { max-height: 200px; overflow: auto; }
 .msg.flagged { border-left: 3px solid #f59e0b; padding-left: 10px; }
 .flag { font-size: 12px; color: #f59e0b; }

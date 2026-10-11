@@ -387,7 +387,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
               if is_err:
                   log.warning("Tool %s fallito per %s: %s", tu["name"], user.username, res_content[:500])
               block = {"type": "tool_result", "tool_use_id": tu["id"], "name": tu["name"], "content": res_content[:50_000],
-                       "is_error": is_err, "artifacts": artifacts or []}
+                       "is_error": is_err, "artifacts": artifacts or [],
+                       "input": tu["input"] if tu["name"] != "create_artifact" else {k: v for k, v in (tu["input"] or {}).items() if k != "content"}}
               results.append(block)
               yield sse({"type": "tool_result", **block, "content": res_content[:800]})
         finally:

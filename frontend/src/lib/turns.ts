@@ -58,6 +58,15 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
   controllers.set(convId, ctrl)
   const set = (patch: Partial<TurnState>) => { Object.assign(s, patch); emit(convId) }
   let current: Message | null = null
+  let optimisticUserId: string | null = null
+  if (action === 'messages' && (body?.text || body?.file_ids?.length)) {
+    // la domanda compare subito in chat, prima che il server risponda
+    optimisticUserId = 'tmp-user-' + Date.now()
+    const att = (body.file_ids || []).length
+    s.messages = [...s.messages, { id: optimisticUserId, role: 'user', author_id: null, created_at: '', flagged: false, usage: {},
+      content: [{ type: 'text', text: String(body.text || '') + (att ? `\n📎 ${att} allegat${att === 1 ? 'o' : 'i'}` : '') }] }]
+    s.status = 'Invio…'
+  }
   emit(convId)
   try {
     await streamMessage(convId, body, (ev) => {
@@ -65,7 +74,9 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
         const i = s.messages.map((x) => x.role).lastIndexOf('user')
         set({ messages: i >= 0 ? s.messages.slice(0, i + 1) : s.messages, provider: ev.provider, model: ev.model, status: `↻ Rigenero con ${ev.model}…` })
       } else if (ev.type === 'user_message') {
-        set({ messages: [...s.messages, ev.message] })
+        const oid = optimisticUserId
+        optimisticUserId = null
+        set({ status: '', messages: oid && s.messages.some((x) => x.id === oid) ? s.messages.map((x) => (x.id === oid ? ev.message : x)) : [...s.messages, ev.message] })
       } else if (ev.type === 'route') {
         set({ status: ev.local ? `🏠 Risponde il modello locale (${ev.model})…` : `☁️ Inoltro a ${ev.provider_label} (${ev.model})…` })
       } else if (ev.type === 'status') {
@@ -88,11 +99,16 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
           msgs = msgs.map((x) => (x.id === finished.id ? finished : x))
           current = null
         }
-        set({ status: `${toolLabel(ev.name)}…`, gotText: false, messages: msgs })
+        const step: Message = { id: 'tool-' + ev.id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {},
+          content: [{ type: 'tool_result', tool_use_id: ev.id, name: ev.name, input: ev.input, status: 'running', content: '', is_error: false, artifacts: [] }] }
+        set({ status: `${toolLabel(ev.name)}…`, gotText: false, messages: [...msgs, step] })
       } else if (ev.type === 'tool_result') {
         const arts = (ev.artifacts || []).filter((a: any) => a.type === 'artifact')
-        const tm: Message = { id: 'tool-' + ev.tool_use_id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {}, content: [ev] }
-        set({ status: '', messages: [...s.messages, tm], artifacts: [...s.artifacts, ...arts] })
+        const id = 'tool-' + ev.tool_use_id
+        const exists = s.messages.some((x) => x.id === id)
+        const done: Message = { id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {},
+          content: [{ ...ev, input: (s.messages.find((x) => x.id === id)?.content?.[0] as any)?.input, status: 'done' }] }
+        set({ status: '', messages: exists ? s.messages.map((x) => (x.id === id ? done : x)) : [...s.messages, done], artifacts: [...s.artifacts, ...arts] })
       } else if (ev.type === 'error') {
         set({ err: ev.error })
       } else if (ev.type === 'done') {
