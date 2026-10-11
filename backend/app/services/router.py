@@ -73,9 +73,12 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
 
     # richiesta esplicita dell'utente: vince su tutto
     low = text.lower()
-    if re.search(r"\b(in locale|modello locale|modello di casa|ollama|qwen|gemma|gpt-oss|llama|server di casa|senza cloud|offline)\b", low):
+    # negazioni: "non usare il cloud", "senza modelli cloud", "niente claude" → locale
+    if re.search(r"\b(non|senza|niente|mai)\b(?:\W+\w+){0,5}?\W+(cloud|claude|gpt|chatgpt|gemini|openai|anthropic)\b", low):
+        return Route(local_id, local_model, True, "l'utente ha escluso il cloud")
+    if re.search(r"\b(in locale|modell[oi] local[ei]|modello di casa|ollama|qwen|gemma|gpt-oss|llama|server di casa|offline|solo locale)\b", low):
         return Route(local_id, local_model, True, "richiesto dall'utente il modello locale")
-    if re.search(r"\b(con claude|usa claude|chiedi a claude|con gpt|usa gpt|chatgpt|con gemini|usa gemini|nel cloud|modello cloud)\b", low):
+    if re.search(r"\b(con claude|usa claude|chiedi a claude|con gpt|usa gpt|chatgpt|con gemini|usa gemini|nel cloud|modell[oi] cloud|usa il cloud)\b", low):
         return to_cloud("richiesto dall'utente un modello cloud")
 
     mode = (settings.router_mode or "locale").lower()
