@@ -324,10 +324,10 @@ export default function AdminProviders() {
           </label>
           <label>Embedding (RAG) <small className="muted">({s.embedding_provider.value})</small>
             <select value={draft.embedding_provider ?? s.embedding_provider.value} onChange={(e) => setDraft({ ...draft, embedding_provider: e.target.value })}>
-              <option value="auto">auto</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">solo parole chiave</option>
+              <option value="auto">auto (Ollama in locale se c'è, poi OpenAI, poi Gemini)</option><option value="ollama">Ollama (locale, es. bge-m3)</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">solo parole chiave</option>
             </select>
           </label>
-          <label>Modello embedding<input placeholder={s.embedding_model.value || 'default'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
+          <label>Modello embedding <small className="muted">(Ollama: bge-m3 consigliato per l'italiano; cambiandolo va rifatta l'indicizzazione)</small><input placeholder={s.embedding_model.value || 'bge-m3 / text-embedding-3-small / gemini-embedding-001'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
         <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>

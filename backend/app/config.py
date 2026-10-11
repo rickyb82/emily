@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     memory_top_k: int = 8
 
     # RAG (ricerca semantica sui file di progetto)
-    embedding_provider: str = "auto"      # auto | openai | gemini | none (none = solo ricerca per parole chiave)
+    embedding_provider: str = "auto"      # auto | ollama | openai | gemini | none (auto = Ollama se c'e', poi OpenAI, poi Gemini)
     embedding_model: str = ""             # vuoto = default del provider
     rag_chunk_chars: int = 2500           # dimensione frammenti (caratteri)
     rag_chunk_overlap: int = 300

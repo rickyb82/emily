@@ -248,12 +248,12 @@ async def recall(db: AsyncSession, user: User, query: str, k: int | None = None)
     rest = [r for r in rows if not r.pinned]
     chosen: list[MemoryItem] = []
     if rest and query.strip():
-        qv, _ = await rag.embed_texts([query], for_query=True)
+        qv, qmodel = await rag.embed_texts([query], for_query=True)
         scored: list[tuple[float, MemoryItem]] = []
-        if qv and any(r.embedding for r in rest):
-            for r in rest:
-                if r.embedding:
-                    scored.append((rag._cosine(qv[0], r.embedding), r))
+        comparable = [r for r in rest if r.embedding and (r.embedding_model or qmodel) == qmodel and qv and len(r.embedding) == len(qv[0])]
+        if qv and comparable:
+            for r in comparable:
+                scored.append((rag._cosine(qv[0], r.embedding), r))
             scored.sort(key=lambda x: -x[0])
             chosen = [r for s, r in scored[:k] if s > 0.25]
         else:

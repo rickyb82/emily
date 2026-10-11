@@ -74,6 +74,9 @@ def _embedding_backend() -> tuple[str, str] | None:
     p = settings.embedding_provider
     if p == "none":
         return None
+    if p in ("auto", "ollama") and settings.ollama_url:
+        # locale: bge-m3 (multilingua, ottimo in italiano), qwen3-embedding, nomic-embed-text, mxbai-embed-large...
+        return "ollama", settings.embedding_model or "bge-m3"
     if p in ("auto", "openai") and settings.openai_api_key:
         return "openai", settings.embedding_model or "text-embedding-3-small"
     if p in ("auto", "gemini") and settings.gemini_api_key:
@@ -91,6 +94,19 @@ async def embed_texts(texts: list[str], for_query: bool = False) -> tuple[list[l
         return None, ""
     provider, model = backend
     try:
+        if provider == "ollama":
+            import httpx
+
+            base = settings.ollama_url.rstrip("/")
+            out: list[list[float]] = []
+            async with httpx.AsyncClient(timeout=120) as c:
+                for i in range(0, len(texts), 32):
+                    r = await c.post(f"{base}/api/embed", json={"model": model, "input": [t[:8000] for t in texts[i:i + 32]]})
+                    if r.status_code == 404:
+                        raise RuntimeError(f"modello di embedding '{model}' non trovato su Ollama: esegui `ollama pull {model}`")
+                    r.raise_for_status()
+                    out.extend(r.json().get("embeddings", []))
+            return out, model
         if provider == "openai":
             from openai import AsyncOpenAI
 
@@ -238,8 +254,10 @@ async def search(db: AsyncSession, query: str, family_id: str, project_ids: list
 
     have_vec = [i for i, c in enumerate(chunks) if c.embedding]
     if have_vec:
-        qv, _ = await embed_texts([query], for_query=True)
-        if qv:
+        qv, qmodel = await embed_texts([query], for_query=True)
+        # confronta solo vettori prodotti dallo stesso modello (dopo un cambio modello, reindicizza dal pannello)
+        have_vec = [i for i in have_vec if (chunks[i].embedding_model or qmodel) == qmodel and len(chunks[i].embedding) == (len(qv[0]) if qv else 0)]
+        if qv and have_vec:
             sims = {i: _cosine(qv[0], chunks[i].embedding) for i in have_vec}
             lo, hi = min(sims.values()), max(sims.values())
             span = (hi - lo) or 1.0

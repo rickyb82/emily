@@ -194,11 +194,16 @@ async def test_provider(pid: str) -> dict:
                 r = await h.get(settings.ollama_url.rstrip("/") + "/api/tags")
                 r.raise_for_status()
                 names = [m.get("name") for m in r.json().get("models", [])]
+            emb = settings.embedding_model or "bge-m3"
+            if settings.embedding_provider in ("auto", "ollama") and not any(n == emb or n.startswith(emb + ":") for n in names):
+                names_hint = f" — per il RAG locale manca '{emb}': ollama pull {emb}"
+            else:
+                names_hint = ""
             if not names:
                 return {"ok": False, "detail": "Ollama risponde ma non ha modelli scaricati: esegui `ollama pull qwen3:8b` e `ollama pull qwen3:4b`",
                         "latency_ms": int((time.perf_counter() - t0) * 1000)}
             missing = [m for m in (settings.ollama_default_model, settings.router_model) if m not in names]
-            detail = f"{len(names)} modelli: {', '.join(names[:8])}" + (f" — mancano: {', '.join(missing)} (ollama pull …)" if missing else "")
+            detail = f"{len(names)} modelli: {', '.join(names[:8])}" + (f" — mancano: {', '.join(missing)} (ollama pull …)" if missing else "") + names_hint
         elif pid == "custom":
             import httpx
             from openai import AsyncOpenAI

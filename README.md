@@ -47,7 +47,7 @@ Serve Docker Desktop. Nella cartella del progetto:
 ```bash
 ./familai.sh dev
 ```
-Apri http://localhost:8080, entra con `ADMIN_EMAIL`/`ADMIN_PASSWORD` del `.env` (default `admin@example.com` / `changeme`), attiva il secondo fattore (passkey con Touch ID oppure app authenticator inquadrando il QR), poi in **Famiglia → Provider AI** incolla le chiavi e prova le connessioni. Il DB e i file restano in `./data`.
+Apri http://localhost:8080, entra con `ADMIN_EMAIL`/`ADMIN_PASSWORD` del `.env` (default `admin@example.com` / `changeme`), attiva il secondo fattore (passkey con Touch ID oppure app authenticator inquadrando il QR), poi in **Famiglia → Provider AI** incolla le chiavi e prova le connessioni. Il DB e i file restano in `./data`. Per il RAG (documenti e memoria) serve un modello di **embedding**: in locale basta `ollama pull bge-m3` (multilingua, ottimo in italiano) e in Altre impostazioni l'embedding su auto/Ollama; altrimenti OpenAI o Gemini, o solo parole chiave.
 
 ### 2. Installazione sulla Ubuntu
 Prerequisiti: Docker + plugin Compose (`sudo apt install docker.io docker-compose-v2` oppure lo script ufficiale get.docker.com); un dominio che punta all'IP di casa; porte **80/443** inoltrate alla Ubuntu.
