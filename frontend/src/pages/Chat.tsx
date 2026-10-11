@@ -240,6 +240,14 @@ export default function Chat() {
         {!busy && canWrite && messages.some((m) => m.role === 'assistant') && (
           <div className="row" style={{ justifyContent: 'flex-start' }}>
             <button className="ghost small" onClick={() => regenerate()} title="Rigenera l'ultima risposta con il modello corrente">↻ Rigenera risposta</button>
+            {(() => {
+              const last = [...messages].reverse().find((m) => m.role === 'assistant')
+              const isLocal = last?.usage?.provider === 'ollama' || last?.usage?.provider === 'custom'
+              const cloud = me?.providers.find((p) => ['anthropic', 'openai', 'gemini'].includes(p.id))
+              return isLocal && cloud ? (
+                <button className="ghost small" onClick={() => regenerate(cloud.id, cloud.default_model)} title={`Rifai l'ultima risposta con ${cloud.label}`}>☁️ Rifai con {cloud.label.split(' ')[0]}</button>
+              ) : null
+            })()}
           </div>
         )}
         <div ref={bottom} />

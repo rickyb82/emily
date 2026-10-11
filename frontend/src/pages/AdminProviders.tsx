@@ -265,6 +265,7 @@ export default function AdminProviders() {
           <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
           <label>Router Auto (locale + cloud) <small className="muted">({s.router_mode.value})</small>
             <select value={draft.router_mode ?? s.router_mode.value} onChange={(e) => setDraft({ ...draft, router_mode: e.target.value })}>
+              <option value="locale">prima il locale (risponde sempre il modello di casa; cloud solo se lo chiedi o per immagini/video/codice)</option>
               <option value="balanced">bilanciato (locale se il router è sicuro)</option>
               <option value="economico">economico (locale quando possibile)</option>
               <option value="qualita">qualità (cloud in caso di dubbio)</option>

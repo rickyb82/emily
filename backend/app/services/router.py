@@ -42,7 +42,7 @@ class Route:
 
 
 def enabled(policy: dict | None = None) -> bool:
-    if (settings.router_mode or "balanced").lower() == "off" or not local_provider_id():
+    if (settings.router_mode or "locale").lower() == "off" or not local_provider_id():
         return False
     allowed = set(policy.get("allowed_providers", [])) if policy is not None else None
     return True if allowed is None else bool({AUTO_ID, *LOCAL_IDS} & allowed)
@@ -78,6 +78,16 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
     if re.search(r"\b(con claude|usa claude|chiedi a claude|con gpt|usa gpt|chatgpt|con gemini|usa gemini|nel cloud|modello cloud)\b", low):
         return to_cloud("richiesto dall'utente un modello cloud")
 
+    mode = (settings.router_mode or "locale").lower()
+    if mode == "locale":
+        # "Prima il locale": risponde sempre il modello di casa, salvo cio' che in locale proprio non si puo' fare
+        # (generare immagini/video, eseguire codice nella sandbox, MCP). L'utente chiede il cloud quando vuole.
+        if re.search(r"(genera|crea|fai|disegna|fammi|realizza)\w*\s+(un'?|una|la|le|delle?)?\s*(immagin|foto|illustrazion|disegn|video|logo)", low):
+            return to_cloud("generazione immagini/video: solo nel cloud")
+        if re.search(r"\b(esegui|eseguil[oa]|lancia|runna|testa il codice|calcola con python)\b", low):
+            return to_cloud("esecuzione codice: solo nel cloud")
+        return Route(local_id, local_model, True, "modalita' 'prima il locale'")
+
     if has_files:
         return to_cloud("allegati presenti")
     if len(text) > 4000:
@@ -90,7 +100,6 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         if not (is_search and settings.searxng_url):
             return to_cloud(f"richiede strumenti/capacita' avanzate ('{m.group(0)[:30]}')")
 
-    mode = (settings.router_mode or "balanced").lower()
     route, conf, reason = "local", 3, "classificazione non disponibile"
     try:
         # il classificatore gira su Ollama (modello piccolo, veloce) se c'e', altrimenti sul server locale stesso

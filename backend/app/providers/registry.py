@@ -75,7 +75,7 @@ def available_providers() -> list[dict]:
     out = [{"id": p.id, "label": p.label, "models": p.models(), "default_model": p.default_model}
            for p in _providers().values()]
     s = get_settings()
-    if LOCAL_IDS & set(_providers()) and (s.router_mode or "balanced").lower() != "off" and len(_providers()) > 1:
+    if LOCAL_IDS & set(_providers()) and (s.router_mode or "locale").lower() != "off" and len(_providers()) > 1:
         # pseudo-provider: il router decide a ogni messaggio tra locale e cloud
         out.insert(0, {"id": "auto", "label": "Auto (locale + cloud)",
                        "models": [{"id": "auto", "label": "decide il router"}], "default_model": "auto"})

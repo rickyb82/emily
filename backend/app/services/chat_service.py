@@ -223,9 +223,19 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     check_time_window(policy)
     await check_daily_quota(db, user, policy, "message")
 
+    prev_provider = conv.provider
     conv.provider, conv.model = resolve_provider_model(user, policy, provider_id, model, conv)
     routed = None   # decisione del router Auto (provider effettivo di questo turno)
-    if conv.provider == "auto":
+    if prev_provider == "auto" and provider_id and provider_id != "auto" and text is None:
+        # "Rifai con il cloud" su una chat in Auto: vale solo per questa rigenerazione, la chat resta in Auto
+        from .router import Route as _Route
+        routed = _Route(conv.provider, conv.model, conv.provider in ("ollama", "custom"), "scelto dall'utente per questa risposta")
+        conv.provider, conv.model = "auto", "auto"
+        provider = get_provider(routed.provider_id)
+        model = routed.model
+        yield sse({"type": "route", "provider": provider.id, "provider_label": provider.label, "model": model,
+                   "local": routed.local, "reason": routed.reason})
+    elif conv.provider == "auto":
         from . import router as _router
         rtext = text
         if rtext is None:   # rigenerazione: ultimo messaggio utente

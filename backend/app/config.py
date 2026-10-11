@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     router_model: str = "qwen3:4b"        # modello locale usato per decidere (e per le risposte rapide se uguale al default)
     router_local_provider: str = "auto"   # chi risponde in locale: auto (custom se presente, altrimenti ollama) | ollama | custom
     router_cloud_provider: str = "auto"   # provider cloud a cui inoltrare: auto | anthropic | openai | gemini
-    router_mode: str = "balanced"         # off | economico (locale quando possibile) | balanced | qualita (cloud se dubbio)
+    router_mode: str = "locale"           # locale (prima il locale: cloud solo su richiesta) | economico | balanced | qualita | off
     max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)
 
     # Tool
