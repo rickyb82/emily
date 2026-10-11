@@ -103,7 +103,7 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
           content: [{ type: 'tool_result', tool_use_id: ev.id, name: ev.name, input: ev.input, status: 'running', content: '', is_error: false, artifacts: [] }] }
         set({ status: `${toolLabel(ev.name)}…`, gotText: false, messages: [...msgs, step] })
       } else if (ev.type === 'tool_result') {
-        const arts = (ev.artifacts || []).filter((a: any) => a.type === 'artifact')
+        const arts = (ev.artifacts || []).filter((a: any) => a.type === 'artifact' || a.type === 'artifact_deleted')
         const id = 'tool-' + ev.tool_use_id
         const exists = s.messages.some((x) => x.id === id)
         const done: Message = { id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {},

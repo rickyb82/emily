@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { get, patch, post, type Conversation, type FileOut, type Message } from '../lib/api'
+import { del, get, patch, post, type Conversation, type FileOut, type Message } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import MessageView from '../components/MessageView'
 import { abortTurn, clearTurn, getTurn, startTurn, subscribe, type TurnState } from '../lib/turns'
@@ -30,9 +30,14 @@ export default function Chat() {
   const [artifacts, setArtifacts] = useState<ArtifactData[]>([])
   const [openArtifact, setOpenArtifact] = useState<ArtifactData | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
-  function upsertArtifact(a: ArtifactData, open = true) {
+  function upsertArtifact(a: ArtifactData | any, open = true) {
+    if (a?.type === 'artifact_deleted') return removeArtifact(a.id)
     setArtifacts((l) => (l.some((x) => x.id === a.id) ? l.map((x) => (x.id === a.id ? a : x)) : [...l, a]))
     if (open) setOpenArtifact(a)
+  }
+  function removeArtifact(aid: string) {
+    setArtifacts((l) => l.filter((x) => x.id !== aid))
+    setOpenArtifact((o) => (o && o.id === aid ? null : o))
   }
   const messagesRef = useRef<Message[]>([])
   messagesRef.current = messages
@@ -291,7 +296,8 @@ export default function Chat() {
       {share && conv && <ShareDialog type="conversation" id={conv.id} onClose={() => setShare(false)} />}
     </div>
     {openArtifact && (
-      <ArtifactPanel artifact={openArtifact} all={artifacts} canEdit={canWrite} onClose={() => setOpenArtifact(null)} onChange={(a) => upsertArtifact(a)} onSelect={(a) => setOpenArtifact(a)} />
+      <ArtifactPanel artifact={openArtifact} all={artifacts} canEdit={canWrite} onClose={() => setOpenArtifact(null)} onChange={(a) => upsertArtifact(a)} onSelect={(a) => setOpenArtifact(a)}
+        onDelete={async (a) => { await del(`/artifacts/${a.id}`); removeArtifact(a.id) }} />
     )}
     </div>
   )

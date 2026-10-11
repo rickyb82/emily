@@ -33,7 +33,7 @@ from ..tools.registry import ToolContext, all_tools, get_tool
 log = logging.getLogger(__name__)
 settings = get_settings()
 MAX_TOOL_ROUNDS = 8
-LOCAL_TOOLS = {"create_artifact", "update_artifact", "search_documents", "read_document", "ask_model"}
+LOCAL_TOOLS = {"create_artifact", "update_artifact", "list_artifacts", "delete_artifact", "search_documents", "read_document", "ask_model"}
 INLINE_DOC_CHARS = settings.rag_inline_max_chars
 
 
@@ -118,7 +118,8 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "\n# Coding\n"
         "- Per pagine web, giochi, app HTML/CSS/JS, grafica SVG, diagrammi o programmi completi usa create_artifact: "
         "l'utente li vede in un pannello con anteprima live (HTML e SVG eseguiti nel browser). Per modifiche successive usa "
-        "update_artifact (preferibilmente con replacements mirati) invece di ricreare l'artifact.\n"
+        "update_artifact (preferibilmente con replacements mirati) invece di ricreare l'artifact; list_artifacts elenca quelli "
+        "esistenti e delete_artifact li elimina quando l'utente lo chiede.\n"
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")

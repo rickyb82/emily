@@ -74,6 +74,17 @@ async def update_artifact(aid: str, body: ArtifactUpdate, ctx: AuthContext = Dep
     return artifact_out(a)
 
 
+@router.delete("/{aid}")
+async def delete_artifact(aid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    a = await db.get(Artifact, aid)
+    if not a:
+        raise HTTPException(404)
+    await require_access(db, "conversation", a.conversation_id, ctx.user, write=True)
+    await db.delete(a)
+    await db.commit()
+    return {"status": "ok"}
+
+
 def _content_disposition(title: str, ext: str) -> str:
     """Gli header HTTP accettano solo latin-1: titoli con emoji/accenti vanno resi ASCII (+ filename* RFC 5987)."""
     import re

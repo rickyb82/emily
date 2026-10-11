@@ -71,9 +71,9 @@ function previewDoc(a: ArtifactData): string {
   return ''
 }
 
-export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, onChange, onSelect }: {
+export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, onChange, onSelect, onDelete }: {
   artifact: ArtifactData; all?: ArtifactData[]; canEdit: boolean; onClose: () => void; onChange: (a: ArtifactData) => void
-  onSelect?: (a: ArtifactData) => void
+  onSelect?: (a: ArtifactData) => void; onDelete?: (a: ArtifactData) => void | Promise<void>
 }) {
   const [tab, setTab] = useState<'preview' | 'code'>(CAN_PREVIEW.has(artifact.kind) ? 'preview' : 'code')
   const [editing, setEditing] = useState(false)
@@ -158,6 +158,7 @@ export default function ArtifactPanel({ artifact, all = [], canEdit, onClose, on
           <button className="icon" title="Copia" onClick={() => navigator.clipboard.writeText(shown.content)}>📋</button>
           <button className="icon" title="Scarica" onClick={download}>⬇️</button>
           {shown.kind === 'html' && <a className="icon" title="Apri in nuova scheda" href={`/api/artifacts/${shown.id}/raw`} target="_blank" rel="noreferrer">↗</a>}
+          {canEdit && onDelete && <button className="icon danger" title="Elimina definitivamente questo artifact" onClick={() => { if (confirm(`Eliminare definitivamente "${artifact.title}" con tutte le versioni?`)) onDelete(artifact) }}>🗑</button>}
           <button className="icon" onClick={onClose} title="Chiudi">✕</button>
         </div>
       </header>

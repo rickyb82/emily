@@ -12,6 +12,8 @@ const TOOL_LABELS: Record<string, string> = {
   search_documents: '📚 Ricerca nei documenti',
   create_artifact: '📦 Creazione artifact',
   update_artifact: '📦 Aggiornamento artifact',
+  list_artifacts: '📦 Elenco artifact',
+  delete_artifact: '🗑 Eliminazione artifact',
   run_code: '⚙️ Esecuzione codice',
   ask_model: '🤝 Consulto un altro modello',
 }
@@ -96,7 +98,7 @@ function inputSummary(name: string, input: any): string {
   if (name === 'web_search') return `"${input.query ?? ''}"`
   if (name === 'generate_image' || name === 'generate_video') return `"${String(input.prompt ?? '').slice(0, 120)}"`
   if (name === 'create_artifact') return `${input.title ?? ''}${input.kind ? ` (${input.kind})` : ''}`
-  if (name === 'update_artifact') return input.title ?? input.artifact_id ?? ''
+  if (name === 'update_artifact' || name === 'delete_artifact') return input.title ?? input.artifact_id ?? ''
   if (name === 'run_code') return `${input.language ?? ''}${input.code ? ` · ${String(input.code).split('\n').length} righe` : ''}`
   if (name === 'read_document' || name === 'search_documents') return input.query ? `"${input.query}"` : (input.file_id ?? '')
   if (name === 'ask_model') return `→ ${input.provider ?? ''}${input.model ? ` (${input.model})` : ''}: "${String(input.prompt ?? '').slice(0, 100)}"`
@@ -130,6 +132,8 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
           </button>
         ) : a.type === 'file' ? (
           <a key={j} className="chip" href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
+        ) : a.type === 'artifact_deleted' ? (
+          <div key={j} className="muted small" style={{ padding: '0 10px 8px' }}>🗑 Eliminato: {a.title}</div>
         ) : null,
       )}
       {open && (

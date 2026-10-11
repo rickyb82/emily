@@ -148,7 +148,8 @@ def dynamic_context(tz: str = "Europe/Rome") -> str:
 
 
 TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei documenti
-                "create_artifact": "artifacts", "update_artifact": "artifacts"}
+                "create_artifact": "artifacts", "update_artifact": "artifacts",
+                "list_artifacts": "artifacts", "delete_artifact": "artifacts"}
 
 
 def tool_allowed(policy: dict, tool_name: str) -> bool:
