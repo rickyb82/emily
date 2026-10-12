@@ -5,14 +5,14 @@ import re
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db import get_db
-from ..models import Chunk, FileAsset, Share
+from ..models import Chunk, FileAsset, Role, Share
 from ..policy.permissions import effective_policy
 from ..schemas import FileOut
 from ..security.sessions import AuthContext, require_auth
@@ -24,7 +24,9 @@ settings = get_settings()
 router = APIRouter(tags=["files"])
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", ".csv", ".json", ".docx", ".xlsx",
-               ".xlsm", ".mp4", ".mp3", ".wav", ".m4a", ".py", ".js", ".ts", ".html"}
+               ".xlsm", ".mp4", ".mp3", ".wav", ".m4a", ".py", ".js", ".ts", ".html", ".odt", ".rtf", ".doc", ".tex"}
+# formati che l'editor WordCraft nel browser puo' aprire e salvare
+WORDCRAFT_EXT = {".docx", ".docm", ".dotx", ".doc", ".odt", ".rtf", ".txt", ".md", ".html", ".htm", ".tex", ".json", ".pdf", ".png"}
 
 
 def _out(f: FileAsset) -> FileOut:
@@ -74,6 +76,70 @@ async def reindex(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncS
     asset, _ = await require_access(db, "file", fid, ctx.user)
     await rag.index_file(asset.id, db)
     await db.refresh(asset)
+    return _out(asset)
+
+
+@router.post("/files/wordcraft-save", response_model=FileOut)
+async def wordcraft_save(request: Request, background: BackgroundTasks, file_id: str, conversation_id: str | None = None,
+                         project_id: str | None = None, ctx: AuthContext = Depends(require_auth),
+                         db: AsyncSession = Depends(get_db)):
+    """Salvataggio dall'editor WordCraft nel browser (File > Salva / Esporta): il corpo e' il file, il nome arriva
+    nell'header X-Filename. `file_id` e' il documento aperto: se esiste e l'estensione coincide viene sovrascritto
+    (e reindicizzato); se non esiste (documento nuovo: id generato dal client) viene creato con quell'id; se
+    l'estensione e' diversa (es. esportazione in PDF) nasce un nuovo file accanto all'originale."""
+    from urllib.parse import unquote
+
+    if ctx.user.role == Role.child:
+        raise HTTPException(403, "Editor riservato agli adulti")
+    if not re.fullmatch(r"[0-9a-f]{32}", file_id or ""):
+        raise HTTPException(400, "file_id non valido")
+    name = re.sub(r"[^\w.\- ]", "_", unquote(request.headers.get("X-Filename", "") or "documento.docx"))[:200]
+    ext = Path(name).suffix.lower() or ".docx"
+    if ext not in WORDCRAFT_EXT:
+        raise HTTPException(400, f"Formato non consentito ({ext})")
+    data = await request.body()
+    max_bytes = int(effective_policy(ctx.user).get("max_upload_mb", 20)) * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(413, "File troppo grande")
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+    asset = await db.get(FileAsset, file_id)
+    if asset is not None:
+        await require_access(db, "file", file_id, ctx.user, write=True)
+        if Path(asset.filename).suffix.lower() != ext:
+            # esportazione in un altro formato: nuovo file nella stessa chat/progetto
+            nid = uuid.uuid4().hex
+            path = settings.generated_dir / f"{nid}{ext}"
+            path.write_bytes(data)
+            new = FileAsset(id=nid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=asset.project_id,
+                            conversation_id=asset.conversation_id, filename=name, mime=mime, size=len(data),
+                            path=str(path), kind="generated")
+            db.add(new)
+            await db.commit()
+            return _out(new)
+        if not asset.path:
+            raise HTTPException(400, "Questo file non e' modificabile")
+        Path(asset.path).write_bytes(data)
+        asset.filename, asset.mime, asset.size = name, mime, len(data)
+    else:
+        if conversation_id:
+            conv, _ = await require_access(db, "conversation", conversation_id, ctx.user, write=True)
+            project_id = project_id or conv.project_id
+        if project_id:
+            await require_access(db, "project", project_id, ctx.user, write=True)
+        path = settings.generated_dir / f"{file_id}{ext}"
+        path.write_bytes(data)
+        asset = FileAsset(id=file_id, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
+                          conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
+                          kind="generated")
+        db.add(asset)
+    if not mime.startswith(("image/", "video/", "audio/")):
+        asset.extracted_text = extract_text(Path(asset.path), mime) or ""
+        asset.index_status = "pending"
+        await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
+    await db.commit()
+    if asset.index_status == "pending":
+        background.add_task(rag.index_file_background, asset.id)
     return _out(asset)
 
 

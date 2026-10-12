@@ -60,6 +60,7 @@ export default function Shell({ children }: { children: ReactNode }) {
         <button className="primary wide" onClick={newChat}>＋ Nuova chat</button>
         <nav className="navlinks">
           <NavLink to="/projects" onClick={() => setOpen(false)}>📁 Progetti</NavLink>
+          {!isChild && <NavLink to="/documents" onClick={() => setOpen(false)}>📝 Documenti</NavLink>}
         </nav>
         <div className="conv-list">
           {convs.map((c) => (

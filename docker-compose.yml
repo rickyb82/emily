@@ -12,6 +12,7 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
       - SANDBOX_URL=http://sandbox:8080
       - WORDCRAFT_HOST=${WORDCRAFT_HOST:-}
+      - WORDCRAFT_WEB=${WORDCRAFT_WEB:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -125,6 +126,17 @@ services:
     logging:
       driver: json-file
       options: { max-size: "1m", max-file: "1" }
+
+  # WordCraft nel browser (editor completo su /wordcraft/, stesso profilo)
+  wordcraft-web:
+    build:
+      context: extras/wordcraft
+      dockerfile: Dockerfile.web
+    image: familai-wordcraft-web
+    profiles: ["wordcraft"]
+    restart: unless-stopped
+    expose:
+      - "80"
 
 networks:
   default:

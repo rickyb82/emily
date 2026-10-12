@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { editableInWordcraft, editorPath, newDocumentPath } from '../lib/wordcraft'
 import { del, get, patch, post, type Conversation, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import ShareDialog from '../components/ShareDialog'
@@ -146,11 +147,13 @@ export default function Projects() {
               <button className="ghost" onClick={() => fileInput.current?.click()}>📎 Carica file</button>
               <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
               {files.length > 0 && <button className="ghost" onClick={reindex} disabled={reindexing}>{reindexing ? 'Indicizzazione…' : '🔄 Reindicizza tutto'}</button>}
+              {me?.features?.wordcraft_web && <button className="ghost" onClick={() => nav(newDocumentPath({ projectId: proj.id }))}>📝 Nuovo documento</button>}
             </div>
             <ul className="file-list">
               {files.map((f) => (
                 <li key={f.id}>
                   <a href={f.url} target="_blank" rel="noreferrer">{f.filename}</a> <small className="muted">{(f.size / 1024).toFixed(0)} KB</small>{' '}
+                  {me?.features?.wordcraft_web && editableInWordcraft(f.filename) && <Link to={editorPath(f.id)} className="small" title="Apri nell'editor WordCraft">✏️ Modifica</Link>}{' '}
                   {f.index_status === 'indexed' && <span className="badge ok">📚 {f.chunk_count} parti</span>}
                   {f.index_status === 'pending' && <span className="badge">⏳ indicizzazione…</span>}
                   {f.index_status === 'failed' && <span className="badge err">⚠️ indice fallito</span>}

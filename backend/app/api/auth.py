@@ -247,8 +247,11 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     mfa_required = ctx.user.role != Role.child and (
         not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
+    from ..tools.mcp_client import mcp_manager
+    features = {"wordcraft_web": bool(settings.wordcraft_web) and ctx.user.role != Role.child,
+                "wordcraft_mcp": mcp_manager.is_connected("wordcraft")}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
-                 mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"])
+                 mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
 
 
 @router.post("/logout")

@@ -9,7 +9,7 @@
 #   ./familai.sh users                   elenca gli utenti
 #   ./familai.sh deploy [user@host]      dal Mac: git push + "update" sulla macchina Ubuntu via SSH (host anche in .deploy)
 #   ./familai.sh portainer up|down|logs  pannello web Docker (Portainer) su https://<ip>:9443 per gestire altri container
-#   ./familai.sh wordcraft up|down|logs|build  word processor WordCraft (documenti Word/PDF via MCP); la prima build compila Rust
+#   ./familai.sh wordcraft up|down|logs|build  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor completo nel browser
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -110,23 +110,31 @@ case "${1:-}" in
     esac;;
   wordcraft)
     need_env
+    set_env() { # set_env CHIAVE valore (idempotente)
+      if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi
+    }
     case "${2:-up}" in
       up|build)
-        # attiva il profilo e l'host nel .env (idempotente)
-        grep -q '^COMPOSE_PROFILES=' .env && ! grep -q '^COMPOSE_PROFILES=.*wordcraft' .env && sed -i.bak 's/^COMPOSE_PROFILES=\(.*\)$/COMPOSE_PROFILES=\1,wordcraft/' .env && rm -f .env.bak
-        grep -q '^COMPOSE_PROFILES=' .env || echo 'COMPOSE_PROFILES=wordcraft' >> .env
-        grep -q '^WORDCRAFT_HOST=' .env && sed -i.bak 's#^WORDCRAFT_HOST=.*#WORDCRAFT_HOST=wordcraft:7982#' .env && rm -f .env.bak
-        grep -q '^WORDCRAFT_HOST=' .env || echo 'WORDCRAFT_HOST=wordcraft:7982' >> .env
-        echo ">> Build di WordCraft (compila Rust: la prima volta 15-40 minuti)…"
-        DOCKER_BUILDKIT=1 compose --profile wordcraft build wordcraft
-        compose --profile wordcraft up -d wordcraft
+        # attiva il profilo compose e le variabili del backend
+        if grep -q '^COMPOSE_PROFILES=' .env; then
+          grep -q '^COMPOSE_PROFILES=.*wordcraft' .env || { sed -i.bak 's/^COMPOSE_PROFILES=\(.*\)$/COMPOSE_PROFILES=\1,wordcraft/' .env && rm -f .env.bak; }
+        else
+          echo 'COMPOSE_PROFILES=wordcraft' >> .env
+        fi
+        set_env WORDCRAFT_HOST wordcraft:7982
+        set_env WORDCRAFT_WEB 1
+        echo ">> Build di WordCraft: CLI/MCP + editor web (compila Rust due volte: la prima volta anche 30-60 minuti in tutto)…"
+        DOCKER_BUILDKIT=1 compose --profile wordcraft build wordcraft wordcraft-web
+        compose --profile wordcraft up -d wordcraft wordcraft-web
         compose up -d --build backend
-        echo ">> WordCraft attivo: in chat chiedi ad esempio 'scrivimi una lettera in Word' o 'converti questo documento in PDF'.";;
+        compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
+        echo ">> WordCraft attivo. In chat: 'scrivimi una lettera in Word'; nel menu: 📝 Documenti per l'editor completo.";;
       down)
-        compose --profile wordcraft stop wordcraft
-        sed -i.bak 's#^WORDCRAFT_HOST=.*#WORDCRAFT_HOST=#' .env && rm -f .env.bak
+        compose --profile wordcraft stop wordcraft wordcraft-web
+        set_env WORDCRAFT_HOST ""
+        set_env WORDCRAFT_WEB ""
         compose up -d backend;;
-      logs) compose --profile wordcraft logs -f --tail=100 wordcraft;;
+      logs) compose --profile wordcraft logs -f --tail=100 wordcraft wordcraft-web;;
       *) echo "uso: ./familai.sh wordcraft up|down|logs|build"; exit 1;;
     esac;;
   deploy)

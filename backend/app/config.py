@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
     wordcraft_host: str = ""          # host:porta del container WordCraft (es. wordcraft:7982): documenti Word/PDF via MCP
+    wordcraft_web: bool = False       # editor WordCraft nel browser servito su /wordcraft/ (container wordcraft-web)
 
     # Email (SMTP) — configurabile dal pannello
     smtp_host: str = ""

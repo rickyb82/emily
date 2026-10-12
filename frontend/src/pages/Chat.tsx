@@ -6,6 +6,7 @@ import MessageView from '../components/MessageView'
 import { abortTurn, clearTurn, getTurn, startTurn, subscribe, type TurnState } from '../lib/turns'
 import ShareDialog from '../components/ShareDialog'
 import ArtifactPanel, { type ArtifactData } from '../components/ArtifactPanel'
+import { newDocumentPath } from '../lib/wordcraft'
 
 interface ToolInfo { name: string; description: string; kind: string; group: string }
 const GROUP_LABEL: Record<string, string> = { web_search: '🔎 Ricerca web', generate_image: '🎨 Immagini', generate_video: '🎬 Video', read_document: '📄 Documenti', artifacts: '📦 Artifact', run_code: '⚙️ Esecuzione codice', mcp: '🔌 MCP', ask_model: '🤝 Altri modelli', memory: '🧠 Memoria' }
@@ -270,6 +271,9 @@ export default function Chat() {
               <option value="">📁 Nessun progetto</option>
               {projects.map((p) => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
             </select>
+          )}
+          {conv && canWrite && !isChild && me?.features?.wordcraft_web && (
+            <button className="ghost" title="Nuovo documento Word collegato a questa chat (editor WordCraft)" onClick={() => nav(newDocumentPath({ conversationId: conv.id, projectId: conv.project_id }))}>📝</button>
           )}
           {conv && access === 'owner' && <button className="ghost" onClick={() => setShare(true)}>🔗 Condividi</button>}
         </div>

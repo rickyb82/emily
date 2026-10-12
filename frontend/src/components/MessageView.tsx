@@ -1,4 +1,7 @@
 import Markdown from './Markdown'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import { editableInWordcraft, editorPath } from '../lib/wordcraft'
 import type { Message } from '../lib/api'
 import { useEffect, useState } from 'react'
 import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
@@ -115,6 +118,7 @@ function inputSummary(name: string, input: any): string {
 /** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
 function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
   const [open, setOpen] = useState(false)
+  const wordcraftWeb = !!useAuth().me?.features?.wordcraft_web
   const running = b.status === 'running'
   const err = !!b.is_error
   const summary = inputSummary(b.name, b.input)
@@ -137,7 +141,10 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
             <span><b>{a.title}</b><br /><small className="muted">{a.kind}{a.language ? ` · ${a.language}` : ''} · v{a.version} · clicca per aprire</small></span>
           </button>
         ) : a.type === 'file' ? (
-          <a key={j} className="chip" href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
+          <span key={j} className="chip">
+            <a href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
+            {wordcraftWeb && a.file_id && editableInWordcraft(a.filename) && <Link to={editorPath(a.file_id)} title="Apri nell'editor WordCraft" style={{ marginLeft: 6 }}>✏️ Modifica</Link>}
+          </span>
         ) : a.type === 'artifact_deleted' ? (
           <div key={j} className="muted small" style={{ padding: '0 10px 8px' }}>🗑 Eliminato: {a.title}</div>
         ) : null,

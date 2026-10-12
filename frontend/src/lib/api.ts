@@ -101,6 +101,7 @@ export interface Me {
   mfa_required: boolean
   providers: Provider[]
   tools: string[]
+  features?: { wordcraft_web?: boolean; wordcraft_mcp?: boolean }
 }
 export interface Provider {
   id: string
@@ -147,7 +148,10 @@ export interface FileOut {
   size: number
   kind: string
   url: string
+  owner_id: string
   project_id: string | null
+  conversation_id: string | null
+  created_at: string
   index_status: 'none' | 'pending' | 'indexed' | 'failed'
   chunk_count: number
 }

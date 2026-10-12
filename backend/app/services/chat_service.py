@@ -142,7 +142,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "- Per convertire o modificare un allegato passa source_file_id (l'id e' indicato accanto all'allegato).\n"
             "- Per interventi precisi (stili, tabelle, intestazioni, revisioni, anteprima di una pagina) usa i tool mcp__wordcraft__*: "
             "open_document con il percorso del file, list_commands per trovare il comando, execute/batch, render_page per "
-            "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile).")
+            "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile)."
+            + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
+               "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available

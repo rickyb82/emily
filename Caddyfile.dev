@@ -15,6 +15,12 @@ http://localhost:8080 {
         encode zstd gzip
         reverse_proxy backend:8000
     }
+
+    # WordCraft nel browser (editor di documenti, se il profilo wordcraft e' attivo)
+    handle_path /wordcraft/* {
+        encode zstd gzip
+        reverse_proxy wordcraft-web:80
+    }
     handle {
         encode zstd gzip
         reverse_proxy frontend:80

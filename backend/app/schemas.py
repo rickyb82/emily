@@ -56,6 +56,7 @@ class MeOut(BaseModel):
     mfa_required: bool
     providers: list[dict]
     tools: list[str]
+    features: dict = {}
 
 
 # ---- admin ----
