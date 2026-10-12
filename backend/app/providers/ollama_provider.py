@@ -20,7 +20,8 @@ class OllamaProvider(OpenAIProvider):
 
     def __init__(self, base_url: str, default_model: str):
         super().__init__("ollama", default_model)
-        self.base_url = base_url.rstrip("/")
+        from ..services.neturl import host_url
+        self.base_url = host_url(base_url).rstrip("/")
         self.param_sizes: dict[str, float] = {}   # modello -> miliardi di parametri (da /api/tags)
 
     def is_small(self, model: str | None) -> bool:

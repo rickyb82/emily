@@ -181,7 +181,8 @@ def _local_llm():
 async def _searxng(query: str, n: int, safe: bool) -> ToolResult:
     """Ricerca tramite SearXNG (Google/Bing/DDG/Wikipedia aggregati). Poi legge le prime pagine e, se c'e' un modello
     locale, ne estrae i punti chiave: tutto senza chiavi API e senza uscire di casa (a parte le ricerche stesse)."""
-    base = settings.searxng_url.rstrip("/")
+    from ..services.neturl import host_url
+    base = host_url(settings.searxng_url).rstrip("/")
     async with httpx.AsyncClient(timeout=20) as c:
         r = await c.get(f"{base}/search", params={"q": query, "format": "json", "language": "it-IT",
                                                    "safesearch": 2 if safe else 0, "categories": "general"})

@@ -196,7 +196,8 @@ async def test_provider(pid: str) -> dict:
             import httpx
 
             async with httpx.AsyncClient(timeout=15) as h:
-                r = await h.get(settings.ollama_url.rstrip("/") + "/api/tags")
+                from .neturl import host_url
+                r = await h.get(host_url(settings.ollama_url).rstrip("/") + "/api/tags")
                 r.raise_for_status()
                 names = [m.get("name") for m in r.json().get("models", [])]
             emb = settings.embedding_model or "bge-m3"
@@ -214,7 +215,8 @@ async def test_provider(pid: str) -> dict:
             from openai import AsyncOpenAI
             from ..providers.openai_compat_provider import OpenAICompatProvider
 
-            base = OpenAICompatProvider.normalize_base(settings.custom_llm_url)
+            from .neturl import host_url
+            base = OpenAICompatProvider.normalize_base(host_url(settings.custom_llm_url))
             # prima un GET "nudo" per distinguere problemi di rete da problemi di API
             try:
                 async with httpx.AsyncClient(timeout=8) as h:
@@ -238,9 +240,15 @@ async def test_provider(pid: str) -> dict:
             r = await c.chat.completions.create(model=model, max_tokens=16, messages=[{"role": "user", "content": "Rispondi solo: OK"}])
             detail = f"{len(names)} modelli ({', '.join(names[:5])}); {model}: {r.choices[0].message.content!r}"
         elif pid == "comfyui":
+            import httpx
             from ..services import comfyui
 
-            info = await comfyui.models_available()
+            try:
+                info = await comfyui.models_available()
+            except httpx.ConnectError as e:
+                return {"ok": False, "latency_ms": int((time.perf_counter() - t0) * 1000),
+                        "detail": f"Il backend (in Docker) non raggiunge ComfyUI a {settings.comfyui_url}: {e}. Se ComfyUI gira sul Mac usa "
+                                  "http://host.docker.internal:8188 (non localhost) e avvialo con --listen 0.0.0.0; se e' su un altro server controlla IP/porta/firewall."}
             dev = ""
             try:
                 d = info["stats"]["devices"][0]

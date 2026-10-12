@@ -99,7 +99,8 @@ async def embed_texts(texts: list[str], for_query: bool = False) -> tuple[list[l
         if provider == "ollama":
             import httpx
 
-            base = settings.ollama_url.rstrip("/")
+            from .neturl import host_url
+            base = host_url(settings.ollama_url).rstrip("/")
             out: list[list[float]] = []
             async with httpx.AsyncClient(timeout=120) as c:
                 for i in range(0, len(texts), 32):

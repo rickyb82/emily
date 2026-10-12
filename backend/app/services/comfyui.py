@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 
 from ..config import get_settings
+from .neturl import host_url
 
 settings = get_settings()
 
@@ -100,7 +101,7 @@ def enabled() -> bool:
 
 async def models_available() -> dict:
     """Elenco modelli presenti sul server (per la pagina admin e la prova di connessione)."""
-    base = settings.comfyui_url.rstrip("/")
+    base = host_url(settings.comfyui_url).rstrip("/")
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.get(f"{base}/object_info/CheckpointLoaderSimple")
         r.raise_for_status()
@@ -116,7 +117,7 @@ async def models_available() -> dict:
 
 
 async def generate(prompt: str, size: str = "1024x1024", negative: str = "", timeout_s: int = 300) -> tuple[bytes, str]:
-    base = settings.comfyui_url.rstrip("/")
+    base = host_url(settings.comfyui_url).rstrip("/")
     wf, label = build_workflow(prompt, size, negative)
     client_id = uuid.uuid4().hex
     async with httpx.AsyncClient(timeout=60) as c:

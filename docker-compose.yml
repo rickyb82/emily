@@ -7,6 +7,7 @@ services:
     env_file: .env
     environment:
       - SEARXNG_URL=${SEARXNG_URL:-http://searxng:8080}
+      - FAMILAI_IN_DOCKER=1
       - DATA_DIR=/data
       - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
       - SANDBOX_URL=http://sandbox:8080
