@@ -65,6 +65,20 @@ COMMON = r'''
         Ok(js_sys::Uint8Array::new(&buf).to_vec())
     }
 
+    /// Tells the FamilAI page around the iframe how a save went (`{type: "familai:saved"|"familai:save_failed", name, error}`).
+    fn notify(kind: &str, name: &str, error: Option<&str>) {
+        let Some(window) = web_sys::window() else { return };
+        let Some(parent) = window.parent().ok().flatten() else { return };
+        let Ok(origin) = window.location().origin() else { return };
+        let m = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&m, &"type".into(), &kind.into());
+        let _ = js_sys::Reflect::set(&m, &"name".into(), &name.into());
+        if let Some(e) = error {
+            let _ = js_sys::Reflect::set(&m, &"error".into(), &e.into());
+        }
+        let _ = parent.post_message(&m, &origin);
+    }
+
     async fn post_bytes(url: &str, name: &str, bytes: &[u8]) -> Result<(), String> {
         let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
         let window = web_sys::window().ok_or("no window")?;
@@ -82,7 +96,12 @@ COMMON = r'''
         let resp = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str_and_init(url, &opts)).await.map_err(js)?;
         let resp: web_sys::Response = resp.dyn_into().map_err(|_| "not a Response".to_string())?;
         if !resp.ok() {
-            return Err(format!("HTTP {}", resp.status()));
+            let status = resp.status();
+            let body = match resp.text() {
+                Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.ok().and_then(|v| v.as_string()).unwrap_or_default(),
+                Err(_) => String::new(),
+            };
+            return Err(format!("HTTP {status} {}", body.chars().take(200).collect::<String>()));
         }
         Ok(())
     }
@@ -100,9 +119,13 @@ SAVE_WORDCRAFT = r'''
         saves.pending.set(saves.pending.get().saturating_add(1));
         wasm_bindgen_futures::spawn_local(async move {
             match post_bytes(&url, &name, &bytes).await {
-                Ok(()) => log::info!("FamilAI: saved {name}"),
+                Ok(()) => {
+                    log::info!("FamilAI: saved {name}");
+                    notify("familai:saved", &name, None);
+                }
                 Err(e) => {
                     log::error!("FamilAI: couldn't save {name}: {e}");
+                    notify("familai:save_failed", &name, Some(&e));
                     saves.unsaved.borrow_mut().push((name, Some(e)));
                 }
             }
@@ -119,8 +142,14 @@ SAVE_SIMPLE = r'''
         let bytes = bytes.to_vec();
         wasm_bindgen_futures::spawn_local(async move {
             match post_bytes(&url, &name, &bytes).await {
-                Ok(()) => log::info!("FamilAI: saved {name}"),
-                Err(e) => log::error!("FamilAI: couldn't save {name}: {e}"),
+                Ok(()) => {
+                    log::info!("FamilAI: saved {name}");
+                    notify("familai:saved", &name, None);
+                }
+                Err(e) => {
+                    log::error!("FamilAI: couldn't save {name}: {e}");
+                    notify("familai:save_failed", &name, Some(&e));
+                }
             }
         });
         Ok(())
@@ -234,6 +263,16 @@ if app == "wordcraft":
           "        let host_save = FAMILAI_HOST_SAVE.load(std::sync::atomic::Ordering::Relaxed);\n"
           "        if self.services.download.is_some() && !host_save {\n            return Some(AutoSaveBlock::Browser);\n        }\n",
           "lib.rs: AutoSave nel browser con host save")
+    patch(lib_rs,
+          '            if let Err(e) = self.session.run("file.save", &json!({})) {\n                log::warn!("AutoSave failed: {e}");',
+          '            // FamilAI: through WordApp::run, so in the browser the save goes to the host (`?save=`) like a manual one\n'
+          '            let autosave_result = if FAMILAI_HOST_SAVE.load(std::sync::atomic::Ordering::Relaxed) {\n'
+          '                self.run("file.save", json!({})).map(|_| ())\n'
+          '            } else {\n'
+          '                self.session.run("file.save", &json!({})).map(|_| ()).map_err(|e| e.to_string())\n'
+          '            };\n'
+          '            if let Err(e) = autosave_result {\n                log::warn!("AutoSave failed: {e}");',
+          "lib.rs: AutoSave via WordApp::run")
     patch(lib_rs,
           "        if !self.saved_here() {\n            return Some(AutoSaveBlock::NotSavedHere);\n        }\n        None\n",
           "        if !self.saved_here() && !host_save {\n            return Some(AutoSaveBlock::NotSavedHere);\n        }\n        None\n",

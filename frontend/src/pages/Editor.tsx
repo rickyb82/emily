@@ -41,10 +41,13 @@ export default function Editor() {
   // PdfCraft parla con la pagina che lo incornicia via postMessage (host=parent): riceviamo i salvataggi e li
   // scriviamo sul server, come fanno WordCraft/GridCraft con ?save=.
   useEffect(() => {
-    if (app !== 'pdfcraft') return
     const onMsg = async (ev: MessageEvent) => {
       if (ev.origin !== window.location.origin || ev.source !== frame.current?.contentWindow) return
       const d = ev.data || {}
+      // WordCraft/GridCraft (patch FamilAI): esito di ogni salvataggio verso il server
+      if (d.type === 'familai:saved') { setSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); setDirty(false); setErr(''); return }
+      if (d.type === 'familai:save_failed') { setErr(`Salvataggio di ${d.name || 'documento'} non riuscito: ${d.error || 'errore sconosciuto'}`); return }
+      if (app !== 'pdfcraft') return
       if (d.type === 'pdfcraft:dirty') setDirty(!!d.dirty)
       else if (d.type === 'pdfcraft:failed') setErr(`PdfCraft non si è avviato: ${d.error || ''}`)
       else if (d.type === 'pdfcraft:save') {
@@ -112,8 +115,8 @@ export default function Editor() {
         <div className="title">{APP_ICON[app]} {isNew ? (app === 'gridcraft' ? 'Nuovo foglio di calcolo' : 'Nuovo documento') : (file?.filename || 'Documento')}
           <small className="muted"> · {APP_LABEL[app]}</small>
           {!canWrite && <small className="muted"> · sola lettura (Salva scarica una copia)</small>}
-          {app === 'pdfcraft' && dirty && <small className="muted"> · modifiche non salvate</small>}
-          {app === 'pdfcraft' && saved && !dirty && <small className="muted"> · salvato {saved}</small>}
+          {dirty && <small className="muted"> · modifiche non salvate</small>}
+          {saved && !dirty && <small className="muted"> · ✓ salvato {saved}</small>}
         </div>
         <div className="row">
           {!isNew && <a className="ghost btn-link" href={`/files/${fileId}`} target="_blank" rel="noreferrer">⬇ Scarica</a>}
