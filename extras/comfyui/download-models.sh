@@ -15,7 +15,7 @@ dl() {  # dl <url> <destinazione>
   local url="$1" dest="$2"
   if [ -s "$dest" ]; then echo "   gia' presente: $(basename "$dest")"; return; fi
   echo ">> $(basename "$dest")"
-  curl -L --fail --retry 3 --progress-bar "${AUTH[@]}" -o "$dest.part" "$url" && mv "$dest.part" "$dest"
+  curl -L --fail --retry 3 --progress-bar ${AUTH[@]+"${AUTH[@]}"} -o "$dest.part" "$url" && mv "$dest.part" "$dest"
 }
 
 common_flux() {

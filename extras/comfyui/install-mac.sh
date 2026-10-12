@@ -36,7 +36,7 @@ pip install -q -r custom_nodes/ComfyUI-GGUF/requirements.txt
 M="$DIR/models"; mkdir -p "$M"/{unet,clip,vae,checkpoints}
 AUTH=(); [ -n "${HF_TOKEN:-}" ] && AUTH=(-H "Authorization: Bearer $HF_TOKEN")
 dl() { local url="$1" dest="$2"; if [ -s "$dest" ]; then echo "   gia' presente: $(basename "$dest")"; return; fi
-      echo ">> $(basename "$dest")"; curl -L --fail --retry 3 --progress-bar "${AUTH[@]}" -o "$dest.part" "$url" && mv "$dest.part" "$dest"; }
+      echo ">> $(basename "$dest")"; curl -L --fail --retry 3 --progress-bar ${AUTH[@]+"${AUTH[@]}"} -o "$dest.part" "$url" && mv "$dest.part" "$dest"; }
 
 say "Scarico encoder e VAE di Flux"
 dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" "$M/clip/clip_l.safetensors"
