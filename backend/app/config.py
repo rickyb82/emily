@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     wordcraft_web: bool = False       # editor WordCraft nel browser servito su /wordcraft/ (container wordcraft-web)
     gridcraft_host: str = ""          # host:porta del container GridCraft (es. gridcraft:7983): fogli di calcolo via MCP
     gridcraft_web: bool = False       # editor GridCraft nel browser servito su /gridcraft/ (container gridcraft-web)
+    pdfcraft_host: str = ""           # host:porta del container PdfCraft (es. pdfcraft:7984): PDF via MCP
+    pdfcraft_web: bool = False        # editor PdfCraft nel browser servito su /pdfcraft/ (container pdfcraft-web)
 
     # Email (SMTP) — configurabile dal pannello
     smtp_host: str = ""

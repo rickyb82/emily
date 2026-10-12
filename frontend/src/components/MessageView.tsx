@@ -19,6 +19,7 @@ const TOOL_LABELS: Record<string, string> = {
   run_code: '⚙️ Esecuzione codice',
   write_document: '📝 Documento con WordCraft',
   write_spreadsheet: '📊 Foglio con GridCraft',
+  pdf_tool: '📕 PDF con PdfCraft',
   ask_model: '🤝 Consulto un altro modello',
   remember: '🧠 Memorizzo',
   forget: '🧠 Dimentico',

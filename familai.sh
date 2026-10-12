@@ -11,6 +11,7 @@
 #   ./familai.sh portainer up|down|logs  pannello web Docker (Portainer) su https://<ip>:9443 per gestire altri container
 #   ./familai.sh wordcraft up|down|logs|upgrade  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor nel browser
 #   ./familai.sh gridcraft up|down|logs|upgrade  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
+#   ./familai.sh pdfcraft up|down|logs|upgrade   PdfCraft: unire/dividere/modificare PDF dalla chat (MCP) + editor PDF nel browser
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -109,11 +110,11 @@ case "${1:-}" in
       update) $DC -f extras/portainer.yml pull && $DC -f extras/portainer.yml up -d;;
       *) echo "uso: ./familai.sh portainer up|down|logs|update"; exit 1;;
     esac;;
-  wordcraft|gridcraft)
+  wordcraft|gridcraft|pdfcraft)
     # App ArtCraft: CLI+MCP per il modello e editor web (extras/artcraft). Stessa logica per entrambe.
     need_env
     app="$1"; APPU=$(echo "$app" | tr a-z A-Z)
-    port=7982; [ "$app" = gridcraft ] && port=7983
+    port=7982; [ "$app" = gridcraft ] && port=7983; [ "$app" = pdfcraft ] && port=7984
     set_env() { # set_env CHIAVE valore (idempotente)
       if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi
     }
@@ -132,11 +133,11 @@ case "${1:-}" in
         compose --profile "$app" up -d "$app" "$app-web"
         compose up -d --build backend
         compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
-        if [ "$app" = wordcraft ]; then
-          echo ">> WordCraft attivo. In chat: 'scrivimi una lettera in Word'; nel menu: 📝 Documenti per l'editor completo."
-        else
-          echo ">> GridCraft attivo. In chat: 'fammi il bilancio in Excel'; nel menu: 📝 Documenti per l'editor completo."
-        fi;;
+        case "$app" in
+          wordcraft) echo ">> WordCraft attivo. In chat: 'scrivimi una lettera in Word'; nel menu: 📝 Documenti per l'editor completo.";;
+          gridcraft) echo ">> GridCraft attivo. In chat: 'fammi il bilancio in Excel'; nel menu: 📝 Documenti per l'editor completo.";;
+          pdfcraft)  echo ">> PdfCraft attivo. In chat: 'unisci questi PDF', 'estrai le pagine 2-4'; ✏️ accanto ai PDF apre l'editor.";;
+        esac;;
       down)
         compose --profile "$app" stop "$app" "$app-web"
         set_env "${APPU}_HOST" ""

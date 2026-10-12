@@ -23,10 +23,11 @@ from .registry import ToolContext, ToolResult, register, unregister_prefix
 settings = get_settings()
 log = logging.getLogger(__name__)
 
-WORDCRAFT, GRIDCRAFT = "wordcraft", "gridcraft"
+WORDCRAFT, GRIDCRAFT, PDFCRAFT = "wordcraft", "gridcraft", "pdfcraft"
 APPS = {
     WORDCRAFT: {"save_tool": "save_document", "native_tool": "write_document", "formats": ("docx", "pdf", "odt", "rtf", "html", "md", "txt")},
     GRIDCRAFT: {"save_tool": "save_workbook", "native_tool": "write_spreadsheet", "formats": ("xlsx", "csv", "tsv", "json", "html")},
+    PDFCRAFT: {"save_tool": None, "native_tool": "pdf_tool", "formats": ("pdf",)},   # i file prodotti si riconoscono dal risultato
 }
 
 
@@ -37,7 +38,44 @@ def app_dir(app: str) -> Path:
 
 
 def host_for(app: str) -> str:
-    return settings.wordcraft_host if app == WORDCRAFT else settings.gridcraft_host
+    return {WORDCRAFT: settings.wordcraft_host, GRIDCRAFT: settings.gridcraft_host, PDFCRAFT: settings.pdfcraft_host}.get(app, "")
+
+
+def harvest_paths(result_text: str) -> list[str]:
+    """Percorsi di file che un tool MCP dichiara di aver scritto (campi path/out/paths/files/parts nel JSON del risultato)
+    dentro una cartella delle app: diventano allegati della chat. Usato per PdfCraft, dove molti tool producono file."""
+    import json
+
+    found: list[str] = []
+    try:
+        data = json.loads(result_text)
+    except Exception:
+        return found
+    dirs = [str(app_dir(a).resolve()) for a in APPS]
+
+    def walk(v, key=""):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, k)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x, key)
+        elif isinstance(v, str) and key in ("path", "out", "paths", "files", "parts", "file", "folder", "out_dir", "written"):
+            try:
+                rp = str(Path(v).resolve())
+            except Exception:
+                return
+            if any(rp.startswith(d + "/") for d in dirs) and rp not in found:
+                found.append(rp)
+    walk(data)
+    out: list[str] = []
+    for f in found:
+        p = Path(f)
+        if p.is_file():
+            out.append(f)
+        elif p.is_dir():   # cartella di output (es. doc_split, doc_export_images): tutti i file dentro
+            out.extend(str(x) for x in sorted(p.iterdir()) if x.is_file())
+    return out[:40]
 
 
 def _safe_name(name: str, ext: str) -> str:
@@ -65,10 +103,16 @@ async def register_saved_file(ctx: ToolContext, path: str) -> dict | None:
     except OSError:
         return None
     mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
-    asset = FileAsset(id=uuid.uuid4().hex, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
-                      conversation_id=ctx.conversation_id, filename=p.name, mime=mime, size=p.stat().st_size,
-                      path=str(p), kind="generated")
-    ctx.db.add(asset)
+    from sqlalchemy import select
+    existing = (await ctx.db.execute(select(FileAsset).where(FileAsset.path == str(p), FileAsset.conversation_id == ctx.conversation_id))).scalars().first()
+    if existing:   # stesso file risalvato: aggiorna la voce invece di duplicarla
+        existing.size, existing.filename, existing.mime = p.stat().st_size, p.name, mime
+        asset = existing
+    else:
+        asset = FileAsset(id=uuid.uuid4().hex, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
+                          conversation_id=ctx.conversation_id, filename=p.name, mime=mime, size=p.stat().st_size,
+                          path=str(p), kind="generated")
+        ctx.db.add(asset)
     await ctx.db.commit()
     if p.suffix.lower() == ".png":
         return {"type": "image", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": mime}
@@ -222,6 +266,165 @@ async def write_spreadsheet(args: dict, ctx: ToolContext) -> ToolResult:
     return res
 
 
+# ---------------------------------------------------------------- PdfCraft: pdf_tool ----
+PDF_ACTIONS = ("merge", "extract", "delete", "rotate", "split", "text", "render", "compress", "watermark", "from_images", "info")
+
+
+def _pages(v) -> list[int]:
+    """'1,3-5' | [1,3] -> [1,3,4,5]"""
+    if isinstance(v, list):
+        return [int(x) for x in v]
+    out: list[int] = []
+    for part in str(v or "").replace(" ", "").split(","):
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            out.extend(range(int(a), int(b) + 1))
+        else:
+            out.append(int(part))
+    return out
+
+
+async def pdf_tool(args: dict, ctx: ToolContext) -> ToolResult:
+    import json
+
+    from .mcp_client import mcp_manager
+
+    if not mcp_manager.is_connected(PDFCRAFT):
+        return ToolResult("PdfCraft non e' attivo su questo server (./familai.sh pdfcraft up).", is_error=True)
+    action = str(args.get("action") or "").lower()
+    if action not in PDF_ACTIONS:
+        return ToolResult(f"Azione sconosciuta: {action}. Azioni: {', '.join(PDF_ACTIONS)}.", is_error=True)
+    ids = [str(x) for x in (args.get("file_ids") or ([args["file_id"]] if args.get("file_id") else []))]
+    name = str(args.get("filename") or args.get("title") or "")
+
+    async def call(tool: str, a: dict) -> dict | str:
+        txt = await mcp_manager.call(PDFCRAFT, tool, a)
+        try:
+            return json.loads(txt)
+        except Exception:
+            return txt
+
+    async def open_doc(fid: str) -> tuple[int, FileAsset]:
+        asset = await _source_asset(ctx, fid)
+        if isinstance(asset, ToolResult):
+            raise RuntimeError(asset.content)
+        r = await call("doc_open", {"path": asset.path})
+        if not isinstance(r, dict) or "doc" not in r:
+            raise RuntimeError(f"doc_open: {str(r)[:200]}")
+        return int(r["doc"]), asset
+
+    def out_path(base: str, ext: str = "pdf") -> Path:
+        return _unique(app_dir(PDFCRAFT) / _safe_name(name or base, ext))
+
+    artifacts: list[dict] = []
+    text_out = ""
+    try:
+        if action == "from_images":
+            srcs = []
+            for fid in ids:
+                a = await _source_asset(ctx, fid)
+                if isinstance(a, ToolResult):
+                    return a
+                srcs.append(a.path)
+            if not srcs:
+                return ToolResult("from_images: servono file_ids di immagini (png/jpg).", is_error=True)
+            r = await call("doc_create", {"from": "images", "paths": srcs})
+            doc = int(r["doc"]) if isinstance(r, dict) else 0
+            out = out_path("immagini")
+            await call("doc_save", {"doc": doc, "path": str(out)})
+            await call("doc_close", {"doc": doc, "discard_changes": True})
+            artifacts.append(await register_saved_file(ctx, str(out)))
+        elif action == "merge":
+            if len(ids) < 2:
+                return ToolResult("merge: servono almeno due file_ids.", is_error=True)
+            paths = []
+            for fid in ids:
+                a = await _source_asset(ctx, fid)
+                if isinstance(a, ToolResult):
+                    return a
+                paths.append(a.path)
+            out = out_path("unito")
+            await call("doc_combine", {"paths": paths, "out": str(out)})
+            artifacts.append(await register_saved_file(ctx, str(out)))
+        else:
+            if not ids:
+                return ToolResult(f"{action}: serve file_id del PDF.", is_error=True)
+            doc, asset = await open_doc(ids[0])
+            stem = Path(asset.filename).stem
+            try:
+                if action == "info":
+                    r = await call("doc_info", {"doc": doc})
+                    text_out = json.dumps(r, ensure_ascii=False)[:6000]
+                elif action == "text":
+                    a = {"doc": doc}
+                    if args.get("pages"):
+                        a["pages"] = _pages(args["pages"])
+                    r = await call("text_extract", a)
+                    text_out = (json.dumps(r, ensure_ascii=False) if not isinstance(r, str) else r)[:60000]
+                elif action == "render":
+                    pages = _pages(args.get("pages") or [1])[:6]
+                    for pg in pages:
+                        res = await mcp_manager.call_raw(PDFCRAFT, "page_render", {"doc": doc, "page": pg, "dpi": float(args.get("dpi") or 110)})
+                        _, arts = await mcp_manager._collect(res, ctx)
+                        artifacts.extend(arts)
+                    text_out = f"Pagine {pages} mostrate all'utente come immagini."
+                elif action == "extract":
+                    out = out_path(f"{stem}-pagine")
+                    await call("page_extract", {"doc": doc, "pages": _pages(args.get("pages")), "out": str(out)})
+                    artifacts.append(await register_saved_file(ctx, str(out)))
+                elif action in ("delete", "rotate", "watermark"):
+                    if action == "delete":
+                        await call("page_delete", {"doc": doc, "pages": _pages(args.get("pages"))})
+                    elif action == "rotate":
+                        a = {"doc": doc, "degrees": int(args.get("degrees") or 90)}
+                        if args.get("pages"):
+                            a["pages"] = _pages(args["pages"])
+                        await call("page_rotate", a)
+                    else:
+                        a = {"doc": doc, "text": str(args.get("text") or "BOZZA"), "opacity": float(args.get("opacity") or 0.25)}
+                        if args.get("pages"):
+                            a["pages"] = _pages(args["pages"])
+                        await call("doc_watermark", a)
+                    out = out_path(f"{stem}-{action}")
+                    await call("doc_save", {"doc": doc, "path": str(out), "full": True})
+                    artifacts.append(await register_saved_file(ctx, str(out)))
+                elif action == "compress":
+                    out = out_path(f"{stem}-compresso")
+                    await call("doc_optimize", {"doc": doc, "path": str(out), "discard_thumbnails": True})
+                    artifacts.append(await register_saved_file(ctx, str(out)))
+                elif action == "split":
+                    folder = app_dir(PDFCRAFT) / f"{_safe_name(stem, 'd')[:-2]}-parti-{uuid.uuid4().hex[:6]}"
+                    folder.mkdir(parents=True, exist_ok=True)
+                    a = {"doc": doc, "out_dir": str(folder)}
+                    if args.get("every"):
+                        a["every"] = int(args["every"])
+                    elif args.get("pages"):
+                        a["before"] = _pages(args["pages"])
+                    else:
+                        a["every"] = 1
+                    await call("doc_split", a)
+                    for f in sorted(folder.iterdir()):
+                        if f.is_file():
+                            artifacts.append(await register_saved_file(ctx, str(f)))
+            finally:
+                try:
+                    await call("doc_close", {"doc": doc, "discard_changes": True})
+                except Exception:
+                    pass
+    except Exception as e:
+        log.warning("pdf_tool %s fallito: %s", action, e)
+        return ToolResult(f"PdfCraft ({action}): {type(e).__name__}: {str(e)[:400]}", is_error=True)
+    artifacts = [a for a in artifacts if a]
+    if text_out and not artifacts:
+        return ToolResult(text_out)
+    files = ", ".join(a.get("filename", "immagine") for a in artifacts)
+    return ToolResult((text_out + " " if text_out else "") + f"Fatto con PdfCraft: {files or 'nessun file'} mostrat{'o' if len(artifacts) == 1 else 'i'} all'utente "
+                      f"come allegat{'o' if len(artifacts) == 1 else 'i'} scaricabil{'e' if len(artifacts) == 1 else 'i'}. Non inventare link.",
+                      artifacts=artifacts or None)
+
+
 # ---------------------------------------------------------------- registrazione ----
 def register_tools(app: str) -> None:
     """Chiamata dal client MCP quando il server dell'app e' connesso: il tool compare solo se l'app c'e'."""
@@ -261,6 +464,27 @@ def register_tools(app: str) -> None:
                 "source_file_id": {"type": "string", "description": "Id di un allegato (xlsx/csv/ods) da aprire/convertire; i dati in sheets vengono scritti sopra"}},
              "required": []},
         )(write_spreadsheet)
+    elif app == PDFCRAFT:
+        register(
+            "pdf_tool",
+            "Lavora sui PDF allegati con PdfCraft: merge (unisce piu' file_ids), extract (estrae pages in un nuovo PDF), delete "
+            "(toglie pages), rotate (degrees 90/180/270, pages opzionali), split (every N pagine, o pages dove iniziare le parti), "
+            "text (testo delle pagine), render (mostra pages come immagini), compress (riduce il peso), watermark (text in "
+            "filigrana), from_images (immagini -> PDF), info (metadati e numero pagine). I file prodotti compaiono in chat. "
+            "Per tutto il resto (moduli, firme, commenti, redazione, OCR, confronto) usa i tool mcp__pdfcraft__* "
+            "(doc_open con il percorso del file, poi tool_search/tool_call; salva in " + str(settings.data_dir / "pdfcraft") + ").",
+            {"type": "object", "properties": {
+                "action": {"type": "string", "enum": list(PDF_ACTIONS)},
+                "file_id": {"type": "string", "description": "Id dell'allegato PDF (o immagine per from_images)"},
+                "file_ids": {"type": "array", "items": {"type": "string"}, "description": "Piu' allegati (merge, from_images)"},
+                "pages": {"type": "string", "description": "Pagine, es. \"1,3-5\" (extract, delete, rotate, text, render, split=inizio parti)"},
+                "degrees": {"type": "integer", "description": "rotate: 90, 180, 270"},
+                "every": {"type": "integer", "description": "split: una parte ogni N pagine"},
+                "text": {"type": "string", "description": "watermark: testo"},
+                "dpi": {"type": "number", "description": "render: risoluzione (default 110)"},
+                "filename": {"type": "string", "description": "Nome del file prodotto (opzionale)"}},
+             "required": ["action"]},
+        )(pdf_tool)
 
 
 def unregister_tools(app: str) -> None:

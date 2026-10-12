@@ -1,22 +1,24 @@
-/** Collegamenti agli editor ArtCraft nel browser: WordCraft (documenti) e GridCraft (fogli di calcolo),
- *  serviti su /wordcraft/ e /gridcraft/ quando i rispettivi profili sono attivi. */
-export type ArtApp = 'wordcraft' | 'gridcraft'
+/** Collegamenti agli editor ArtCraft nel browser: WordCraft (documenti), GridCraft (fogli di calcolo) e PdfCraft (PDF),
+ *  serviti su /wordcraft/, /gridcraft/ e /pdfcraft/ quando i rispettivi profili sono attivi. */
+export type ArtApp = 'wordcraft' | 'gridcraft' | 'pdfcraft'
 
 export const WORDCRAFT_EXT = ['.docx', '.docm', '.dotx', '.doc', '.odt', '.rtf', '.txt', '.md', '.html', '.htm', '.tex']
 export const GRIDCRAFT_EXT = ['.xlsx', '.xlsm', '.xls', '.xlsb', '.ods', '.csv', '.tsv']
+export const PDFCRAFT_EXT = ['.pdf']
 
-export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft' }
-export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊' }
+export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft', pdfcraft: 'PdfCraft' }
+export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊', pdfcraft: '📕' }
 
 /** Quale editor apre questo file (undefined = nessuno). */
 export function editorFor(filename: string): ArtApp | undefined {
   const lower = (filename || '').toLowerCase()
   if (WORDCRAFT_EXT.some((e) => lower.endsWith(e))) return 'wordcraft'
   if (GRIDCRAFT_EXT.some((e) => lower.endsWith(e))) return 'gridcraft'
+  if (PDFCRAFT_EXT.some((e) => lower.endsWith(e))) return 'pdfcraft'
   return undefined
 }
 
-type Features = { wordcraft_web?: boolean; gridcraft_web?: boolean } | undefined
+type Features = { wordcraft_web?: boolean; gridcraft_web?: boolean; pdfcraft_web?: boolean } | undefined
 
 /** True se il file si puo' modificare in un editor attivo su questo server. */
 export function canEdit(filename: string, features: Features): boolean {

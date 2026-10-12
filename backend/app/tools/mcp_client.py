@@ -206,12 +206,18 @@ class MCPManager:
             except Exception as e:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts, artifacts = await self._collect(res, ctx)
-            from .artcraft import APPS as _ARTCRAFT, register_saved_file
-            if server in _ARTCRAFT and tool == _ARTCRAFT[server]["save_tool"] and not res.isError:
-                art = await register_saved_file(ctx, str(args.get("path") or ""))
-                if art:
-                    artifacts.append(art)
-                    parts.append(f"File salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
+            from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file
+            if server in _ARTCRAFT and not res.isError:
+                paths: list[str] = []
+                if tool == _ARTCRAFT[server]["save_tool"]:
+                    paths = [str(args.get("path") or "")]
+                elif _ARTCRAFT[server]["save_tool"] is None:   # PdfCraft: i percorsi scritti stanno nel risultato
+                    paths = harvest_paths("\n".join(parts))
+                for pth in paths:
+                    art = await register_saved_file(ctx, pth)
+                    if art:
+                        artifacts.append(art)
+                        parts.append(f"File {art.get('filename', '')} salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
             return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(res.isError), artifacts=artifacts or None)
         return call
 
@@ -250,6 +256,16 @@ class MCPManager:
         if res.isError:
             raise RuntimeError(text[:500] or f"{tool} fallito")
         return text
+
+    async def call_raw(self, server: str, tool: str, args: dict, timeout: int = 180):
+        """Come call() ma restituisce il risultato MCP grezzo (per contenuti non testuali, es. immagini)."""
+        conn = self.conns.get(server)
+        if not conn or not conn.connected or not conn.session:
+            raise RuntimeError(f"server MCP {server} non connesso")
+        res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=timeout)
+        if res.isError:
+            raise RuntimeError("\n".join(c.text for c in res.content if getattr(c, "type", "") == "text")[:500] or f"{tool} fallito")
+        return res
 
     def is_connected(self, server: str) -> bool:
         c = self.conns.get(server)

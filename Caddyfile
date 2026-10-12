@@ -38,6 +38,10 @@
         encode zstd gzip
         reverse_proxy gridcraft-web:80
     }
+    handle_path /pdfcraft/* {
+        encode zstd gzip
+        reverse_proxy pdfcraft-web:80
+    }
 
     # Webapp
     handle {

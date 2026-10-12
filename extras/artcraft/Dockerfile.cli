@@ -1,4 +1,4 @@
-# App "ArtCraft" (WordCraft, GridCraft…): CLI headless con server MCP, compilata dal sorgente Rust.
+# App "ArtCraft" (WordCraft, GridCraft, PdfCraft…): CLI headless con server MCP, compilata dal sorgente Rust.
 # Il server MCP parla su stdio; socat lo espone su una porta della rete Docker dove il backend FamilAI lo raggiunge
 # (una sessione nuova per ogni connessione). I file passano dalla cartella condivisa /data.
 # Prima build: 15-40 minuti e qualche GB di cache; le successive sono rapide (cache di cargo e target).
@@ -13,7 +13,7 @@ ARG APP
 ARG REPO
 ARG REF
 ARG UPSTREAM_SHA
-RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config cmake clang \
+RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config cmake clang libclang-dev perl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 RUN echo "upstream: ${UPSTREAM_SHA:-latest}" && git clone --depth 1 --branch "$REF" "$REPO" . && git rev-parse HEAD
@@ -29,5 +29,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends socat ca-certif
 COPY --from=build /usr/local/bin/${APP}-cli /usr/local/bin/${APP}-cli
 COPY serve-mcp.sh /usr/local/bin/serve-mcp
 RUN chmod +x /usr/local/bin/serve-mcp && mkdir -p /data/${APP}
-ENV APP=${APP} WORDCRAFT_NO_PREFS=1 GRIDCRAFT_NO_PREFS=1 MCP_PORT=7982 MCP_ARGS=""
+ENV APP=${APP} WORDCRAFT_NO_PREFS=1 GRIDCRAFT_NO_PREFS=1 PDFCRAFT_NO_PREFS=1 MCP_PORT=7982 MCP_ARGS=""
 CMD ["serve-mcp"]

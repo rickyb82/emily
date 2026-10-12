@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Piccola patch alle app web ArtCraft (apps/<app>-web) per integrarle in FamilAI.
 
-Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft)
+Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft)
 
 Aggiunge due parametri all'URL della pagina:
   ?open=<url>&name=<file>   apre il documento scaricandolo dal server (con i cookie di sessione)
@@ -190,6 +190,10 @@ elif app == "gridcraft":
           '    let window = web_sys::window().ok_or("no window")?;\n',
           "web.rs: ?save=")
     patch(web_rs, "\nfn mime_for(", HEAD_SIMPLE + SAVE_SIMPLE + COMMON + "\nfn mime_for(", "web.rs: modulo familai")
+elif app == "pdfcraft":
+    # PdfCraft ha gia' tutto: ?file=<url> apre dal server e ?host=parent spedisce i salvataggi alla pagina che lo
+    # incornicia via postMessage (pdfcraft:save); FamilAI li riceve nella pagina Editor. Nessuna patch.
+    print("  = pdfcraft: nessuna patch necessaria (?file= e ?host=parent sono nativi)")
 else:
     sys.exit(f"!! app sconosciuta: {app}")
 print("Patch completata.")

@@ -156,7 +156,7 @@ TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei docu
                 "create_artifact": "artifacts", "update_artifact": "artifacts",
                 "list_artifacts": "artifacts", "delete_artifact": "artifacts",
                 "remember": "memory", "forget": "memory",
-                "write_document": "mcp", "write_spreadsheet": "mcp"}   # WordCraft/GridCraft: stesso permesso dei server MCP
+                "write_document": "mcp", "write_spreadsheet": "mcp", "pdf_tool": "mcp"}   # WordCraft/GridCraft/PdfCraft: stesso permesso dei server MCP
 
 
 def tool_allowed(policy: dict, tool_name: str) -> bool:

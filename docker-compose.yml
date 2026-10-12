@@ -15,6 +15,8 @@ services:
       - WORDCRAFT_WEB=${WORDCRAFT_WEB:-}
       - GRIDCRAFT_HOST=${GRIDCRAFT_HOST:-}
       - GRIDCRAFT_WEB=${GRIDCRAFT_WEB:-}
+      - PDFCRAFT_HOST=${PDFCRAFT_HOST:-}
+      - PDFCRAFT_WEB=${PDFCRAFT_WEB:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -112,10 +114,10 @@ services:
     #     reservations:
     #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
 
-  # App ArtCraft (opzionali): WordCraft (word processor) e GridCraft (foglio di calcolo), open source in Rust.
+  # App ArtCraft (opzionali): WordCraft (word processor), GridCraft (foglio di calcolo) e PdfCraft (PDF), open source in Rust.
   # Ogni app ha due container: la CLI con il server MCP (il modello crea/modifica i file dalla chat) e l'editor completo
-  # nel browser (WebAssembly, servito da Caddy su /wordcraft/ e /gridcraft/). Attivazione: ./familai.sh wordcraft up,
-  # ./familai.sh gridcraft up (imposta COMPOSE_PROFILES e le variabili *_HOST / *_WEB nel .env).
+  # nel browser (WebAssembly, servito da Caddy su /wordcraft/, /gridcraft/, /pdfcraft/). Attivazione: ./familai.sh wordcraft up,
+  # gridcraft up, pdfcraft up (imposta COMPOSE_PROFILES e le variabili *_HOST / *_WEB nel .env).
   wordcraft:
     build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: wordcraft, UPSTREAM_SHA: "${WORDCRAFT_SHA:-}" } }
     image: familai-wordcraft
@@ -156,6 +158,28 @@ services:
     build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: gridcraft, UPSTREAM_SHA: "${GRIDCRAFT_SHA:-}" } }
     image: familai-gridcraft-web
     profiles: ["gridcraft"]
+    restart: unless-stopped
+    expose: ["80"]
+
+  pdfcraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: pdfcraft, UPSTREAM_SHA: "${PDFCRAFT_SHA:-}" } }
+    image: familai-pdfcraft
+    profiles: ["pdfcraft"]
+    restart: unless-stopped
+    environment:
+      - MCP_PORT=7984
+      # --root /data: ogni percorso deve stare in /data; --compact: pochi tool in elenco + tool_search/tool_call per gli altri 100+
+      - MCP_ARGS=--root /data --compact
+    volumes:
+      - ./data:/data:ro
+      - ./data/pdfcraft:/data/pdfcraft
+    expose: ["7984"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  pdfcraft-web:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: pdfcraft, UPSTREAM_SHA: "${PDFCRAFT_SHA:-}" } }
+    image: familai-pdfcraft-web
+    profiles: ["pdfcraft"]
     restart: unless-stopped
     expose: ["80"]
 

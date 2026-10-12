@@ -25,6 +25,10 @@ http://localhost:8080 {
         encode zstd gzip
         reverse_proxy gridcraft-web:80
     }
+    handle_path /pdfcraft/* {
+        encode zstd gzip
+        reverse_proxy pdfcraft-web:80
+    }
     handle {
         encode zstd gzip
         reverse_proxy frontend:80

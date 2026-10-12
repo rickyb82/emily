@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { del, get, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { canEdit, editorFor, editorPath, newFilePath } from '../lib/artcraft'
+import { APP_ICON, canEdit, editorFor, editorPath, newFilePath } from '../lib/artcraft'
 
 /** I documenti dell'utente (caricati, generati dall'assistente, scritti nell'editor) con apertura in WordCraft. */
 export default function Documents() {
@@ -35,10 +35,11 @@ export default function Documents() {
 
   const wc = !!me?.features?.wordcraft_web
   const gc = !!me?.features?.gridcraft_web
-  const web = wc || gc
+  const pc = !!me?.features?.pdfcraft_web
+  const web = wc || gc || pc
   const feats = me?.features
   const shown = files
-    .filter((f) => !onlyDocs || editorFor(f.filename) || f.filename.toLowerCase().endsWith('.pdf'))
+    .filter((f) => !onlyDocs || editorFor(f.filename))
     .filter((f) => !filter || f.filename.toLowerCase().includes(filter.toLowerCase()))
   const projName = (id: string | null) => projects.find((p) => p.id === id)?.name
 
@@ -46,8 +47,8 @@ export default function Documents() {
     <div className="page">
       <h2>📝 Documenti</h2>
       <p className="muted">
-        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)'].filter(Boolean).join(' e ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
-             : "Gli editor non sono attivi (./familai.sh wordcraft up / gridcraft up): qui trovi comunque i tuoi file."}
+        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)', pc && 'PDF (PdfCraft)'].filter(Boolean).join(', ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
+             : "Gli editor non sono attivi (./familai.sh wordcraft|gridcraft|pdfcraft up): qui trovi comunque i tuoi file."}
       </p>
       {err && <div className="error">{err}</div>}
       <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
@@ -64,7 +65,7 @@ export default function Documents() {
           <li key={f.id} className="row between wrap" style={{ gap: 8 }}>
             <span>
               {canEdit(f.filename, feats)
-                ? <Link to={editorPath(f.id, f.filename)} title="Apri nell'editor"><b>{editorFor(f.filename) === 'gridcraft' ? '📊' : '📝'} {f.filename}</b></Link>
+                ? <Link to={editorPath(f.id, f.filename)} title="Apri nell'editor"><b>{APP_ICON[editorFor(f.filename)!]} {f.filename}</b></Link>
                 : <a href={f.url} target="_blank" rel="noreferrer"><b>{f.filename}</b></a>}
               <small className="muted"> · {(f.size / 1024).toFixed(0)} KB · {new Date(f.created_at).toLocaleDateString()}
                 {f.kind === 'generated' && ' · creato qui'}{f.project_id && projName(f.project_id) && ` · 📁 ${projName(f.project_id)}`}
