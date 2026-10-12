@@ -11,6 +11,24 @@ export default function Shell({ children }: { children: ReactNode }) {
   const id = loc.pathname.startsWith('/c/') ? loc.pathname.split('/')[2] : undefined
   const [convs, setConvs] = useState<Conversation[]>([])
   const [open, setOpen] = useState(false)
+  // Barra laterale a scomparsa (desktop): ricordata tra una sessione e l'altra; l'editor la chiude da solo per fare spazio.
+  const [collapsed, setCollapsed] = useState<boolean>(() => { try { return localStorage.getItem('familai:sidebar') === 'collapsed' } catch { return false } })
+  const [autoCollapsed, setAutoCollapsed] = useState(false)
+  const toggleSidebar = () => {
+    const next = !collapsed
+    setCollapsed(next); setAutoCollapsed(false)
+    try { localStorage.setItem('familai:sidebar', next ? 'collapsed' : 'open') } catch {}
+  }
+  useEffect(() => {
+    const inEditor = loc.pathname.startsWith('/editor')
+    if (inEditor && !collapsed) { setCollapsed(true); setAutoCollapsed(true) }
+    else if (!inEditor && autoCollapsed) { setCollapsed(false); setAutoCollapsed(false) }
+  }, [loc.pathname])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && !e.shiftKey) { e.preventDefault(); toggleSidebar() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [collapsed])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     try {
@@ -48,13 +66,14 @@ export default function Shell({ children }: { children: ReactNode }) {
 
   const isChild = me?.user.role === 'child'
   return (
-    <div className={`shell ${open ? 'open' : ''}`}>
+    <div className={`shell ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <span>🏠 FamilAI</span>
           <span className="row" style={{ gap: 4 }}>
             {!isChild && <Approvals />}
             <button className="icon" onClick={() => setOpen(false)}>✕</button>
+            <button className="icon collapse-btn" onClick={toggleSidebar} title="Nascondi la barra laterale (⌘/Ctrl+B)">◀</button>
           </span>
         </div>
         <button className="primary wide" onClick={newChat}>＋ Nuova chat</button>
@@ -91,6 +110,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       </aside>
       <main className="main">
         <button className="icon menu-btn" onClick={() => setOpen(true)}>☰</button>
+        <button className="icon expand-btn" onClick={toggleSidebar} title="Mostra la barra laterale (⌘/Ctrl+B)">☰</button>
         {children}
       </main>
     </div>
