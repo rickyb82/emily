@@ -457,9 +457,26 @@ async def providers_status(ctx: AuthContext = Depends(require_admin), db: AsyncS
     st = await settings_store.describe(db)
     active = {p["id"]: p for p in available_providers()}
     cards = []
+    comfy_models: list[dict] = []
+    if settings.comfyui_url:
+        try:
+            from ..services import comfyui as _comfy
+            from ..services.comfyui import PRESETS as _PRESETS
+            info = await _comfy.models_available()
+            have = info["checkpoints"] + info["unets"]
+            # preset disponibili (se il file c'e') + file grezzi presenti sul server
+            for name, p in _PRESETS.items():
+                need = p.get("unet") or p.get("ckpt")
+                if any(need in h for h in have):
+                    comfy_models.append({"id": name, "label": f"{name} ({need})"})
+            for h in have:
+                comfy_models.append({"id": h, "label": h})
+        except Exception:
+            comfy_models = []
     for c in PROVIDER_CARDS:
         cards.append({**c, "key_state": st[c["key"]], "model_state": st[c["model_key"]] if c["model_key"] else None,
-                      "active": c["id"] in active, "models": active.get(c["id"], {}).get("models", [])})
+                      "active": c["id"] in active or (c["id"] == "comfyui" and bool(comfy_models)),
+                      "models": comfy_models if c["id"] == "comfyui" else active.get(c["id"], {}).get("models", [])})
     from .google_auth import redirect_uri
     from ..providers.registry import _providers
 
