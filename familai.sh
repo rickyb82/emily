@@ -9,7 +9,8 @@
 #   ./familai.sh users                   elenca gli utenti
 #   ./familai.sh deploy [user@host]      dal Mac: git push + "update" sulla macchina Ubuntu via SSH (host anche in .deploy)
 #   ./familai.sh portainer up|down|logs  pannello web Docker (Portainer) su https://<ip>:9443 per gestire altri container
-#   ./familai.sh wordcraft up|down|logs|build  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor completo nel browser
+#   ./familai.sh wordcraft up|down|logs  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor nel browser
+#   ./familai.sh gridcraft up|down|logs  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -108,34 +109,41 @@ case "${1:-}" in
       update) $DC -f extras/portainer.yml pull && $DC -f extras/portainer.yml up -d;;
       *) echo "uso: ./familai.sh portainer up|down|logs|update"; exit 1;;
     esac;;
-  wordcraft)
+  wordcraft|gridcraft)
+    # App ArtCraft: CLI+MCP per il modello e editor web (extras/artcraft). Stessa logica per entrambe.
     need_env
+    app="$1"; APPU=$(echo "$app" | tr a-z A-Z)
+    port=7982; [ "$app" = gridcraft ] && port=7983
     set_env() { # set_env CHIAVE valore (idempotente)
       if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi
     }
     case "${2:-up}" in
       up|build)
-        # attiva il profilo compose e le variabili del backend
+        mkdir -p "data/$app"
         if grep -q '^COMPOSE_PROFILES=' .env; then
-          grep -q '^COMPOSE_PROFILES=.*wordcraft' .env || { sed -i.bak 's/^COMPOSE_PROFILES=\(.*\)$/COMPOSE_PROFILES=\1,wordcraft/' .env && rm -f .env.bak; }
+          grep -q "^COMPOSE_PROFILES=.*$app" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,$app/" .env && rm -f .env.bak; }
         else
-          echo 'COMPOSE_PROFILES=wordcraft' >> .env
+          echo "COMPOSE_PROFILES=$app" >> .env
         fi
-        set_env WORDCRAFT_HOST wordcraft:7982
-        set_env WORDCRAFT_WEB 1
-        echo ">> Build di WordCraft: CLI/MCP + editor web (compila Rust due volte: la prima volta anche 30-60 minuti in tutto)…"
-        DOCKER_BUILDKIT=1 compose --profile wordcraft build wordcraft wordcraft-web
-        compose --profile wordcraft up -d wordcraft wordcraft-web
+        set_env "${APPU}_HOST" "$app:$port"
+        set_env "${APPU}_WEB" 1
+        echo ">> Build di $app: CLI/MCP + editor web (compila Rust due volte: la prima volta anche 30-60 minuti in tutto)…"
+        DOCKER_BUILDKIT=1 compose --profile "$app" build "$app" "$app-web"
+        compose --profile "$app" up -d "$app" "$app-web"
         compose up -d --build backend
         compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
-        echo ">> WordCraft attivo. In chat: 'scrivimi una lettera in Word'; nel menu: 📝 Documenti per l'editor completo.";;
+        if [ "$app" = wordcraft ]; then
+          echo ">> WordCraft attivo. In chat: 'scrivimi una lettera in Word'; nel menu: 📝 Documenti per l'editor completo."
+        else
+          echo ">> GridCraft attivo. In chat: 'fammi il bilancio in Excel'; nel menu: 📝 Documenti per l'editor completo."
+        fi;;
       down)
-        compose --profile wordcraft stop wordcraft wordcraft-web
-        set_env WORDCRAFT_HOST ""
-        set_env WORDCRAFT_WEB ""
+        compose --profile "$app" stop "$app" "$app-web"
+        set_env "${APPU}_HOST" ""
+        set_env "${APPU}_WEB" ""
         compose up -d backend;;
-      logs) compose --profile wordcraft logs -f --tail=100 wordcraft wordcraft-web;;
-      *) echo "uso: ./familai.sh wordcraft up|down|logs|build"; exit 1;;
+      logs) compose --profile "$app" logs -f --tail=100 "$app" "$app-web";;
+      *) echo "uso: ./familai.sh $app up|down|logs|build"; exit 1;;
     esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.

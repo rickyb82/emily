@@ -1,0 +1,30 @@
+# App "ArtCraft" (WordCraft, GridCraft…): CLI headless con server MCP, compilata dal sorgente Rust.
+# Il server MCP parla su stdio; socat lo espone su una porta della rete Docker dove il backend FamilAI lo raggiunge
+# (una sessione nuova per ogni connessione). I file passano dalla cartella condivisa /data.
+# Prima build: 15-40 minuti e qualche GB di cache; le successive sono rapide (cache di cargo e target).
+ARG APP=wordcraft
+ARG REPO=https://github.com/rickyb82/${APP}
+ARG REF=main
+
+FROM rust:1-bookworm AS build
+ARG APP
+ARG REPO
+ARG REF
+RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config cmake clang \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN git clone --depth 1 --branch "$REF" "$REPO" .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-cli-${APP} \
+    cargo build --release -p ${APP}-cli && cp target/release/${APP}-cli /usr/local/bin/${APP}-cli
+
+FROM debian:bookworm-slim
+ARG APP
+RUN apt-get update && apt-get install -y --no-install-recommends socat ca-certificates fontconfig \
+    fonts-dejavu fonts-liberation2 fonts-noto-core fonts-crosextra-carlito fonts-crosextra-caladea \
+    && rm -rf /var/lib/apt/lists/* && fc-cache -f
+COPY --from=build /usr/local/bin/${APP}-cli /usr/local/bin/${APP}-cli
+COPY serve-mcp.sh /usr/local/bin/serve-mcp
+RUN chmod +x /usr/local/bin/serve-mcp && mkdir -p /data/${APP}
+ENV APP=${APP} WORDCRAFT_NO_PREFS=1 GRIDCRAFT_NO_PREFS=1 MCP_PORT=7982 MCP_ARGS=""
+CMD ["serve-mcp"]

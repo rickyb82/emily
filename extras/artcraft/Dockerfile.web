@@ -1,13 +1,14 @@
-# WordCraft nel browser (WebAssembly): l'editor completo servito da FamilAI su /wordcraft/.
-# Build: trunk compila apps/wordcraft-web per wasm32 (lunga come quella della CLI, 15-40 minuti la prima volta).
-# Prima della build viene applicata familai-web-patch.py: ?open=<url> apre un documento del server, ?save=<url>
-# fa salvare sul server invece di scaricare. Il risultato e' un sito statico servito da nginx.
-ARG WORDCRAFT_REPO=https://github.com/rickyb82/wordcraft
-ARG WORDCRAFT_REF=main
+# App "ArtCraft" nel browser (WebAssembly): l'editor completo servito da FamilAI su /<app>/.
+# trunk compila apps/<app>-web per wasm32 (lunga come la CLI la prima volta). Prima della build viene applicata
+# familai-web-patch.py: ?open=<url> apre un file del server, ?save=<url> fa salvare sul server invece di scaricare.
+ARG APP=wordcraft
+ARG REPO=https://github.com/rickyb82/${APP}
+ARG REF=main
 
 FROM rust:1-bookworm AS build
-ARG WORDCRAFT_REPO
-ARG WORDCRAFT_REF
+ARG APP
+ARG REPO
+ARG REF
 RUN apt-get update && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN rustup target add wasm32-unknown-unknown
@@ -15,12 +16,12 @@ RUN rustup target add wasm32-unknown-unknown
 RUN set -eux; arch="$(uname -m)"; case "$arch" in x86_64) t=x86_64-unknown-linux-gnu;; aarch64|arm64) t=aarch64-unknown-linux-gnu;; *) echo "arch $arch non supportata"; exit 1;; esac; \
     curl -fsSL "https://github.com/trunk-rs/trunk/releases/latest/download/trunk-${t}.tar.gz" | tar xz -C /usr/local/bin trunk; trunk --version
 WORKDIR /src
-RUN git clone --depth 1 --branch "$WORDCRAFT_REF" "$WORDCRAFT_REPO" .
+RUN git clone --depth 1 --branch "$REF" "$REPO" .
 COPY familai-web-patch.py /familai-web-patch.py
-RUN python3 /familai-web-patch.py /src
-WORKDIR /src/apps/wordcraft-web
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
+RUN python3 /familai-web-patch.py /src ${APP}
+WORKDIR /src/apps/${APP}-web
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-web-${APP} \
     trunk build --release && ls -la /src/dist/web
 
 FROM nginx:alpine

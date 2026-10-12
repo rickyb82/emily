@@ -101,7 +101,7 @@ export interface Me {
   mfa_required: boolean
   providers: Provider[]
   tools: string[]
-  features?: { wordcraft_web?: boolean; wordcraft_mcp?: boolean }
+  features?: { wordcraft_web?: boolean; wordcraft_mcp?: boolean; gridcraft_web?: boolean; gridcraft_mcp?: boolean }
 }
 export interface Provider {
   id: string

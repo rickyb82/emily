@@ -29,10 +29,14 @@
         reverse_proxy backend:8000
     }
 
-    # WordCraft nel browser (editor di documenti, se il profilo wordcraft e' attivo)
+    # Editor nel browser (se i profili wordcraft / gridcraft sono attivi)
     handle_path /wordcraft/* {
         encode zstd gzip
         reverse_proxy wordcraft-web:80
+    }
+    handle_path /gridcraft/* {
+        encode zstd gzip
+        reverse_proxy gridcraft-web:80
     }
 
     # Webapp

@@ -25,7 +25,6 @@ settings = get_settings()
 ROLE_RANK = {Role.child: 0, Role.adult: 1, Role.admin: 2}
 MIN_ROLE_RANK = {"child": 0, "adult": 1, "admin": 2}
 CONNECT_TIMEOUT = 45
-WORDCRAFT = "wordcraft"
 
 
 @dataclass
@@ -85,11 +84,13 @@ class MCPManager:
             for row in rows:
                 if row.enabled:
                     asyncio.create_task(self.connect(self.config_from_row(row)))
-            if settings.wordcraft_host and not any(r.name == WORDCRAFT for r in rows):
-                # container WordCraft (extras/wordcraft): MCP stdio esposto via socat sulla rete Docker
-                asyncio.create_task(self.connect(ServerConfig(
-                    name=WORDCRAFT, type="stdio", command="socat", args=["-", f"TCP:{settings.wordcraft_host}"],
-                    min_role="adult", enabled=True)))
+            # app ArtCraft (extras/artcraft): MCP stdio esposto via socat sulla rete Docker
+            from .artcraft import APPS, host_for
+            for app in APPS:
+                if host_for(app) and not any(r.name == app for r in rows):
+                    asyncio.create_task(self.connect(ServerConfig(
+                        name=app, type="stdio", command="socat", args=["-", f"TCP:{host_for(app)}"],
+                        min_role="adult", enabled=True)))
 
     async def stop(self) -> None:
         for name in list(self.conns):
@@ -175,9 +176,9 @@ class MCPManager:
                     conn.session = session
                     conn.connected = True
                     conn.error = ""
-                    if cfg.name == WORDCRAFT:
-                        from .wordcraft import register_tools as _wc_register
-                        _wc_register()
+                    from .artcraft import APPS as _ARTCRAFT, register_tools as _ac_register
+                    if cfg.name in _ARTCRAFT:
+                        _ac_register(cfg.name)
                     conn.ready.set()
                     log.info("MCP %s: connesso, %d tool", cfg.name, len(conn.tools))
                     await conn.stop.wait()
@@ -189,8 +190,9 @@ class MCPManager:
             conn.session = None
             conn.ready.set()
             unregister_prefix(f"mcp__{cfg.name}__")
-            if cfg.name == WORDCRAFT:
-                unregister_prefix("write_document")
+            from .artcraft import APPS as _ARTCRAFT, unregister_tools as _ac_unregister
+            if cfg.name in _ARTCRAFT:
+                _ac_unregister(cfg.name)
 
     def _make_caller(self, server: str, tool: str):
         async def call(args: dict, ctx: ToolContext) -> ToolResult:
@@ -204,8 +206,8 @@ class MCPManager:
             except Exception as e:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts, artifacts = await self._collect(res, ctx)
-            if server == WORDCRAFT and tool == "save_document" and not res.isError:
-                from .wordcraft import register_saved_file
+            from .artcraft import APPS as _ARTCRAFT, register_saved_file
+            if server in _ARTCRAFT and tool == _ARTCRAFT[server]["save_tool"] and not res.isError:
                 art = await register_saved_file(ctx, str(args.get("path") or ""))
                 if art:
                     artifacts.append(art)

@@ -145,6 +145,18 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile)."
             + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
                "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
+    if mcp_manager.is_connected("gridcraft"):
+        parts.append(
+            "\n# Fogli di calcolo (GridCraft)\n"
+            "- Per tabelle da scaricare, bilanci, elenchi con totali, preventivi, registri e qualsiasi cosa 'da Excel' usa "
+            "write_spreadsheet: passa le righe (prima riga = intestazioni) con numeri veri (non stringhe) e formule Excel per i "
+            "totali (es. \"=SUM(B2:B9)\"); aggiungi formats (numberFormat Currency/Percentage, bold) e charts quando servono. "
+            "L'utente riceve il file .xlsx in chat: non proporre di 'copiare la tabella in Excel'.\n"
+            "- Per leggere o modificare un allegato xlsx/csv/ods passa source_file_id oppure usa i tool mcp__gridcraft__* "
+            "(open_workbook con il percorso del file, read_range, evaluate_formula, format_range, insert_chart, save_workbook in "
+            + str(settings.data_dir / "gridcraft") + "/<nome>.xlsx)."
+            + ("\n- L'utente puo' aprire e modificare ogni foglio con l'editor GridCraft integrato (✏️ Modifica accanto al file, "
+               "o menu 📝 Documenti)." if settings.gridcraft_web else ""))
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available
@@ -378,7 +390,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tools.append(t.spec)
 
     if provider.id == "ollama" and getattr(provider, "is_small", lambda m: True)(model):
-        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set())
+        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set()) | ({"write_spreadsheet"} if mcp_manager.is_connected("gridcraft") else set())
         # Modelli locali piccoli (Qwen3 8B & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
         # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
         # I modelli grandi (es. gpt-oss:120b) ricevono tutti i tool.

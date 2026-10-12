@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type FileOut } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { APP_ICON, APP_LABEL, editorFor, type ArtApp } from '../lib/artcraft'
 
 /**
- * Editor di documenti: WordCraft (word processor open source, WebAssembly) in un iframe a tutta pagina.
- * ?file=<id> apre quel file del server; con &new=1 e' un documento nuovo (l'id lo ha scelto il browser):
- * File > Salva nell'editor spedisce il file a /api/files/wordcraft-save, che lo crea o lo sovrascrive.
+ * Editor a tutta pagina: WordCraft (documenti) o GridCraft (fogli di calcolo), app open source in WebAssembly in un iframe.
+ * ?file=<id> apre quel file del server (l'app la decide l'estensione); con &new=1&app=... e' un file nuovo (l'id lo ha
+ * scelto il browser). File > Salva nell'editor spedisce il file a /api/files/wordcraft-save, che lo crea o lo sovrascrive.
  */
 export default function Editor() {
   const { me } = useAuth()
@@ -17,6 +18,9 @@ export default function Editor() {
   const [file, setFile] = useState<FileOut | null>(null)
   const [err, setErr] = useState('')
   const [canWrite, setCanWrite] = useState(true)
+  const [loaded, setLoaded] = useState(false)
+  const name = file?.filename || params.get('name') || ''
+  const app: ArtApp = (params.get('app') as ArtApp) || editorFor(name) || 'wordcraft'
 
   useEffect(() => {
     if (isNew || !fileId) return
@@ -26,9 +30,10 @@ export default function Editor() {
         setFile(f)
         setCanWrite(f.owner_id === me?.user.id)
       }
-    }).catch(() => {})
+    }).catch(() => {}).finally(() => setLoaded(true))
     // anche un file non in elenco (es. di un progetto condiviso) si apre: il download controlla i permessi
   }, [fileId, isNew, me?.user.id])
+  const ready = isNew || loaded
 
   const src = useMemo(() => {
     if (!fileId) return ''
@@ -39,19 +44,19 @@ export default function Editor() {
     const q = new URLSearchParams()
     if (!isNew) {
       q.set('open', `/files/${fileId}`)
-      q.set('name', file?.filename || params.get('name') || 'documento.docx')
-    } else if (params.get('name')) {
-      q.set('name', params.get('name')!)
+      q.set('name', name || 'documento')
+    } else if (name) {
+      q.set('name', name)
     }
     if (canWrite) q.set('save', `/api/files/wordcraft-save?${saveQ.toString()}`)
-    return `/wordcraft/?${q.toString()}`
-  }, [fileId, isNew, file?.filename, canWrite, params])
+    return `/${app}/?${q.toString()}`
+  }, [fileId, isNew, name, canWrite, params, app])
 
-  if (!me?.features?.wordcraft_web) {
+  if (!me?.features?.[`${app}_web`]) {
     return (
       <div className="page">
-        <h2>📝 Editor documenti</h2>
-        <p className="muted">L'editor WordCraft non è attivo su questo server. Un amministratore può avviarlo con <code>./familai.sh wordcraft up</code>.</p>
+        <h2>{APP_ICON[app]} Editor</h2>
+        <p className="muted">L'editor {APP_LABEL[app]} non è attivo su questo server. Un amministratore può avviarlo con <code>./familai.sh {app} up</code>.</p>
       </div>
     )
   }
@@ -60,7 +65,8 @@ export default function Editor() {
   return (
     <div className="editor-layout">
       <header className="chat-header">
-        <div className="title">📝 {isNew ? 'Nuovo documento' : (file?.filename || 'Documento')}
+        <div className="title">{APP_ICON[app]} {isNew ? (app === 'gridcraft' ? 'Nuovo foglio di calcolo' : 'Nuovo documento') : (file?.filename || 'Documento')}
+          <small className="muted"> · {APP_LABEL[app]}</small>
           {!canWrite && <small className="muted"> · sola lettura (Salva scarica una copia)</small>}
         </div>
         <div className="row">
@@ -69,11 +75,13 @@ export default function Editor() {
         </div>
       </header>
       {err && <div className="error">{err}</div>}
-      <iframe className="editor-frame" src={src} title="WordCraft" allow="clipboard-read; clipboard-write"
-        onError={() => setErr("L'editor non si è caricato: il container wordcraft-web è attivo?")} />
+      {ready ? (
+        <iframe className="editor-frame" src={src} title={APP_LABEL[app]} allow="clipboard-read; clipboard-write"
+          onError={() => setErr(`L'editor non si è caricato: il container ${app}-web è attivo?`)} />
+      ) : <div className="editor-frame center muted">Caricamento…</div>}
       <p className="muted small editor-hint">
         Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato.
-        <b> File › Esporta</b> in PDF crea un nuovo file accanto a questo. Serve un browser con WebGPU o WebGL2.
+        <b> File › Esporta</b> (PDF, CSV…) crea un nuovo file accanto a questo. Serve un browser con WebGPU o WebGL2.
       </p>
     </div>
   )

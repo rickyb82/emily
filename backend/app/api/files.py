@@ -23,10 +23,12 @@ from ..tools.documents import extract_text
 settings = get_settings()
 router = APIRouter(tags=["files"])
 
-ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", ".csv", ".json", ".docx", ".xlsx",
-               ".xlsm", ".mp4", ".mp3", ".wav", ".m4a", ".py", ".js", ".ts", ".html", ".odt", ".rtf", ".doc", ".tex"}
-# formati che l'editor WordCraft nel browser puo' aprire e salvare
+ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", ".csv", ".tsv", ".json", ".docx", ".xlsx",
+               ".xlsm", ".xls", ".xlsb", ".ods", ".mp4", ".mp3", ".wav", ".m4a", ".py", ".js", ".ts", ".html", ".odt", ".rtf", ".doc", ".tex"}
+# formati che gli editor nel browser (WordCraft / GridCraft) possono aprire e salvare
 WORDCRAFT_EXT = {".docx", ".docm", ".dotx", ".doc", ".odt", ".rtf", ".txt", ".md", ".html", ".htm", ".tex", ".json", ".pdf", ".png"}
+GRIDCRAFT_EXT = {".xlsx", ".xlsm", ".xls", ".xlsb", ".ods", ".csv", ".tsv", ".txt", ".json", ".html", ".pdf", ".png"}
+EDITOR_EXT = WORDCRAFT_EXT | GRIDCRAFT_EXT
 
 
 def _out(f: FileAsset) -> FileOut:
@@ -83,7 +85,7 @@ async def reindex(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncS
 async def wordcraft_save(request: Request, background: BackgroundTasks, file_id: str, conversation_id: str | None = None,
                          project_id: str | None = None, ctx: AuthContext = Depends(require_auth),
                          db: AsyncSession = Depends(get_db)):
-    """Salvataggio dall'editor WordCraft nel browser (File > Salva / Esporta): il corpo e' il file, il nome arriva
+    """Salvataggio dagli editor nel browser, WordCraft e GridCraft (File > Salva / Esporta): il corpo e' il file, il nome arriva
     nell'header X-Filename. `file_id` e' il documento aperto: se esiste e l'estensione coincide viene sovrascritto
     (e reindicizzato); se non esiste (documento nuovo: id generato dal client) viene creato con quell'id; se
     l'estensione e' diversa (es. esportazione in PDF) nasce un nuovo file accanto all'originale."""
@@ -95,7 +97,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
         raise HTTPException(400, "file_id non valido")
     name = re.sub(r"[^\w.\- ]", "_", unquote(request.headers.get("X-Filename", "") or "documento.docx"))[:200]
     ext = Path(name).suffix.lower() or ".docx"
-    if ext not in WORDCRAFT_EXT:
+    if ext not in EDITOR_EXT:
         raise HTTPException(400, f"Formato non consentito ({ext})")
     data = await request.body()
     max_bytes = int(effective_policy(ctx.user).get("max_upload_mb", 20)) * 1024 * 1024

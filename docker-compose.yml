@@ -13,6 +13,8 @@ services:
       - SANDBOX_URL=http://sandbox:8080
       - WORDCRAFT_HOST=${WORDCRAFT_HOST:-}
       - WORDCRAFT_WEB=${WORDCRAFT_WEB:-}
+      - GRIDCRAFT_HOST=${GRIDCRAFT_HOST:-}
+      - GRIDCRAFT_WEB=${GRIDCRAFT_WEB:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -28,11 +30,10 @@ services:
       - sandbox_net
     depends_on:
       - sandbox
-
-  # Esecuzione codice generato dall'AI: isolata, senza internet, risorse limitate
     extra_hosts:
       - "host.docker.internal:host-gateway"   # per raggiungere Ollama nativo sull'host (Mac/Linux)
 
+  # Esecuzione codice generato dall'AI: isolata, senza internet, risorse limitate
   sandbox:
     build: ./sandbox
     restart: unless-stopped
@@ -111,32 +112,52 @@ services:
     #     reservations:
     #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
 
-  # WordCraft (opzionale): word processor open source con server MCP. Il modello crea/modifica documenti Word, ODT,
-  # PDF... Attiva con COMPOSE_PROFILES=wordcraft e WORDCRAFT_HOST=wordcraft:7982 nel .env (./familai.sh wordcraft up).
+  # App ArtCraft (opzionali): WordCraft (word processor) e GridCraft (foglio di calcolo), open source in Rust.
+  # Ogni app ha due container: la CLI con il server MCP (il modello crea/modifica i file dalla chat) e l'editor completo
+  # nel browser (WebAssembly, servito da Caddy su /wordcraft/ e /gridcraft/). Attivazione: ./familai.sh wordcraft up,
+  # ./familai.sh gridcraft up (imposta COMPOSE_PROFILES e le variabili *_HOST / *_WEB nel .env).
   wordcraft:
-    build:
-      context: extras/wordcraft
+    build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: wordcraft } }
     image: familai-wordcraft
     profiles: ["wordcraft"]
     restart: unless-stopped
+    environment:
+      - MCP_PORT=7982
+      # lettura: tutta /data (allegati e file generati); scrittura: solo /data/wordcraft
+      - MCP_ARGS=--author FamilAI --automation-read-root /data --automation-write-root /data/wordcraft
     volumes:
       - ./data:/data
-    expose:
-      - "7982"
-    logging:
-      driver: json-file
-      options: { max-size: "1m", max-file: "1" }
+    expose: ["7982"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
-  # WordCraft nel browser (editor completo su /wordcraft/, stesso profilo)
   wordcraft-web:
-    build:
-      context: extras/wordcraft
-      dockerfile: Dockerfile.web
+    build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: wordcraft } }
     image: familai-wordcraft-web
     profiles: ["wordcraft"]
     restart: unless-stopped
-    expose:
-      - "80"
+    expose: ["80"]
+
+  gridcraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: gridcraft } }
+    image: familai-gridcraft
+    profiles: ["gridcraft"]
+    restart: unless-stopped
+    environment:
+      - MCP_PORT=7983
+      - MCP_ARGS=
+    volumes:
+      # GridCraft non ha il confinamento delle cartelle: legge /data in sola lettura e scrive solo in /data/gridcraft
+      - ./data:/data:ro
+      - ./data/gridcraft:/data/gridcraft
+    expose: ["7983"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  gridcraft-web:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: gridcraft } }
+    image: familai-gridcraft-web
+    profiles: ["gridcraft"]
+    restart: unless-stopped
+    expose: ["80"]
 
 networks:
   default:

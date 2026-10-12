@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { del, get, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { editableInWordcraft, editorPath, newDocumentPath } from '../lib/wordcraft'
+import { canEdit, editorFor, editorPath, newFilePath } from '../lib/artcraft'
 
 /** I documenti dell'utente (caricati, generati dall'assistente, scritti nell'editor) con apertura in WordCraft. */
 export default function Documents() {
@@ -33,9 +33,12 @@ export default function Documents() {
     try { await del(`/files/${f.id}`); load() } catch (e: any) { setErr(e.message) }
   }
 
-  const web = !!me?.features?.wordcraft_web
+  const wc = !!me?.features?.wordcraft_web
+  const gc = !!me?.features?.gridcraft_web
+  const web = wc || gc
+  const feats = me?.features
   const shown = files
-    .filter((f) => !onlyDocs || editableInWordcraft(f.filename) || f.filename.toLowerCase().endsWith('.pdf'))
+    .filter((f) => !onlyDocs || editorFor(f.filename) || f.filename.toLowerCase().endsWith('.pdf'))
     .filter((f) => !filter || f.filename.toLowerCase().includes(filter.toLowerCase()))
   const projName = (id: string | null) => projects.find((p) => p.id === id)?.name
 
@@ -43,12 +46,13 @@ export default function Documents() {
     <div className="page">
       <h2>📝 Documenti</h2>
       <p className="muted">
-        {web ? 'Scrivi e modifica documenti Word, ODT e Markdown direttamente qui, con WordCraft (word processor open source): niente installazioni, i file restano in casa.'
-             : "L'editor WordCraft non è attivo (./familai.sh wordcraft up): qui trovi comunque i tuoi file."}
+        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)'].filter(Boolean).join(' e ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
+             : "Gli editor non sono attivi (./familai.sh wordcraft up / gridcraft up): qui trovi comunque i tuoi file."}
       </p>
       {err && <div className="error">{err}</div>}
       <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
-        {web && <button className="primary" onClick={() => nav(newDocumentPath())}>＋ Nuovo documento</button>}
+        {wc && <button className="primary" onClick={() => nav(newFilePath('wordcraft'))}>＋ Documento</button>}
+        {gc && <button className="primary" onClick={() => nav(newFilePath('gridcraft'))}>＋ Foglio di calcolo</button>}
         <button className="ghost" onClick={() => fileInput.current?.click()}>📎 Carica</button>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         <input placeholder="Cerca…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 220 }} />
@@ -59,15 +63,15 @@ export default function Documents() {
         {shown.map((f) => (
           <li key={f.id} className="row between wrap" style={{ gap: 8 }}>
             <span>
-              {web && editableInWordcraft(f.filename)
-                ? <Link to={editorPath(f.id)} title="Apri nell'editor"><b>{f.filename}</b></Link>
+              {canEdit(f.filename, feats)
+                ? <Link to={editorPath(f.id, f.filename)} title="Apri nell'editor"><b>{editorFor(f.filename) === 'gridcraft' ? '📊' : '📝'} {f.filename}</b></Link>
                 : <a href={f.url} target="_blank" rel="noreferrer"><b>{f.filename}</b></a>}
               <small className="muted"> · {(f.size / 1024).toFixed(0)} KB · {new Date(f.created_at).toLocaleDateString()}
                 {f.kind === 'generated' && ' · creato qui'}{f.project_id && projName(f.project_id) && ` · 📁 ${projName(f.project_id)}`}
                 {f.conversation_id && <> · <Link to={`/c/${f.conversation_id}`}>chat</Link></>}</small>
             </span>
             <span className="row" style={{ gap: 4 }}>
-              {web && editableInWordcraft(f.filename) && <Link className="ghost btn-link small" to={editorPath(f.id)}>✏️ Modifica</Link>}
+              {canEdit(f.filename, feats) && <Link className="ghost btn-link small" to={editorPath(f.id, f.filename)}>✏️ Modifica</Link>}
               <a className="ghost btn-link small" href={f.url} target="_blank" rel="noreferrer">⬇</a>
               {f.owner_id === me?.user.id && <button className="icon" title="Elimina" onClick={() => remove(f)}>🗑</button>}
             </span>

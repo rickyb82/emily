@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     mcp_config_path: Path = Path("mcp_servers.json")
     wordcraft_host: str = ""          # host:porta del container WordCraft (es. wordcraft:7982): documenti Word/PDF via MCP
     wordcraft_web: bool = False       # editor WordCraft nel browser servito su /wordcraft/ (container wordcraft-web)
+    gridcraft_host: str = ""          # host:porta del container GridCraft (es. gridcraft:7983): fogli di calcolo via MCP
+    gridcraft_web: bool = False       # editor GridCraft nel browser servito su /gridcraft/ (container gridcraft-web)
 
     # Email (SMTP) — configurabile dal pannello
     smtp_host: str = ""

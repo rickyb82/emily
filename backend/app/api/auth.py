@@ -248,8 +248,9 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
         not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
     from ..tools.mcp_client import mcp_manager
-    features = {"wordcraft_web": bool(settings.wordcraft_web) and ctx.user.role != Role.child,
-                "wordcraft_mcp": mcp_manager.is_connected("wordcraft")}
+    adult = ctx.user.role != Role.child
+    features = {"wordcraft_web": bool(settings.wordcraft_web) and adult, "wordcraft_mcp": mcp_manager.is_connected("wordcraft"),
+                "gridcraft_web": bool(settings.gridcraft_web) and adult, "gridcraft_mcp": mcp_manager.is_connected("gridcraft")}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
 

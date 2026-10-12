@@ -1,7 +1,7 @@
 import Markdown from './Markdown'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { editableInWordcraft, editorPath } from '../lib/wordcraft'
+import { canEdit, editorPath } from '../lib/artcraft'
 import type { Message } from '../lib/api'
 import { useEffect, useState } from 'react'
 import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
@@ -18,6 +18,7 @@ const TOOL_LABELS: Record<string, string> = {
   delete_artifact: '🗑 Eliminazione artifact',
   run_code: '⚙️ Esecuzione codice',
   write_document: '📝 Documento con WordCraft',
+  write_spreadsheet: '📊 Foglio con GridCraft',
   ask_model: '🤝 Consulto un altro modello',
   remember: '🧠 Memorizzo',
   forget: '🧠 Dimentico',
@@ -118,7 +119,7 @@ function inputSummary(name: string, input: any): string {
 /** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
 function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
   const [open, setOpen] = useState(false)
-  const wordcraftWeb = !!useAuth().me?.features?.wordcraft_web
+  const feats = useAuth().me?.features
   const running = b.status === 'running'
   const err = !!b.is_error
   const summary = inputSummary(b.name, b.input)
@@ -143,7 +144,7 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
         ) : a.type === 'file' ? (
           <span key={j} className="chip">
             <a href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
-            {wordcraftWeb && a.file_id && editableInWordcraft(a.filename) && <Link to={editorPath(a.file_id)} title="Apri nell'editor WordCraft" style={{ marginLeft: 6 }}>✏️ Modifica</Link>}
+            {a.file_id && canEdit(a.filename, feats) && <Link to={editorPath(a.file_id, a.filename)} title="Apri nell'editor" style={{ marginLeft: 6 }}>✏️ Modifica</Link>}
           </span>
         ) : a.type === 'artifact_deleted' ? (
           <div key={j} className="muted small" style={{ padding: '0 10px 8px' }}>🗑 Eliminato: {a.title}</div>
