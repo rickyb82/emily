@@ -70,6 +70,8 @@ COMMON = r'''
         let window = web_sys::window().ok_or("no window")?;
         let headers = web_sys::Headers::new().map_err(js)?;
         headers.set("Content-Type", "application/octet-stream").map_err(js)?;
+        // FamilAI accetta scritture solo con questo header (protezione CSRF)
+        headers.set("X-Requested-With", "FamilAI").map_err(js)?;
         let encoded = js_sys::encode_uri_component(name).as_string().unwrap_or_default();
         headers.set("X-Filename", &encoded).map_err(js)?;
         let opts = web_sys::RequestInit::new();
@@ -212,7 +214,30 @@ if app == "wordcraft":
           "                        app.ui.language = lang;\n"
           "                    }\n",
           "web.rs: ?lang=")
+    patch(web_rs,
+          "                    app.autosave = false;\n",
+          "                    // FamilAI: con ?save= il salvataggio va al server, quindi AutoSave puo' restare acceso\n"
+          "                    let host_save = familai::save_url().is_some();\n"
+          "                    wordcraft_ui_egui::FAMILAI_HOST_SAVE.store(host_save, std::sync::atomic::Ordering::Relaxed);\n"
+          "                    app.autosave = host_save;\n",
+          "web.rs: AutoSave con ?save=")
     patch(web_rs, "\nfn mime_for(", HEAD_WORDCRAFT + SAVE_WORDCRAFT + COMMON + "\nfn mime_for(", "web.rs: modulo familai")
+    lib_rs = root / "crates/ui-egui/src/lib.rs"
+    patch(lib_rs,
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\n",
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\n\n"
+          "/// FamilAI: true when the page saves to a server (`?save=`), so AutoSave is allowed in the browser.\n"
+          "pub static FAMILAI_HOST_SAVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n",
+          "lib.rs: flag FAMILAI_HOST_SAVE")
+    patch(lib_rs,
+          "        if self.services.download.is_some() {\n            return Some(AutoSaveBlock::Browser);\n        }\n",
+          "        let host_save = FAMILAI_HOST_SAVE.load(std::sync::atomic::Ordering::Relaxed);\n"
+          "        if self.services.download.is_some() && !host_save {\n            return Some(AutoSaveBlock::Browser);\n        }\n",
+          "lib.rs: AutoSave nel browser con host save")
+    patch(lib_rs,
+          "        if !self.saved_here() {\n            return Some(AutoSaveBlock::NotSavedHere);\n        }\n        None\n",
+          "        if !self.saved_here() && !host_save {\n            return Some(AutoSaveBlock::NotSavedHere);\n        }\n        None\n",
+          "lib.rs: AutoSave anche prima del primo salvataggio manuale")
 elif app == "gridcraft":
     patch(cargo, '"ClipboardItem", "Navigator"]', '"ClipboardItem", "Navigator"' + FEATURES, "Cargo.toml: feature web-sys")
     patch(web_rs,

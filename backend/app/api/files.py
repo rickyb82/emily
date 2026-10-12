@@ -69,8 +69,28 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     db.add(asset)
     await db.commit()
     if asset.index_status == "pending":
-        background.add_task(rag.index_file_background, asset.id)
+        _schedule_reindex(asset.id)
     return _out(asset)
+
+
+_reindex_gen: dict[str, int] = {}
+
+
+def _schedule_reindex(file_id: str, delay: float = 20.0) -> None:
+    """L'AutoSave degli editor salva ogni pochi secondi: reindicizza per il RAG solo quando il file e' fermo da un po',
+    cosi' un documento in scrittura non tiene occupato il modello di embedding a ogni battuta."""
+    import asyncio
+
+    gen = _reindex_gen.get(file_id, 0) + 1
+    _reindex_gen[file_id] = gen
+
+    async def later():
+        await asyncio.sleep(delay)
+        if _reindex_gen.get(file_id) == gen:   # nessun salvataggio piu' recente nel frattempo
+            _reindex_gen.pop(file_id, None)
+            await rag.index_file_background(file_id)
+
+    asyncio.get_running_loop().create_task(later())
 
 
 @router.post("/files/{fid}/reindex", response_model=FileOut)

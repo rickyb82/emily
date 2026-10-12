@@ -59,7 +59,7 @@ export default function Editor() {
         if (pid) saveQ.set('project_id', pid)
         try {
           const r = await fetch(`/api/files/wordcraft-save?${saveQ.toString()}`, { method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(d.name || name || 'documento.pdf') }, body: d.bytes })
+            headers: { 'Content-Type': 'application/octet-stream', 'X-Requested-With': 'FamilAI', 'X-Filename': encodeURIComponent(d.name || name || 'documento.pdf') }, body: d.bytes })
           if (!r.ok) throw new Error(`HTTP ${r.status}`)
           setSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
           setErr('')
@@ -126,7 +126,7 @@ export default function Editor() {
           onError={() => setErr(`L'editor non si è caricato: il container ${app}-web è attivo?`)} />
       ) : <div className="editor-frame center muted">Caricamento…</div>}
       <p className="muted small editor-hint">
-        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato.
+        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato{app === 'wordcraft' && ' (e il salvataggio automatico resta attivo)'}.
         {app !== 'pdfcraft' && <><b> File › Esporta</b> (PDF, CSV…) crea un nuovo file accanto a questo.</>} Serve un browser con WebGPU o WebGL2.
       </p>
     </div>
