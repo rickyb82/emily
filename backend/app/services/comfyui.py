@@ -78,11 +78,11 @@ def _custom_workflow(path: str, prompt: str, negative: str, w: int, h: int, seed
     return json.loads(raw)
 
 
-def build_workflow(prompt: str, size: str, negative: str = "") -> tuple[dict, str]:
+def build_workflow(prompt: str, size: str, negative: str = "", model_name: str | None = None) -> tuple[dict, str]:
     w, h = (int(x) for x in (size or "1024x1024").lower().split("x"))
     w, h = max(256, min(w, 2048)) // 16 * 16, max(256, min(h, 2048)) // 16 * 16
     seed = random.randint(0, 2**31 - 1)
-    name = (settings.comfyui_model or "flux-dev").strip()
+    name = (model_name or settings.comfyui_model or "flux-dev").strip()
     if settings.comfyui_workflow and Path(settings.comfyui_workflow).exists():
         return _custom_workflow(settings.comfyui_workflow, prompt, negative, w, h, seed, 20), f"ComfyUI ({Path(settings.comfyui_workflow).name})"
     p = PRESETS.get(name)
@@ -116,9 +116,42 @@ async def models_available() -> dict:
     return {"checkpoints": ckpts, "unets": unets, "stats": stats}
 
 
+_avail_cache: dict = {"at": 0.0, "have": []}
+
+
+async def _available_files() -> list[str]:
+    if time.monotonic() - _avail_cache["at"] < 60 and _avail_cache["have"]:
+        return _avail_cache["have"]
+    try:
+        info = await models_available()
+        _avail_cache.update(at=time.monotonic(), have=info["checkpoints"] + info["unets"])
+    except Exception:
+        pass
+    return _avail_cache["have"]
+
+
+def _preset_ok(name: str, have: list[str]) -> bool:
+    p = PRESETS.get(name)
+    need = (p.get("unet") or p.get("ckpt")) if p else name
+    return any(need in h for h in have)
+
+
+async def resolve_model_name() -> str:
+    """Il modello scelto, oppure il primo preset i cui file esistono davvero sul server (es. gguf scaricato sul Mac)."""
+    name = (settings.comfyui_model or "flux-dev").strip()
+    have = await _available_files()
+    if not have or _preset_ok(name, have):
+        return name
+    for cand in ("flux-dev", "flux-dev-gguf", "flux-schnell", "flux-schnell-gguf", "sdxl", "sd35"):
+        if _preset_ok(cand, have):
+            return cand
+    return name
+
+
 async def generate(prompt: str, size: str = "1024x1024", negative: str = "", timeout_s: int = 300) -> tuple[bytes, str]:
     base = host_url(settings.comfyui_url).rstrip("/")
-    wf, label = build_workflow(prompt, size, negative)
+    name = await resolve_model_name()
+    wf, label = build_workflow(prompt, size, negative, model_name=name)
     client_id = uuid.uuid4().hex
     async with httpx.AsyncClient(timeout=60) as c:
         r = await c.post(f"{base}/prompt", json={"prompt": wf, "client_id": client_id})
