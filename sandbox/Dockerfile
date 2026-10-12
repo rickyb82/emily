@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Librerie Python più richieste per script, dati e grafici (nessuna rete a runtime, quindi vanno preinstallate)
 RUN pip install --no-cache-dir fastapi uvicorn pydantic \
-        numpy pandas matplotlib pillow sympy scipy requests openpyxl python-docx pypdf tabulate
+        numpy pandas matplotlib pillow sympy scipy requests openpyxl python-docx pypdf tabulate \
+        python-pptx reportlab xlsxwriter markdown
 
 RUN useradd -m -u 10001 -s /usr/sbin/nologin runner && mkdir -p /work && chown runner:runner /work
 ENV MPLBACKEND=Agg PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp

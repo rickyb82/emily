@@ -143,6 +143,10 @@ async def run(req: RunRequest):
                 continue  # input non modificato
             if rel == spec["file"] or rel.endswith(".class") or "__pycache__" in rel or "node_modules" in rel:
                 continue
+            # scorie di librerie e strumenti (cache dei font di matplotlib, log di npm, ecc.): non sono "file prodotti"
+            low = p.name.lower()
+            if low.endswith((".log", ".pyc", ".lock")) or low.startswith(("fontlist", "npm-debug")) or ".cache" in rel or "/.npm" in f"/{rel}":
+                continue
             if p.stat().st_size > MAX_FILE_BYTES or len(files) >= MAX_FILES:
                 continue
             mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"

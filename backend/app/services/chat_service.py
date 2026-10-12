@@ -141,6 +141,12 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "file 'nell'editor', NON dire che non puoi: rispondi che basta cliccare ✏️ Modifica accanto al file (o il menu "
             "📝 Documenti). Per convertire tra formati (Word → PDF, xlsx → csv…) usa i tool write_document/write_spreadsheet/"
             "write_presentation con source_file_id, non script Python.")
+    missing = [a for a in ("wordcraft", "gridcraft", "pdfcraft", "deckcraft") if not mcp_manager.is_connected(a)]
+    if missing and len(missing) < 4:
+        parts.append(
+            "Le app ArtCraft NON attive su questo server: " + ", ".join(missing) + ". Per i formati che coprono (Word, Excel, PDF, "
+            "PowerPoint) usa run_code con le librerie disponibili nella sandbox (python-docx, openpyxl, python-pptx, reportlab, "
+            "pypdf) e di' all'utente che l'amministratore puo' attivare l'app con ./familai.sh <app> up per avere l'editor integrato.")
     if mcp_manager.is_connected("wordcraft"):
         parts.append(
             "\n# Documenti Word/PDF (WordCraft)\n"
