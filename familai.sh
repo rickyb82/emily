@@ -165,8 +165,13 @@ case "${1:-}" in
         DOCKER_BUILDKIT=1 compose --profile "$app" build $svcs || { echo "!! Build fallita: se l'errore viene da familai-web-patch.py il sorgente upstream e' cambiato e la patch va aggiornata."; exit 1; }
         # shellcheck disable=SC2086
         compose --profile "$app" up -d $svcs
+        # .env coerente (un'app attivata prima dell'editor web non aveva ${APPU}_WEB) e backend riavviato:
+        # i tool MCP dell'app si registrano alla (ri)connessione, altrimenti il modello vede "Strumento non disponibile".
+        set_env "${APPU}_HOST" "$app:$port"
+        [ "$web" = 1 ] && set_env "${APPU}_WEB" 1
+        compose up -d --build backend
         docker image prune -f >/dev/null
-        echo ">> $app aggiornato.";;
+        echo ">> $app aggiornato (backend riavviato).";;
       *) echo "uso: ./familai.sh $app up|down|logs|upgrade"; exit 1;;
     esac;;
   deploy)
