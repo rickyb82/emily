@@ -85,8 +85,12 @@ class MCPManager:
                 if row.enabled:
                     asyncio.create_task(self.connect(self.config_from_row(row)))
             # app ArtCraft (extras/artcraft): MCP stdio esposto via socat sulla rete Docker
-            from .artcraft import APPS, host_for
+            from .artcraft import APPS, HTTP_APPS, host_for, register_tools as _ac_reg
             for app in APPS:
+                if app in HTTP_APPS:
+                    if host_for(app):
+                        _ac_reg(app)   # CLI via HTTP (IdeaCraft): nessuna sessione MCP, il tool c'e' se l'host e' configurato
+                    continue
                 if host_for(app) and not any(r.name == app for r in rows):
                     asyncio.create_task(self.connect(ServerConfig(
                         name=app, type="stdio", command="socat", args=["-", f"TCP:{host_for(app)}"],

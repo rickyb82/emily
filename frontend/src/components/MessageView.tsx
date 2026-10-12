@@ -21,6 +21,7 @@ const TOOL_LABELS: Record<string, string> = {
   write_spreadsheet: '📊 Foglio con GridCraft',
   pdf_tool: '📕 PDF con PdfCraft',
   write_presentation: '📽️ Presentazione con DeckCraft',
+  mind_map: '🧠 Mappa mentale con IdeaCraft',
   ask_model: '🤝 Consulto un altro modello',
   remember: '🧠 Memorizzo',
   forget: '🧠 Dimentico',

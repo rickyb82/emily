@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     pdfcraft_web: bool = False        # editor PdfCraft nel browser servito su /pdfcraft/ (container pdfcraft-web)
     deckcraft_host: str = ""          # host:porta del container DeckCraft (es. deckcraft:7985): presentazioni via MCP
     deckcraft_web: bool = False       # editor DeckCraft nel browser servito su /deckcraft/ (container deckcraft-web)
+    ideacraft_host: str = ""          # host:porta del container IdeaCraft (es. ideacraft:7986): mappe mentali via CLI/HTTP
 
     @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", mode="before")
     @classmethod

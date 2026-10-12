@@ -13,6 +13,7 @@
 #   ./familai.sh gridcraft up|down|logs|upgrade  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
 #   ./familai.sh pdfcraft up|down|logs|upgrade   PdfCraft: unire/dividere/modificare PDF dalla chat (MCP) + editor PDF nel browser
 #   ./familai.sh deckcraft up|down|logs|upgrade  DeckCraft: presentazioni PowerPoint dalla chat (MCP) + editor nel browser
+#   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali dalla chat (immagine + .mm/.opml; per ora senza editor web)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -111,11 +112,13 @@ case "${1:-}" in
       update) $DC -f extras/portainer.yml pull && $DC -f extras/portainer.yml up -d;;
       *) echo "uso: ./familai.sh portainer up|down|logs|update"; exit 1;;
     esac;;
-  wordcraft|gridcraft|pdfcraft|deckcraft)
+  wordcraft|gridcraft|pdfcraft|deckcraft|ideacraft)
     # App ArtCraft: CLI+MCP per il modello e editor web (extras/artcraft). Stessa logica per entrambe.
     need_env
     app="$1"; APPU=$(echo "$app" | tr a-z A-Z)
-    port=7982; [ "$app" = gridcraft ] && port=7983; [ "$app" = pdfcraft ] && port=7984; [ "$app" = deckcraft ] && port=7985
+    port=7982; [ "$app" = gridcraft ] && port=7983; [ "$app" = pdfcraft ] && port=7984; [ "$app" = deckcraft ] && port=7985; [ "$app" = ideacraft ] && port=7986
+    web=1; [ "$app" = ideacraft ] && web=0   # IdeaCraft: solo CLI, nessun editor web
+    svcs="$app"; [ "$web" = 1 ] && svcs="$app $app-web"
     set_env() { # set_env CHIAVE valore (idempotente)
       if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi
     }
@@ -128,10 +131,12 @@ case "${1:-}" in
           echo "COMPOSE_PROFILES=$app" >> .env
         fi
         set_env "${APPU}_HOST" "$app:$port"
-        set_env "${APPU}_WEB" 1
-        echo ">> Build di $app: CLI/MCP + editor web (compila Rust due volte: la prima volta anche 30-60 minuti in tutto)…"
-        DOCKER_BUILDKIT=1 compose --profile "$app" build "$app" "$app-web"
-        compose --profile "$app" up -d "$app" "$app-web"
+        [ "$web" = 1 ] && set_env "${APPU}_WEB" 1
+        echo ">> Build di $app (compila Rust: la prima volta anche 30-60 minuti)…"
+        # shellcheck disable=SC2086
+        DOCKER_BUILDKIT=1 compose --profile "$app" build $svcs
+        # shellcheck disable=SC2086
+        compose --profile "$app" up -d $svcs
         compose up -d --build backend
         compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
         case "$app" in
@@ -139,13 +144,15 @@ case "${1:-}" in
           gridcraft) echo ">> GridCraft attivo. In chat: 'fammi il bilancio in Excel'; nel menu: 📝 Documenti per l'editor completo.";;
           pdfcraft)  echo ">> PdfCraft attivo. In chat: 'unisci questi PDF', 'estrai le pagine 2-4'; ✏️ accanto ai PDF apre l'editor.";;
           deckcraft) echo ">> DeckCraft attivo. In chat: 'fammi una presentazione di 6 slide su…'; ✏️ accanto ai .pptx apre l'editor.";;
+          ideacraft) echo ">> IdeaCraft attivo. In chat: 'fammi una mappa mentale su…' (immagine + file .mm per FreeMind/XMind).";;
         esac;;
       down)
-        compose --profile "$app" stop "$app" "$app-web"
+        # shellcheck disable=SC2086
+        compose --profile "$app" stop $svcs
         set_env "${APPU}_HOST" ""
-        set_env "${APPU}_WEB" ""
+        [ "$web" = 1 ] && set_env "${APPU}_WEB" ""
         compose up -d backend;;
-      logs) compose --profile "$app" logs -f --tail=100 "$app" "$app-web";;
+      logs) compose --profile "$app" logs -f --tail=100 $svcs;;
       upgrade)
         # prende l'ultimo commit del repository dell'app e ricompila (incrementale grazie alla cache di cargo)
         repo="https://github.com/rickyb82/$app"
@@ -154,8 +161,10 @@ case "${1:-}" in
         if grep -q "^${APPU}_SHA=$sha" .env; then echo ">> $app e' gia' all'ultimo commit (${sha:0:10})"; exit 0; fi
         echo ">> $app: aggiorno al commit ${sha:0:10} e ricompilo…"
         set_env "${APPU}_SHA" "$sha"
-        DOCKER_BUILDKIT=1 compose --profile "$app" build "$app" "$app-web" || { echo "!! Build fallita: se l'errore viene da familai-web-patch.py il sorgente upstream e' cambiato e la patch va aggiornata."; exit 1; }
-        compose --profile "$app" up -d "$app" "$app-web"
+        # shellcheck disable=SC2086
+        DOCKER_BUILDKIT=1 compose --profile "$app" build $svcs || { echo "!! Build fallita: se l'errore viene da familai-web-patch.py il sorgente upstream e' cambiato e la patch va aggiornata."; exit 1; }
+        # shellcheck disable=SC2086
+        compose --profile "$app" up -d $svcs
         docker image prune -f >/dev/null
         echo ">> $app aggiornato.";;
       *) echo "uso: ./familai.sh $app up|down|logs|upgrade"; exit 1;;

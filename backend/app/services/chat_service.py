@@ -142,7 +142,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "📝 Documenti). Per convertire tra formati (Word → PDF, xlsx → csv…) usa i tool write_document/write_spreadsheet/"
             "write_presentation con source_file_id, non script Python.")
     missing = [a for a in ("wordcraft", "gridcraft", "pdfcraft", "deckcraft") if not mcp_manager.is_connected(a)]
-    if missing and len(missing) < 4:
+    if not settings.ideacraft_host:
+        missing.append("ideacraft")
+    if missing and len(missing) < 5:
         parts.append(
             "Le app ArtCraft NON attive su questo server: " + ", ".join(missing) + ". Per i formati che coprono (Word, Excel, PDF, "
             "PowerPoint) usa run_code con le librerie disponibili nella sandbox (python-docx, openpyxl, python-pptx, reportlab, "
@@ -193,6 +195,13 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "per controllare il risultato, save_presentation in " + str(settings.data_dir / "deckcraft") + "/<nome>.pptx)."
             + ("\n- L'utente puo' aprire e modificare ogni presentazione con l'editor DeckCraft integrato (✏️ accanto al file)."
                if settings.deckcraft_web else ""))
+    if settings.ideacraft_host:
+        parts.append(
+            "\n# Mappe mentali (IdeaCraft)\n"
+            "- Per mappe mentali, mappe concettuali, brainstorming, schemi di studio o 'una mappa di…' usa mind_map con un outline "
+            "Markdown annidato (titolo come idea centrale, rami e sotto-rami come elenco; 'A -> B: perche'' per collegamenti "
+            "trasversali). L'immagine della mappa compare in chat; il .mm si apre in FreeMind/Freeplane/XMind. Con source_file_id "
+            "converte una mappa allegata (.mm, .xmind, .opml, Mermaid).")
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available
@@ -426,7 +435,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tools.append(t.spec)
 
     if provider.id == "ollama" and getattr(provider, "is_small", lambda m: True)(model):
-        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set()) | ({"write_spreadsheet"} if mcp_manager.is_connected("gridcraft") else set()) | ({"pdf_tool"} if mcp_manager.is_connected("pdfcraft") else set()) | ({"write_presentation"} if mcp_manager.is_connected("deckcraft") else set())
+        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set()) | ({"write_spreadsheet"} if mcp_manager.is_connected("gridcraft") else set()) | ({"pdf_tool"} if mcp_manager.is_connected("pdfcraft") else set()) | ({"write_presentation"} if mcp_manager.is_connected("deckcraft") else set()) | ({"mind_map"} if settings.ideacraft_host else set())
         # Modelli locali piccoli (Qwen3 8B & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
         # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
         # I modelli grandi (es. gpt-oss:120b) ricevono tutti i tool.
