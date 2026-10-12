@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth'
 import { APP_ICON, APP_LABEL, UI_LANG, editorFor, type ArtApp } from '../lib/artcraft'
 
 /**
- * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli di calcolo) o PdfCraft (PDF), app open source in WebAssembly in un iframe.
+ * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli), PdfCraft (PDF) o DeckCraft (presentazioni), app open source in WebAssembly in un iframe.
  * ?file=<id> apre quel file del server (l'app la decide l'estensione); con &new=1&app=... e' un file nuovo (l'id lo ha
  * scelto il browser). File > Salva nell'editor spedisce il file a /api/files/wordcraft-save, che lo crea o lo sovrascrive.
  */
@@ -94,8 +94,9 @@ export default function Editor() {
     if (!isNew) {
       q.set('open', `/files/${fileId}?v=${Date.now()}`)   // mai una copia dalla cache del browser
       q.set('name', name || 'documento')
-    } else if (name) {
-      q.set('name', name)
+    } else {
+      q.set('name', name || 'documento')
+      if (app === 'deckcraft') q.set('blank', '1')   // presentazione nuova: niente deck di esempio
     }
     if (canWrite) q.set('save', `/api/files/wordcraft-save?${saveQ.toString()}`)
     return `/${app}/?${q.toString()}`
@@ -114,7 +115,7 @@ export default function Editor() {
   return (
     <div className="editor-layout">
       <header className="chat-header">
-        <div className="title">{APP_ICON[app]} {isNew ? (app === 'gridcraft' ? 'Nuovo foglio di calcolo' : 'Nuovo documento') : (file?.filename || 'Documento')}
+        <div className="title">{APP_ICON[app]} {isNew ? (app === 'gridcraft' ? 'Nuovo foglio di calcolo' : app === 'deckcraft' ? 'Nuova presentazione' : 'Nuovo documento') : (file?.filename || 'Documento')}
           <small className="muted"> · {APP_LABEL[app]}</small>
           {!canWrite && <small className="muted"> · sola lettura (Salva scarica una copia)</small>}
           {dirty && <small className="muted"> · modifiche non salvate</small>}

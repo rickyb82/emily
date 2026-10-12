@@ -209,9 +209,9 @@ class MCPManager:
             from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file
             if server in _ARTCRAFT and not res.isError:
                 paths: list[str] = []
-                if tool == _ARTCRAFT[server]["save_tool"]:
+                if tool in _ARTCRAFT[server]["save_tools"]:
                     paths = [str(args.get("path") or "")]
-                elif _ARTCRAFT[server]["save_tool"] is None:   # PdfCraft: i percorsi scritti stanno nel risultato
+                elif not _ARTCRAFT[server]["save_tools"]:   # PdfCraft: i percorsi scritti stanno nel risultato
                     paths = harvest_paths("\n".join(parts))
                 for pth in paths:
                     art = await register_saved_file(ctx, pth)

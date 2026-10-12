@@ -97,8 +97,10 @@ class Settings(BaseSettings):
     gridcraft_web: bool = False       # editor GridCraft nel browser servito su /gridcraft/ (container gridcraft-web)
     pdfcraft_host: str = ""           # host:porta del container PdfCraft (es. pdfcraft:7984): PDF via MCP
     pdfcraft_web: bool = False        # editor PdfCraft nel browser servito su /pdfcraft/ (container pdfcraft-web)
+    deckcraft_host: str = ""          # host:porta del container DeckCraft (es. deckcraft:7985): presentazioni via MCP
+    deckcraft_web: bool = False       # editor DeckCraft nel browser servito su /deckcraft/ (container deckcraft-web)
 
-    @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", mode="before")
+    @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", mode="before")
     @classmethod
     def _empty_is_false(cls, v):
         # docker-compose passa WORDCRAFT_WEB=${WORDCRAFT_WEB:-}: una stringa vuota vale "spento", non e' un errore

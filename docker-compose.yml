@@ -17,6 +17,8 @@ services:
       - GRIDCRAFT_WEB=${GRIDCRAFT_WEB:-0}
       - PDFCRAFT_HOST=${PDFCRAFT_HOST:-}
       - PDFCRAFT_WEB=${PDFCRAFT_WEB:-0}
+      - DECKCRAFT_HOST=${DECKCRAFT_HOST:-}
+      - DECKCRAFT_WEB=${DECKCRAFT_WEB:-0}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -114,10 +116,11 @@ services:
     #     reservations:
     #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
 
-  # App ArtCraft (opzionali): WordCraft (word processor), GridCraft (foglio di calcolo) e PdfCraft (PDF), open source in Rust.
+  # App ArtCraft (opzionali): WordCraft (word processor), GridCraft (foglio di calcolo), PdfCraft (PDF) e DeckCraft
+  # (presentazioni), open source in Rust.
   # Ogni app ha due container: la CLI con il server MCP (il modello crea/modifica i file dalla chat) e l'editor completo
-  # nel browser (WebAssembly, servito da Caddy su /wordcraft/, /gridcraft/, /pdfcraft/). Attivazione: ./familai.sh wordcraft up,
-  # gridcraft up, pdfcraft up (imposta COMPOSE_PROFILES e le variabili *_HOST / *_WEB nel .env).
+  # nel browser (WebAssembly, servito da Caddy su /wordcraft/, /gridcraft/, /pdfcraft/, /deckcraft/). Attivazione:
+  # ./familai.sh wordcraft|gridcraft|pdfcraft|deckcraft up (imposta COMPOSE_PROFILES e le variabili *_HOST / *_WEB nel .env).
   wordcraft:
     build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: wordcraft, UPSTREAM_SHA: "${WORDCRAFT_SHA:-}" } }
     image: familai-wordcraft
@@ -180,6 +183,27 @@ services:
     build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: pdfcraft, UPSTREAM_SHA: "${PDFCRAFT_SHA:-}" } }
     image: familai-pdfcraft-web
     profiles: ["pdfcraft"]
+    restart: unless-stopped
+    expose: ["80"]
+
+  deckcraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: deckcraft, UPSTREAM_SHA: "${DECKCRAFT_SHA:-}" } }
+    image: familai-deckcraft
+    profiles: ["deckcraft"]
+    restart: unless-stopped
+    environment:
+      - MCP_PORT=7985
+      - MCP_ARGS=
+    volumes:
+      - ./data:/data:ro
+      - ./data/deckcraft:/data/deckcraft
+    expose: ["7985"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  deckcraft-web:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: deckcraft, UPSTREAM_SHA: "${DECKCRAFT_SHA:-}" } }
+    image: familai-deckcraft-web
+    profiles: ["deckcraft"]
     restart: unless-stopped
     expose: ["80"]
 

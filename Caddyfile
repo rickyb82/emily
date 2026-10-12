@@ -42,6 +42,10 @@
         encode zstd gzip
         reverse_proxy pdfcraft-web:80
     }
+    handle_path /deckcraft/* {
+        encode zstd gzip
+        reverse_proxy deckcraft-web:80
+    }
 
     # Webapp
     handle {

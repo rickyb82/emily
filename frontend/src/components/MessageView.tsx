@@ -20,6 +20,7 @@ const TOOL_LABELS: Record<string, string> = {
   write_document: '📝 Documento con WordCraft',
   write_spreadsheet: '📊 Foglio con GridCraft',
   pdf_tool: '📕 PDF con PdfCraft',
+  write_presentation: '📽️ Presentazione con DeckCraft',
   ask_model: '🤝 Consulto un altro modello',
   remember: '🧠 Memorizzo',
   forget: '🧠 Dimentico',

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Piccola patch alle app web ArtCraft (apps/<app>-web) per integrarle in FamilAI.
 
-Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft)
+Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft | deckcraft)
 
 Aggiunge tre parametri all'URL della pagina:
   ?open=<url>&name=<file>   apre il documento scaricandolo dal server (con i cookie di sessione)
@@ -317,6 +317,47 @@ elif app == "pdfcraft":
           "                    }\n"
           "                    // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).\n",
           "main.rs: ?lang=")
+elif app == "deckcraft":
+    patch(cargo, '"CssStyleDeclaration"]', '"CssStyleDeclaration"' + FEATURES, "Cargo.toml: feature web-sys")
+    patch(web_rs,
+          "                    let inbox: Inbox = Inbox::default();\n"
+          "                    let mut app = SlideApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));\n"
+          "                    let q = query();\n"
+          "                    if !q.contains(\"blank\") {\n",
+          "                    let inbox: Inbox = Inbox::default();\n"
+          "                    let mut app = SlideApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));\n"
+          "                    // FamilAI: ?open= apre dal server (niente deck di esempio); i .pptx si risalvano come .pptx\n"
+          "                    familai::open_from_query(inbox.clone(), cc.egui_ctx.clone());\n"
+          "                    deckcraft_ui_egui::FAMILAI_SAVE_PPTX.store(familai::save_as_pptx(), std::sync::atomic::Ordering::Relaxed);\n"
+          "                    let q = query();\n"
+          "                    if !q.contains(\"blank\") && !q.contains(\"open=\") {\n",
+          "web.rs: ?open=")
+    patch(web_rs,
+          "    let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| \"deckcraft\".into());\n"
+          "    let window = web_sys::window().ok_or(\"no window\")?;\n",
+          "    let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| \"deckcraft\".into());\n"
+          "    if let Some(save_url) = familai::save_url() {\n"
+          "        return familai::save_remote(&save_url, &name, bytes);\n"
+          "    }\n"
+          "    let window = web_sys::window().ok_or(\"no window\")?;\n",
+          "web.rs: ?save=")
+    head_deck = HEAD_SIMPLE + (
+        "\n    /// `?name=` ends with .pptx: Save keeps the PowerPoint format instead of DeckCraft's own.\n"
+        "    pub fn save_as_pptx() -> bool {\n"
+        "        param(\"name\").is_some_and(|n| n.to_ascii_lowercase().ends_with(\".pptx\"))\n"
+        "    }\n")
+    patch(web_rs, "\nfn mime_for(", head_deck + SAVE_SIMPLE + COMMON + "\nfn mime_for(", "web.rs: modulo familai")
+    lib_rs = root / "crates/ui-egui/src/lib.rs"
+    patch(lib_rs,
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\n",
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\n\n"
+          "/// FamilAI: Save in the browser keeps the .pptx format when the file opened was a PowerPoint.\n"
+          "pub static FAMILAI_SAVE_PPTX: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n",
+          "lib.rs: flag FAMILAI_SAVE_PPTX")
+    patch(lib_rs,
+          "        } else {\n            self.save_as_dialog(\"deckcraft\");\n        }\n",
+          "        } else {\n            self.save_as_dialog(if FAMILAI_SAVE_PPTX.load(std::sync::atomic::Ordering::Relaxed) { \"pptx\" } else { \"deckcraft\" });\n        }\n",
+          "lib.rs: Salva in .pptx")
 else:
     sys.exit(f"!! app sconosciuta: {app}")
 print("Patch completata.")

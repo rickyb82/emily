@@ -1,13 +1,14 @@
-/** Collegamenti agli editor ArtCraft nel browser: WordCraft (documenti), GridCraft (fogli di calcolo) e PdfCraft (PDF),
- *  serviti su /wordcraft/, /gridcraft/ e /pdfcraft/ quando i rispettivi profili sono attivi. */
-export type ArtApp = 'wordcraft' | 'gridcraft' | 'pdfcraft'
+/** Collegamenti agli editor ArtCraft nel browser: WordCraft (documenti), GridCraft (fogli), PdfCraft (PDF) e DeckCraft
+ *  (presentazioni), serviti su /wordcraft/, /gridcraft/, /pdfcraft/ e /deckcraft/ quando i rispettivi profili sono attivi. */
+export type ArtApp = 'wordcraft' | 'gridcraft' | 'pdfcraft' | 'deckcraft'
 
 export const WORDCRAFT_EXT = ['.docx', '.docm', '.dotx', '.doc', '.odt', '.rtf', '.txt', '.md', '.html', '.htm', '.tex']
 export const GRIDCRAFT_EXT = ['.xlsx', '.xlsm', '.xls', '.xlsb', '.ods', '.csv', '.tsv']
 export const PDFCRAFT_EXT = ['.pdf']
+export const DECKCRAFT_EXT = ['.pptx', '.potx', '.ppsx', '.deckcraft']
 
-export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft', pdfcraft: 'PdfCraft' }
-export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊', pdfcraft: '📕' }
+export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft', pdfcraft: 'PdfCraft', deckcraft: 'DeckCraft' }
+export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊', pdfcraft: '📕', deckcraft: '📽️' }
 /** Lingua dell'interfaccia degli editor (parametro ?lang= aggiunto dalla patch FamilAI; PdfCraft e WordCraft hanno l'italiano nativo). */
 export const UI_LANG = 'it'
 
@@ -17,10 +18,11 @@ export function editorFor(filename: string): ArtApp | undefined {
   if (WORDCRAFT_EXT.some((e) => lower.endsWith(e))) return 'wordcraft'
   if (GRIDCRAFT_EXT.some((e) => lower.endsWith(e))) return 'gridcraft'
   if (PDFCRAFT_EXT.some((e) => lower.endsWith(e))) return 'pdfcraft'
+  if (DECKCRAFT_EXT.some((e) => lower.endsWith(e))) return 'deckcraft'
   return undefined
 }
 
-type Features = { wordcraft_web?: boolean; gridcraft_web?: boolean; pdfcraft_web?: boolean } | undefined
+type Features = { wordcraft_web?: boolean; gridcraft_web?: boolean; pdfcraft_web?: boolean; deckcraft_web?: boolean } | undefined
 
 /** True se il file si puo' modificare in un editor attivo su questo server. */
 export function canEdit(filename: string, features: Features): boolean {
@@ -45,6 +47,6 @@ export function newFilePath(app: ArtApp, opts: { conversationId?: string | null;
   const q = new URLSearchParams({ file: newFileId(), new: '1', app })
   if (opts.conversationId) q.set('conversation_id', opts.conversationId)
   if (opts.projectId) q.set('project_id', opts.projectId)
-  q.set('name', opts.name || (app === 'gridcraft' ? 'foglio.xlsx' : 'documento.docx'))
+  q.set('name', opts.name || (app === 'gridcraft' ? 'foglio.xlsx' : app === 'deckcraft' ? 'presentazione.pptx' : 'documento.docx'))
   return `/editor?${q.toString()}`
 }

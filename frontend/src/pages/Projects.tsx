@@ -149,6 +149,7 @@ export default function Projects() {
               {files.length > 0 && <button className="ghost" onClick={reindex} disabled={reindexing}>{reindexing ? 'Indicizzazione…' : '🔄 Reindicizza tutto'}</button>}
               {me?.features?.wordcraft_web && <button className="ghost" onClick={() => nav(newFilePath('wordcraft', { projectId: proj.id }))}>📝 Nuovo documento</button>}
               {me?.features?.gridcraft_web && <button className="ghost" onClick={() => nav(newFilePath('gridcraft', { projectId: proj.id }))}>📊 Nuovo foglio</button>}
+              {me?.features?.deckcraft_web && <button className="ghost" onClick={() => nav(newFilePath('deckcraft', { projectId: proj.id }))}>📽️ Nuova presentazione</button>}
             </div>
             <ul className="file-list">
               {files.map((f) => (

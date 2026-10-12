@@ -133,6 +133,14 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")
+    if any(getattr(settings, f"{a}_web", False) for a in ("wordcraft", "gridcraft", "pdfcraft", "deckcraft")):
+        parts.append(
+            "\n# Editor integrati\n"
+            "Accanto a ogni file in chat (docx, xlsx, pdf, pptx…) l'utente ha gia' il pulsante ✏️ Modifica che lo apre "
+            "nell'editor integrato di FamilAI (WordCraft, GridCraft, PdfCraft, DeckCraft). Se chiede di aprire o modificare un "
+            "file 'nell'editor', NON dire che non puoi: rispondi che basta cliccare ✏️ Modifica accanto al file (o il menu "
+            "📝 Documenti). Per convertire tra formati (Word → PDF, xlsx → csv…) usa i tool write_document/write_spreadsheet/"
+            "write_presentation con source_file_id, non script Python.")
     if mcp_manager.is_connected("wordcraft"):
         parts.append(
             "\n# Documenti Word/PDF (WordCraft)\n"
@@ -168,6 +176,17 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "doc_save in " + str(settings.data_dir / "pdfcraft") + "/<nome>.pdf (l'unica cartella scrivibile)."
             + ("\n- L'utente puo' aprire ogni PDF nell'editor PdfCraft integrato (✏️ accanto al file) per annotare, compilare "
                "moduli e firmare a mano." if settings.pdfcraft_web else ""))
+    if mcp_manager.is_connected("deckcraft"):
+        parts.append(
+            "\n# Presentazioni (DeckCraft)\n"
+            "- Per slide, presentazioni, lezioni, pitch o 'un PowerPoint' usa write_presentation: una voce per diapositiva con "
+            "title, body (una riga per punto, tab per i sottolivelli) e layout; scegli un tema adatto. L'utente riceve il .pptx "
+            "in chat: non proporre di 'copiare in PowerPoint'.\n"
+            "- Per immagini, tabelle, grafici o modifiche a una presentazione allegata usa i tool mcp__deckcraft__* "
+            "(open_presentation con il percorso del file, inspect_slide, set_text, insert_picture, insert_chart, render_slide "
+            "per controllare il risultato, save_presentation in " + str(settings.data_dir / "deckcraft") + "/<nome>.pptx)."
+            + ("\n- L'utente puo' aprire e modificare ogni presentazione con l'editor DeckCraft integrato (✏️ accanto al file)."
+               if settings.deckcraft_web else ""))
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available
@@ -401,7 +420,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tools.append(t.spec)
 
     if provider.id == "ollama" and getattr(provider, "is_small", lambda m: True)(model):
-        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set()) | ({"write_spreadsheet"} if mcp_manager.is_connected("gridcraft") else set()) | ({"pdf_tool"} if mcp_manager.is_connected("pdfcraft") else set())
+        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set()) | ({"write_spreadsheet"} if mcp_manager.is_connected("gridcraft") else set()) | ({"pdf_tool"} if mcp_manager.is_connected("pdfcraft") else set()) | ({"write_presentation"} if mcp_manager.is_connected("deckcraft") else set())
         # Modelli locali piccoli (Qwen3 8B & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
         # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
         # I modelli grandi (es. gpt-oss:120b) ricevono tutti i tool.

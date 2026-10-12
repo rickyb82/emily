@@ -36,7 +36,8 @@ export default function Documents() {
   const wc = !!me?.features?.wordcraft_web
   const gc = !!me?.features?.gridcraft_web
   const pc = !!me?.features?.pdfcraft_web
-  const web = wc || gc || pc
+  const dc = !!me?.features?.deckcraft_web
+  const web = wc || gc || pc || dc
   const feats = me?.features
   const shown = files
     .filter((f) => !onlyDocs || editorFor(f.filename))
@@ -47,13 +48,14 @@ export default function Documents() {
     <div className="page">
       <h2>📝 Documenti</h2>
       <p className="muted">
-        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)', pc && 'PDF (PdfCraft)'].filter(Boolean).join(', ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
-             : "Gli editor non sono attivi (./familai.sh wordcraft|gridcraft|pdfcraft up): qui trovi comunque i tuoi file."}
+        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)', pc && 'PDF (PdfCraft)', dc && 'presentazioni PowerPoint (DeckCraft)'].filter(Boolean).join(', ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
+             : "Gli editor non sono attivi (./familai.sh wordcraft|gridcraft|pdfcraft|deckcraft up): qui trovi comunque i tuoi file."}
       </p>
       {err && <div className="error">{err}</div>}
       <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
         {wc && <button className="primary" onClick={() => nav(newFilePath('wordcraft'))}>＋ Documento</button>}
         {gc && <button className="primary" onClick={() => nav(newFilePath('gridcraft'))}>＋ Foglio di calcolo</button>}
+        {dc && <button className="primary" onClick={() => nav(newFilePath('deckcraft'))}>＋ Presentazione</button>}
         <button className="ghost" onClick={() => fileInput.current?.click()}>📎 Carica</button>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         <input placeholder="Cerca…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 220 }} />

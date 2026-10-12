@@ -23,11 +23,14 @@ from .registry import ToolContext, ToolResult, register, unregister_prefix
 settings = get_settings()
 log = logging.getLogger(__name__)
 
-WORDCRAFT, GRIDCRAFT, PDFCRAFT = "wordcraft", "gridcraft", "pdfcraft"
+WORDCRAFT, GRIDCRAFT, PDFCRAFT, DECKCRAFT = "wordcraft", "gridcraft", "pdfcraft", "deckcraft"
+# save_tools: tool MCP il cui argomento `path` e' un file scritto (registrato come allegato); vuoto = i percorsi si
+# ricavano dal risultato (PdfCraft).
 APPS = {
-    WORDCRAFT: {"save_tool": "save_document", "native_tool": "write_document", "formats": ("docx", "pdf", "odt", "rtf", "html", "md", "txt")},
-    GRIDCRAFT: {"save_tool": "save_workbook", "native_tool": "write_spreadsheet", "formats": ("xlsx", "csv", "tsv", "json", "html")},
-    PDFCRAFT: {"save_tool": None, "native_tool": "pdf_tool", "formats": ("pdf",)},   # i file prodotti si riconoscono dal risultato
+    WORDCRAFT: {"save_tools": ("save_document",), "native_tool": "write_document", "formats": ("docx", "pdf", "odt", "rtf", "html", "md", "txt")},
+    GRIDCRAFT: {"save_tools": ("save_workbook",), "native_tool": "write_spreadsheet", "formats": ("xlsx", "csv", "tsv", "json", "html")},
+    PDFCRAFT: {"save_tools": (), "native_tool": "pdf_tool", "formats": ("pdf",)},
+    DECKCRAFT: {"save_tools": ("save_presentation", "export"), "native_tool": "write_presentation", "formats": ("pptx", "pdf", "deckcraft")},
 }
 
 
@@ -38,7 +41,8 @@ def app_dir(app: str) -> Path:
 
 
 def host_for(app: str) -> str:
-    return {WORDCRAFT: settings.wordcraft_host, GRIDCRAFT: settings.gridcraft_host, PDFCRAFT: settings.pdfcraft_host}.get(app, "")
+    return {WORDCRAFT: settings.wordcraft_host, GRIDCRAFT: settings.gridcraft_host, PDFCRAFT: settings.pdfcraft_host,
+            DECKCRAFT: settings.deckcraft_host}.get(app, "")
 
 
 def harvest_paths(result_text: str) -> list[str]:
@@ -425,6 +429,69 @@ async def pdf_tool(args: dict, ctx: ToolContext) -> ToolResult:
                       artifacts=artifacts or None)
 
 
+# ---------------------------------------------------------------- DeckCraft: write_presentation ----
+DECK_THEMES = ("DeckCraft", "Harbor", "Ember", "Meadow", "Nocturne", "Paper", "Coral Reef", "Slate")
+DECK_LAYOUTS = ("title", "titleAndContent", "sectionHeader", "twoContent", "comparison", "titleOnly", "blank", "contentWithCaption", "pictureWithCaption")
+
+
+async def write_presentation(args: dict, ctx: ToolContext) -> ToolResult:
+    from .mcp_client import mcp_manager
+
+    if not mcp_manager.is_connected(DECKCRAFT):
+        return ToolResult("DeckCraft non e' attivo su questo server (./familai.sh deckcraft up).", is_error=True)
+    fmt = str(args.get("format") or "pptx").lower().lstrip(".")
+    if fmt not in APPS[DECKCRAFT]["formats"]:
+        return ToolResult(f"Formato non supportato: {fmt}. Usa uno tra {', '.join(APPS[DECKCRAFT]['formats'])}.", is_error=True)
+    title = str(args.get("title") or args.get("filename") or "presentazione")
+    out = _unique(app_dir(DECKCRAFT) / _safe_name(str(args.get("filename") or title), fmt))
+    slides = [s for s in (args.get("slides") or []) if isinstance(s, dict)]
+    src_id = str(args.get("source_file_id") or "").strip()
+    notes: list[str] = []
+    try:
+        if src_id:
+            asset = await _source_asset(ctx, src_id)
+            if isinstance(asset, ToolResult):
+                return asset
+            await mcp_manager.call(DECKCRAFT, "open_presentation", {"path": asset.path})
+        else:
+            if not slides:
+                return ToolResult("Servono le diapositive (slides: [{title, body, layout}]) oppure source_file_id.", is_error=True)
+            theme = str(args.get("theme") or "DeckCraft")
+            if theme not in DECK_THEMES:
+                notes.append(f"tema '{theme}' sconosciuto: uso DeckCraft")
+                theme = "DeckCraft"
+            await mcp_manager.call(DECKCRAFT, "new_presentation", {"theme": theme, "blank": True})
+        for i, sl in enumerate(slides):
+            a: dict = {}
+            layout = str(sl.get("layout") or ("title" if i == 0 and not src_id else "titleAndContent"))
+            a["layout"] = layout if layout in DECK_LAYOUTS else "titleAndContent"
+            if sl.get("title"):
+                a["title"] = str(sl["title"])
+            body = sl.get("body")
+            if isinstance(body, list):
+                body = "\n".join(str(x) for x in body)
+            if body:
+                a["body"] = str(body)
+            try:
+                await mcp_manager.call(DECKCRAFT, "add_slide", a)
+            except Exception as e:
+                notes.append(f"diapositiva {i + 1} non aggiunta ({str(e)[:80]})")
+        if fmt == "pdf":
+            await mcp_manager.call(DECKCRAFT, "export", {"path": str(out), "format": "pdf"})
+        else:
+            await mcp_manager.call(DECKCRAFT, "save_presentation", {"path": str(out)})
+    except Exception as e:
+        log.warning("write_presentation fallito: %s", e)
+        return ToolResult(f"DeckCraft: {type(e).__name__}: {str(e)[:400]}", is_error=True)
+    art = await register_saved_file(ctx, str(out))
+    if not art:
+        return ToolResult("DeckCraft non ha prodotto il file.", is_error=True)
+    res = _done(out, art, "DeckCraft")
+    if notes:
+        res.content += " Note: " + "; ".join(notes) + "."
+    return res
+
+
 # ---------------------------------------------------------------- registrazione ----
 def register_tools(app: str) -> None:
     """Chiamata dal client MCP quando il server dell'app e' connesso: il tool compare solo se l'app c'e'."""
@@ -485,6 +552,26 @@ def register_tools(app: str) -> None:
                 "filename": {"type": "string", "description": "Nome del file prodotto (opzionale)"}},
              "required": ["action"]},
         )(pdf_tool)
+    elif app == DECKCRAFT:
+        register(
+            "write_presentation",
+            "Crea una presentazione PowerPoint (.pptx) o PDF con DeckCraft: passa le diapositive come elenco di {title, body, "
+            "layout}; body = una riga per punto (tab iniziali = sottolivelli). Temi: DeckCraft, Harbor, Ember, Meadow, Nocturne, "
+            "Paper, Coral Reef, Slate. Con source_file_id apre/converte una presentazione allegata (pptx) e vi aggiunge le slide. "
+            "Il file compare in chat pronto da scaricare e l'utente puo' aprirlo nell'editor. Per immagini, tabelle, grafici e "
+            "ritocchi usa poi i tool mcp__deckcraft__* (open_presentation sul percorso del file, insert_picture, insert_table, "
+            "insert_chart, render_slide per vedere una slide, save_presentation in " + str(settings.data_dir / "deckcraft") + ").",
+            {"type": "object", "properties": {
+                "title": {"type": "string", "description": "Titolo (diventa anche il nome file)"},
+                "slides": {"type": "array", "description": "Diapositive in ordine", "items": {"type": "object", "properties": {
+                    "title": {"type": "string"}, "body": {"type": "string", "description": "Testo, una riga per punto"},
+                    "layout": {"type": "string", "enum": list(DECK_LAYOUTS)}}}},
+                "theme": {"type": "string", "enum": list(DECK_THEMES)},
+                "format": {"type": "string", "enum": list(APPS[DECKCRAFT]["formats"]), "description": "Formato di uscita (default pptx)"},
+                "filename": {"type": "string", "description": "Nome file senza percorso (opzionale)"},
+                "source_file_id": {"type": "string", "description": "Id di una presentazione allegata da aprire/convertire"}},
+             "required": []},
+        )(write_presentation)
 
 
 def unregister_tools(app: str) -> None:
