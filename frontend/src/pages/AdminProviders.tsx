@@ -309,6 +309,11 @@ export default function AdminProviders() {
           <label className="wide">Stile della voce <small className="muted">(istruzioni in linguaggio naturale; vuoto = voce calda e chiara, adatta ai bambini)</small>
             <input placeholder="es. Parla lentamente e con allegria, come una maestra" value={draft.tts_style ?? s.tts_style.value} onChange={(e) => setDraft({ ...draft, tts_style: e.target.value })} />
           </label>
+          <label>Ragionamento visibile <small className="muted">({s.thinking_mode.value})</small>
+            <select value={draft.thinking_mode ?? s.thinking_mode.value} onChange={(e) => setDraft({ ...draft, thinking_mode: e.target.value })}>
+              <option value="cloud">Claude e Gemini mostrano il ragionamento (consigliato)</option><option value="all">anche i modelli locali (Qwen3 pensa prima di rispondere: più lento)</option><option value="off">spento</option>
+            </select>
+          </label>
           <label>Risposte lunghe <small className="muted">({s.auto_continue.value})</small>
             <select value={draft.auto_continue ?? s.auto_continue.value} onChange={(e) => setDraft({ ...draft, auto_continue: e.target.value })}>
               <option value="true">continua da solo se si interrompe (fino a 256k token totali, MAX_TOTAL_OUTPUT_TOKENS)</option><option value="false">si ferma e chiede di continuare</option>
@@ -339,7 +344,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding <small className="muted">(Ollama: bge-m3 consigliato per l'italiano; cambiandolo va rifatta l'indicizzazione)</small><input placeholder={s.embedding_model.value || 'bge-m3 / text-embedding-3-small / gemini-embedding-001'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'compaction_enabled', 'auto_continue', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'compaction_enabled', 'auto_continue', 'thinking_mode', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

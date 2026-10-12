@@ -25,7 +25,7 @@ class AnthropicProvider(BaseProvider):
         return out
 
     @staticmethod
-    def _convert(messages: list[dict]) -> list[dict]:
+    def _convert(messages: list[dict], keep_thinking: bool = False) -> list[dict]:
         out: list[dict] = []
         for m in messages:
             blocks = []
@@ -36,6 +36,10 @@ class AnthropicProvider(BaseProvider):
                         blocks.append({"type": "text", "text": b["text"]})
                 elif t == "image":
                     blocks.append({"type": "image", "source": {"type": "base64", "media_type": b["mime"], "data": b["data"]}})
+                elif t == "thinking" and b.get("signature") and keep_thinking:
+                    blocks.append({"type": "thinking", "thinking": b.get("thinking") or b.get("text", ""), "signature": b["signature"]})
+                elif t == "redacted_thinking" and b.get("data") and keep_thinking:
+                    blocks.append({"type": "redacted_thinking", "data": b["data"]})
                 elif t == "tool_use":
                     blocks.append({"type": "tool_use", "id": b["id"], "name": b["name"], "input": b["input"]})
                 elif t == "tool_result":
@@ -61,12 +65,15 @@ class AnthropicProvider(BaseProvider):
         sys_blocks = [{"type": "text", "text": system or " ", "cache_control": cache}]
         if system_dynamic:
             sys_blocks.append({"type": "text", "text": system_dynamic})
-        msgs = self._convert(messages)
+        msgs = self._convert(messages, keep_thinking=bool(self.thinking))
         for m in reversed(msgs):
             if m["role"] == "user":
                 m["content"][-1] = {**m["content"][-1], "cache_control": cache}
                 break
         kwargs = dict(model=model or self.default_model, system=sys_blocks, max_tokens=max_tokens, messages=msgs)
+        if self.thinking:
+            budget = max(1024, min(int(self.thinking_budget or 4096), max_tokens - 1024))
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
         if tools:
             spec = []
             for t in tools:
@@ -81,6 +88,7 @@ class AnthropicProvider(BaseProvider):
         json_buf = ""
         next_report = PROGRESS_STEP
         stop_reason = None
+        think_sig, in_think = "", False
         usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
         async with client.messages.stream(**kwargs) as s:
             async for ev in s:
@@ -95,16 +103,28 @@ class AnthropicProvider(BaseProvider):
                     elif cb.type == "server_tool_use":
                         current_tool = None
                         yield ProviderEvent("status", text="🔎 Ricerca web (Claude)…")
+                    elif cb.type == "thinking":
+                        think_sig = ""
+                        in_think = True
+                    elif cb.type == "redacted_thinking":
+                        yield ProviderEvent("thinking_block", tool_use={"type": "redacted_thinking", "data": getattr(cb, "data", "")})
                 elif et == "content_block_delta":
                     d = ev.delta
                     if d.type == "text_delta":
                         yield ProviderEvent("text_delta", text=d.text)
+                    elif d.type == "thinking_delta":
+                        yield ProviderEvent("thinking_delta", text=d.thinking)
+                    elif d.type == "signature_delta":
+                        think_sig += d.signature
                     elif d.type == "input_json_delta":
                         json_buf += d.partial_json
                         if len(json_buf) >= next_report and current_tool is not None:
                             next_report += PROGRESS_STEP
                             yield ProviderEvent("status", text=writing_status(current_tool["name"], len(json_buf)))
                 elif et == "content_block_stop":
+                    if in_think:
+                        in_think = False
+                        yield ProviderEvent("thinking_block", tool_use={"type": "thinking", "signature": think_sig})
                     if current_tool is not None:
                         try:
                             current_tool["input"] = json.loads(json_buf) if json_buf.strip() else {}

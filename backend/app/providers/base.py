@@ -35,6 +35,8 @@ class BaseProvider:
     id: str = "base"
     label: str = "Base"
     supports_images: bool = True
+    thinking: bool = False            # mostra il ragionamento (extended thinking / <think>) come eventi thinking_delta
+    thinking_budget: int = 4096
 
     fallback_models: list[str] = []
 

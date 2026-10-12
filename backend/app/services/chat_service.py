@@ -359,6 +359,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     for _round in range(MAX_TOOL_ROUNDS + 1):
         text_acc = ""
         tool_uses: list[dict] = []
+        think_acc, think_blocks = "", []   # ragionamento visibile (extended thinking / <think>)
         yield sse({"type": "status", "text": "Sto pensando…" if _round == 0 else "Sto elaborando i risultati…"})
         try:
             # Continuazione automatica: se il modello si ferma per il limite di token della singola chiamata,
@@ -374,6 +375,15 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                         yield sse({"type": "text_delta", "text": ev.text})
                     elif ev.type == "tool_use" and ev.tool_use:
                         tool_uses.append(ev.tool_use)
+                    elif ev.type == "thinking_delta":
+                        think_acc += ev.text
+                        yield sse({"type": "thinking_delta", "text": ev.text})
+                    elif ev.type == "thinking_block" and ev.tool_use:
+                        blk = dict(ev.tool_use)
+                        if blk.get("type") == "thinking":
+                            blk["thinking"] = think_acc
+                            think_acc = ""
+                        think_blocks.append(blk)
                     elif ev.type == "status":
                         yield sse({"type": "status", "text": ev.text})
                     elif ev.type == "truncated":
@@ -411,6 +421,9 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             return
 
         blocks: list[dict] = []
+        if think_acc and not think_blocks:
+            think_blocks.append({"type": "thinking", "thinking": think_acc})   # modelli senza firma (Gemini, locali)
+        blocks += think_blocks   # Anthropic: i blocchi thinking (firmati) devono precedere testo e tool_use
         if text_acc:
             blocks.append({"type": "text", "text": text_acc})
         blocks += [{"type": "tool_use", **tu} for tu in tool_uses]

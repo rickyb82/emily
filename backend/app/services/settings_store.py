@@ -58,6 +58,7 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "tts_style": ("Stile della voce (istruzioni)", False),
     "compaction_enabled": ("Compattazione chat lunghe (riassunto + archivio RAG)", False),
     "auto_continue": ("Continuazione automatica delle risposte troncate", False),
+    "thinking_mode": ("Ragionamento visibile (off/cloud/all)", False),
     "memory_enabled": ("Memoria di famiglia attiva", False),
     "memory_auto_approve": ("Memoria: approvazione automatica voci sicure", False),
     "memory_model": ("Memoria: modello per l'estrazione", False),

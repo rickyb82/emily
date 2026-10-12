@@ -59,8 +59,9 @@ class OllamaProvider(OpenAIProvider):
 
     async def stream(self, model, system, messages, tools, max_tokens=4096, system_dynamic="") -> AsyncIterator[ProviderEvent]:
         model = model or self.default_model
-        # Qwen3: disattiva la modalita' "thinking" (lenta) per le risposte in chat; i blocchi <think> vengono comunque filtrati.
-        if model.lower().startswith("qwen3"):
+        # Qwen3: thinking disattivato di default (piu' veloce); se abilitato, il contenuto di <think> viene mostrato
+        # all'utente come ragionamento invece di essere scartato.
+        if model.lower().startswith("qwen3") and not self.thinking:
             system_dynamic = (system_dynamic + "\n/no_think").strip()
         buf, in_think = "", False
         async for ev in super().stream(model, system, messages, tools, max_tokens=max_tokens, system_dynamic=system_dynamic):
@@ -73,8 +74,12 @@ class OllamaProvider(OpenAIProvider):
                 if in_think:
                     j = buf.find("</think>")
                     if j < 0:
+                        if self.thinking and len(buf) > 8:
+                            yield ProviderEvent("thinking_delta", text=buf[:-8])
                         buf = buf[-8:] if len(buf) > 8 else buf   # tieni solo una coda per riconoscere il tag spezzato
                         break
+                    if self.thinking and j > 0:
+                        yield ProviderEvent("thinking_delta", text=buf[:j])
                     buf, in_think = buf[j + len("</think>"):].lstrip(), False
                     continue
                 i = buf.find("<think>")

@@ -54,7 +54,9 @@ class Settings(BaseSettings):
     router_mode: str = "locale"           # locale (prima il locale: cloud solo su richiesta) | economico | balanced | qualita | off
     max_output_tokens: int = 32768      # lunghezza massima di UNA chiamata al modello (serve alta per app/artifact e codice)
     max_total_output_tokens: int = 256000   # oltre questo totale la risposta si ferma davvero (continuazioni automatiche incluse)
-    auto_continue: str = "true"         # se la risposta si interrompe per lunghezza, il backend chiede di continuare da solo
+    auto_continue: str = "true"
+    thinking_mode: str = "cloud"        # off | cloud (Claude/Gemini mostrano il ragionamento) | all (anche i modelli locali, piu' lenti)
+    thinking_budget: int = 4096         # token di ragionamento per risposta (Claude/Gemini)         # se la risposta si interrompe per lunghezza, il backend chiede di continuare da solo
 
     # Tool
     web_search_provider: str = "auto"      # auto | searxng | anthropic | openai | gemini | tavily | brave

@@ -84,6 +84,11 @@ class GeminiProvider(BaseProvider):
         # Gemini 2.5: caching implicito automatico sul prefisso identico (parte stabile prima, variabile dopo).
         full_system = system + (("\n\n" + system_dynamic) if system_dynamic else "")
         cfg = types.GenerateContentConfig(system_instruction=full_system or None, max_output_tokens=max_tokens)
+        if self.thinking:
+            try:
+                cfg.thinking_config = types.ThinkingConfig(include_thoughts=True, thinking_budget=int(self.thinking_budget or 4096))
+            except Exception:
+                pass
         if tools:
             cfg.tools = [types.Tool(function_declarations=[
                 types.FunctionDeclaration(name=t.name, description=t.description,
@@ -105,7 +110,10 @@ class GeminiProvider(BaseProvider):
                     continue
                 for part in cand.content.parts:
                     if part.text:
-                        yield ProviderEvent("text_delta", text=part.text)
+                        if getattr(part, "thought", False):
+                            yield ProviderEvent("thinking_delta", text=part.text)
+                        else:
+                            yield ProviderEvent("text_delta", text=part.text)
                     if part.function_call:
                         fc = part.function_call
                         yield ProviderEvent("tool_use", tool_use={"id": fc.id or f"call_{uuid.uuid4().hex[:12]}",

@@ -81,6 +81,14 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
         set({ status: ev.local ? `🏠 Risponde il modello locale (${ev.model})…` : `☁️ Inoltro a ${ev.provider_label} (${ev.model})…` })
       } else if (ev.type === 'status') {
         set({ status: ev.text || '' })
+      } else if (ev.type === 'thinking_delta') {
+        if (!current) {
+          current = { id: 'tmp-' + Date.now(), role: 'assistant', author_id: null, content: [{ type: 'text', text: '' }], created_at: '', flagged: false, usage: {}, streaming: true }
+          s.messages = [...s.messages, current]
+        }
+        ;(current as any).thinking = ((current as any).thinking || '') + ev.text
+        const snap = { ...current, content: [{ ...current.content[0] }] }
+        set({ status: '💭 Sto ragionando…', messages: s.messages.map((x) => (x.id === snap.id ? snap : x)) })
       } else if (ev.type === 'text_delta') {
         if (!current) {
           current = { id: 'tmp-' + Date.now(), role: 'assistant', author_id: null, content: [{ type: 'text', text: '' }], created_at: '', flagged: false, usage: {}, streaming: true }

@@ -239,3 +239,10 @@ button.small { font-size: 13px; padding: 4px 10px; }
 .mem-text { line-height: 1.4; }
 .mem-item select { width: auto; padding: 4px 6px; font-size: 12px; }
 .mem-item button.small { padding: 4px 8px; }
+
+/* ragionamento visibile */
+.thinking { border-left: 3px solid var(--border); margin: 4px 0 10px; }
+.thinking.live { border-left-color: var(--primary); }
+.thinking-head { display: flex; justify-content: space-between; width: 100%; background: transparent; border: 0; padding: 4px 10px; font-size: 13px; color: var(--muted); text-align: left; border-radius: 0; }
+.thinking-head:hover { color: var(--text); }
+.thinking-body { padding: 2px 10px 8px; font-size: 13px; color: var(--muted); white-space: pre-wrap; line-height: 1.5; max-height: 320px; overflow: auto; font-style: italic; }

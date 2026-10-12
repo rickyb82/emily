@@ -108,6 +108,9 @@ class OpenAIProvider(BaseProvider):
                 continue
             finish_reason = chunk.choices[0].finish_reason or finish_reason
             delta = chunk.choices[0].delta
+            rc = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+            if rc and self.thinking:
+                yield ProviderEvent("thinking_delta", text=str(rc))
             if delta.content:
                 yield ProviderEvent("text_delta", text=delta.content)
             for tc in delta.tool_calls or []:

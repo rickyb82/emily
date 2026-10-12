@@ -45,6 +45,10 @@ def _providers() -> dict[str, BaseProvider]:
         out["custom"] = OpenAICompatProvider(s.custom_llm_url, s.custom_llm_model, s.custom_llm_key, s.custom_llm_label)
     if s.enable_mock_provider or not out:
         out["mock"] = MockProvider("", "mock-1")
+    mode = (s.thinking_mode or "cloud").lower()
+    for pid, p in out.items():
+        p.thinking = mode == "all" or (mode == "cloud" and pid in ("anthropic", "gemini", "openai"))
+        p.thinking_budget = int(s.thinking_budget or 4096)
     return out
 
 

@@ -29,6 +29,7 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
     )
   }
   const text = m.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+  const thinking = (m as any).thinking || m.content.filter((b: any) => b.type === 'thinking').map((b: any) => b.thinking || b.text || '').join('\n')
   const images = m.content.filter((b: any) => b.type === 'image' && b.file_id)
   // messaggio dell'assistente fatto solo di chiamate a tool: lo mostrano gia' gli step sotto
   if (m.role === 'assistant' && !text.trim() && images.length === 0 && !m.streaming) return null
@@ -42,6 +43,7 @@ export default function MessageView({ m, authorName, onOpenArtifact }: { m: Mess
         <div className="bubble">{text}</div>
       ) : (
         <div className="markdown">
+          {thinking && <Thinking text={thinking} live={!!m.streaming && !text.trim()} />}
           <Markdown className="">{text}</Markdown>
           {m.streaming && <span className="cursor">▍</span>}
         </div>
@@ -147,6 +149,23 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
           {running ? <div className="muted small">In esecuzione…</div> : <pre>{String(b.content ?? '').slice(0, 6000) || '(nessun output)'}</pre>}
         </div>
       )}
+    </div>
+  )
+}
+
+
+/** Ragionamento del modello: aperto mentre pensa, poi ripiegato in una riga cliccabile. */
+function Thinking({ text, live }: { text: string; live: boolean }) {
+  const [open, setOpen] = useState<boolean | null>(null)
+  const isOpen = open ?? live
+  const words = text.trim().split(/\s+/).length
+  return (
+    <div className={`thinking ${live ? 'live' : ''}`}>
+      <button className="thinking-head" onClick={() => setOpen(!isOpen)} aria-expanded={isOpen}>
+        <span>💭 {live ? 'Sto ragionando…' : `Ragionamento (${words} parole)`}</span>
+        <span className="step-caret">{isOpen ? '▾' : '▸'}</span>
+      </button>
+      {isOpen && <div className="thinking-body">{text}{live && <span className="cursor">▍</span>}</div>}
     </div>
   )
 }
