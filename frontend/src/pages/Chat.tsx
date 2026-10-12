@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { del, get, patch, post, type Conversation, type FileOut, type Message } from '../lib/api'
+import { del, get, patch, post, type Conversation, type FileOut, type Message, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import MessageView from '../components/MessageView'
 import { abortTurn, clearTurn, getTurn, startTurn, subscribe, type TurnState } from '../lib/turns'
@@ -28,6 +28,7 @@ export default function Chat() {
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set())
   const [share, setShare] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
   const [artifacts, setArtifacts] = useState<ArtifactData[]>([])
   const [openArtifact, setOpenArtifact] = useState<ArtifactData | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
@@ -179,6 +180,27 @@ export default function Chat() {
     if (fileInput.current) fileInput.current.value = ''
   }
 
+  useEffect(() => {
+    if (!me || me.user.role === 'child') return
+    get<Project[]>('/projects').then(setProjects).catch(() => {})
+  }, [me?.user.id])
+
+  async function moveToProject(projectId: string | null) {
+    if (!conv) return
+    const target = projects.find((p) => p.id === projectId)
+    const msg = target
+      ? `Spostare la chat nel progetto "${target.name}"? Gli allegati e gli artifact di questa chat diventano visibili a chi partecipa al progetto.`
+      : 'Togliere la chat dal progetto? I suoi allegati torneranno visibili solo in questa chat.'
+    if (!confirm(msg)) return
+    try {
+      const c = await patch<Conversation>(`/chat/conversations/${conv.id}`, { project_id: projectId })
+      setConv(c)
+      window.dispatchEvent(new Event('familai:conversations'))
+    } catch (e: any) {
+      setErr(e.message)
+    }
+  }
+
   async function changeModel(provider: string, model: string) {
     if (!conv) {
       const c = await post<Conversation>('/chat/conversations', { provider, model })
@@ -240,6 +262,13 @@ export default function Chat() {
             <select className="ghost-select" value="" title="Apri un artifact" onChange={(e) => { const a = artifacts.find((x) => x.id === e.target.value); if (a) setOpenArtifact(a) }}>
               <option value="" disabled>📦 {artifacts.length} artifact…</option>
               {artifacts.map((a, i) => <option key={a.id} value={a.id}>{i + 1}. {a.title}</option>)}
+            </select>
+          )}
+          {conv && access === 'owner' && !isChild && projects.length > 0 && (
+            <select className="ghost-select" value={conv.project_id ?? ''} title="Sposta la chat in un progetto (allegati e artifact condivisi con i membri)"
+              disabled={busy} onChange={(e) => moveToProject(e.target.value || null)}>
+              <option value="">📁 Nessun progetto</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
             </select>
           )}
           {conv && access === 'owner' && <button className="ghost" onClick={() => setShare(true)}>🔗 Condividi</button>}

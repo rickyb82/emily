@@ -3,12 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db import get_db
-from ..models import Conversation, Message, Share, User
+from ..models import Artifact, Chunk, Conversation, FileAsset, Message, Share, User
 from ..policy.permissions import TOOL_ALIASES, effective_policy, tool_allowed
 from ..providers.registry import available_providers, get_provider
 from ..schemas import ConversationCreate, ConversationOut, ConversationUpdate, MessageOut, SendMessageRequest
@@ -48,7 +48,21 @@ async def list_conversations(project_id: str | None = None, include_shared: bool
             sq = q.where(Conversation.id.in_(shared_ids), Conversation.owner_id != ctx.user.id)
             if project_id:
                 sq = sq.where(Conversation.project_id == project_id)
-            shared = (await db.execute(sq.order_by(Conversation.updated_at.desc()))).scalars().all()
+            shared = list((await db.execute(sq.order_by(Conversation.updated_at.desc()))).scalars().all())
+        else:
+            shared = []
+        if project_id:
+            # dentro un progetto condiviso si vedono anche le chat degli altri membri (con i loro allegati)
+            try:
+                await require_access(db, "project", project_id, ctx.user)
+                seen = {c.id for c in rows} | {c.id for c in shared}
+                pq = q.where(Conversation.project_id == project_id, Conversation.owner_id != ctx.user.id)
+                for c in (await db.execute(pq.order_by(Conversation.updated_at.desc()))).scalars().all():
+                    if c.id not in seen:
+                        shared.append(c)
+            except HTTPException:
+                pass
+        if shared:
             for c in shared:
                 o = ConversationOut.model_validate(c)
                 o.shared = True
@@ -82,11 +96,30 @@ async def get_conversation(cid: str, ctx: AuthContext = Depends(require_auth), d
             "messages": [MessageOut.model_validate(m) for m in msgs]}
 
 
+async def _move_to_project(db: AsyncSession, conv: Conversation, project_id: str | None) -> None:
+    """Sposta la chat in un progetto: anche gli allegati caricati nella chat, i loro frammenti RAG e gli artifact
+    passano al progetto, cosi' chi partecipa al progetto li vede (e il modello li ritrova nelle altre chat del progetto).
+    Se la chat viene tolta dal progetto, i suoi file restano solo nella chat."""
+    conv.project_id = project_id
+    await db.execute(update(FileAsset).where(FileAsset.conversation_id == conv.id).values(project_id=project_id))
+    await db.execute(update(Chunk).where(Chunk.conversation_id == conv.id).values(project_id=project_id))
+    await db.execute(update(Artifact).where(Artifact.conversation_id == conv.id).values(project_id=project_id))
+
+
 @router.patch("/conversations/{cid}", response_model=ConversationOut)
 async def update_conversation(cid: str, body: ConversationUpdate, ctx: AuthContext = Depends(require_auth),
                               db: AsyncSession = Depends(get_db)):
-    conv, _ = await require_access(db, "conversation", cid, ctx.user, write=True)
-    data = body.model_dump(exclude_none=True)
+    conv, level = await require_access(db, "conversation", cid, ctx.user, write=True)
+    data = body.model_dump(exclude_unset=True)
+    if "project_id" in data:
+        # spostare la chat in un progetto (o toglierla): solo il proprietario; il progetto deve essere accessibile
+        if level != "owner":
+            raise HTTPException(403, "Solo il proprietario può spostare la chat")
+        new_pid = data.pop("project_id") or None
+        if new_pid:
+            await require_access(db, "project", new_pid, ctx.user)
+        await _move_to_project(db, conv, new_pid)
+    data = {k: v for k, v in data.items() if v is not None}
     if "provider" in data or "model" in data:
         # i bambini non possono cambiare modello: resolve_provider_model impone quello del genitore
         data["provider"], data["model"] = resolve_provider_model(

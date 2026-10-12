@@ -45,7 +45,10 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     if project_id:
         await require_access(db, "project", project_id, ctx.user, write=True)
     if conversation_id:
-        await require_access(db, "conversation", conversation_id, ctx.user, write=True)
+        conv, _ = await require_access(db, "conversation", conversation_id, ctx.user, write=True)
+        # allegato in una chat di progetto: appartiene anche al progetto (visibile ai membri, usato nel RAG di progetto)
+        if not project_id and conv.project_id:
+            project_id = conv.project_id
     data = await file.read()
     max_bytes = int(pol.get("max_upload_mb", 20)) * 1024 * 1024
     if len(data) > max_bytes:
