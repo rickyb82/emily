@@ -528,7 +528,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
                       r = await tool.fn(tu["input"] or {}, ctx)
                       res_content, is_err, artifacts = r.content, r.is_error, r.artifacts
                       if not is_err:
-                          await log_usage(db, user, tool.usage_kind, provider.id, model, detail=tu["name"])
+                          u = r.usage or {}
+                          await log_usage(db, user, tool.usage_kind, u.get("provider") or provider.id, u.get("model") or model,
+                                          int(u.get("input_tokens", 0) or 0), int(u.get("output_tokens", 0) or 0),
+                                          detail=u.get("detail") or tu["name"])
                   except HTTPException as he:
                       res_content, is_err, artifacts = he.detail, True, None
                   except Exception as e:

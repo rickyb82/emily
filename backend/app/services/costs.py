@@ -78,12 +78,17 @@ def estimate_cost(table: dict, provider: str, model: str, kind: str, input_token
         return (input_tokens * pin + cache_read_tokens * pin * rf + cache_write_tokens * pin * wf
                 + output_tokens * float(p.get("out", 0))) / 1_000_000
     if kind == "image":
-        # immagini: generate da OpenAI o Gemini a seconda della configurazione; usiamo il prezzo del provider immagini
-        if settings.comfyui_url and settings.image_provider in ("auto", "comfyui"):
+        if provider in ("comfyui", "ollama", "custom"):
             return 0.0   # generate in casa
-        img_prov = "openai" if settings.openai_api_key and settings.image_provider in ("auto", "openai") else "gemini"
+        if provider == "openai" and (input_tokens or output_tokens):
+            # gpt-image: token di testo in ingresso ($5/M) + token immagine in uscita ($40/M)
+            pi = table.get("openai", {})
+            return (input_tokens * float(pi.get("image_in", 5.0)) + output_tokens * float(pi.get("image_out", 40.0))) / 1_000_000
+        img_prov = provider if provider in ("openai", "gemini") else ("openai" if settings.openai_api_key else "gemini")
         return count * float(table.get(img_prov, {}).get("image", 0.04))
     if kind == "video":
+        if provider in ("comfyui", "ollama", "custom"):
+            return 0.0
         return count * 8 * float(table.get("gemini", {}).get("video_per_second", 0.4))
     return 0.0
 
@@ -118,6 +123,7 @@ async def local_report(db: AsyncSession, family_id: str, since: datetime) -> dic
                 p["cache_saved"] += tcr * pin * (1 - cache_factors(prov, model or "")[0]) / 1_000_000
         elif kind == "image":
             p["images"] += n; u["images"] += n
+            p["image_tokens"] = p.get("image_tokens", 0) + tin + tout
         elif kind == "video":
             p["videos"] += n; u["videos"] += n
         elif kind == "web_search":

@@ -26,6 +26,7 @@ class ToolResult:
     content: str                      # testo restituito al modello
     is_error: bool = False
     artifacts: list[dict] | None = None  # es. [{"type":"image","file_id":..., "url":...}] mostrati in chat
+    usage: dict | None = None         # consumo del tool: {"provider","model","input_tokens","output_tokens","detail"} (per i costi)
 
 
 ToolFn = Callable[[dict, ToolContext], Awaitable[ToolResult]]

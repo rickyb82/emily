@@ -75,6 +75,7 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
             from ..services import comfyui
 
             data, model_used = await comfyui.generate(prompt, size, negative=str(args.get("negative") or ""))
+            tool_usage = {"provider": "comfyui", "model": model_used, "detail": f"immagine {size}"}
         elif backend == "openai":
             from openai import AsyncOpenAI
 
@@ -85,6 +86,9 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
                 return ToolResult("Il provider non ha restituito l'immagine", is_error=True)
             data = base64.b64decode(b64)
             model_used = settings.image_model
+            ru = getattr(r, "usage", None)
+            tool_usage = {"provider": "openai", "model": model_used, "input_tokens": int(getattr(ru, "input_tokens", 0) or 0),
+                          "output_tokens": int(getattr(ru, "output_tokens", 0) or 0), "detail": f"immagine {size}"}
         else:
             from google import genai
             from google.genai import types
@@ -99,13 +103,14 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
                 return ToolResult("Il provider non ha restituito l'immagine (prompt rifiutato dai filtri?)", is_error=True)
             data = r.generated_images[0].image.image_bytes
             model_used = settings.gemini_image_model
+            tool_usage = {"provider": "gemini", "model": model_used, "detail": f"immagine {size}"}
         asset = await _save_generated(ctx, data, "png", "image/png", "immagine")
     except Exception as e:
         log.exception("Generazione immagine fallita")
         return ToolResult(f"Generazione immagine fallita ({backend}): {type(e).__name__}: {e}", is_error=True)
     url = f"/files/{asset.id}"
     return ToolResult(f"Immagine generata con {model_used} e mostrata all'utente (id {asset.id}). Descrivila brevemente.",
-                      artifacts=[{"type": "image", "file_id": asset.id, "url": url, "mime": "image/png"}])
+                      artifacts=[{"type": "image", "file_id": asset.id, "url": url, "mime": "image/png"}], usage=tool_usage)
 
 
 @register(
@@ -152,7 +157,8 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
             log.exception("Generazione video (ComfyUI) fallita")
             return ToolResult(f"Generazione video fallita (comfyui): {type(e).__name__}: {e}", is_error=True)
         return ToolResult(f"Video generato con {label} e mostrato all'utente (id {asset.id}).",
-                          artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}])
+                          artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}],
+                          usage={"provider": "comfyui", "model": label, "detail": "video"})
     if not settings.gemini_api_key:
         return ToolResult("Generazione video non disponibile: serve ComfyUI con il modello Wan 2.2 oppure una chiave Gemini (Veo).", is_error=True)
     try:
@@ -179,4 +185,5 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
         log.exception("Generazione video fallita")
         return ToolResult(f"Generazione video fallita: {type(e).__name__}: {e}", is_error=True)
     return ToolResult(f"Video generato e mostrato all'utente (id {asset.id}).",
-                      artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}])
+                      artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}],
+                      usage={"provider": "gemini", "model": settings.video_model, "detail": "video 8s"})

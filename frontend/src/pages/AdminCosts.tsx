@@ -4,7 +4,7 @@ import { get, put } from '../lib/api'
 interface Prov {
   provider: string; configured: boolean; estimated_usd: number; budget_usd: number; remaining_usd: number | null
   percent: number | null; real: { ok: boolean; usd?: number; error?: string; via?: string } | null
-  stats: { messages?: number; input_tokens?: number; output_tokens?: number; images?: number; videos?: number; searches?: number; cache_read_tokens?: number; cache_write_tokens?: number; cache_saved?: number }
+  stats: { messages?: number; input_tokens?: number; output_tokens?: number; images?: number; videos?: number; searches?: number; cache_read_tokens?: number; cache_write_tokens?: number; cache_saved?: number; image_tokens?: number }
 }
 interface Report {
   local?: { configured: boolean; model: string; messages: number; input_tokens: number; output_tokens: number; cloud_messages: number; avoided_usd: number; reference: string }
@@ -89,7 +89,7 @@ export default function AdminCosts() {
                 {(p.stats.cache_read_tokens ?? 0) > 0 && <> · {(p.stats.cache_read_tokens ?? 0).toLocaleString()} da cache ({Math.round(100 * (p.stats.cache_read_tokens ?? 0) / Math.max(1, p.stats.input_tokens ?? 1))}% dell'ingresso, risparmiati ≈ {usd(p.stats.cache_saved ?? 0)})</>}
               </small>
             </div>
-            <small className="muted">{p.stats.messages ?? 0} messaggi · {p.stats.images ?? 0} immagini · {p.stats.videos ?? 0} video · {p.stats.searches ?? 0} ricerche</small>
+            <small className="muted">{p.stats.messages ?? 0} messaggi · {p.stats.images ?? 0} immagini{(p.stats.image_tokens ?? 0) > 0 && <> ({(p.stats.image_tokens ?? 0).toLocaleString()} token immagine)</>} · {p.stats.videos ?? 0} video · {p.stats.searches ?? 0} ricerche</small>
             <label>Budget mensile (USD)
               <input type="number" min={0} step={1} placeholder={s[`budget_${p.provider}`]?.value || '0'} value={draft[`budget_${p.provider}`] ?? ''} onChange={(e) => setDraft({ ...draft, [`budget_${p.provider}`]: e.target.value })} />
             </label>
