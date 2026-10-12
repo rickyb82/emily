@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { del, get, post, type FileOut, type Project } from '../lib/api'
+import { del, get, patch, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { APP_ICON, canEdit, editorFor, editorPath, newFilePath } from '../lib/artcraft'
 
@@ -27,6 +27,12 @@ export default function Documents() {
     }
     if (fileInput.current) fileInput.current.value = ''
     load()
+  }
+  async function rename(f: FileOut) {
+    const ext = (f.filename.match(/\.[^.]+$/) || [''])[0]
+    const typed = prompt('Nuovo nome del file', f.filename.replace(/\.[^.]+$/, ''))
+    if (!typed || !typed.trim()) return
+    try { await patch(`/files/${f.id}`, { filename: typed.trim().replace(/\.[^.]+$/, '') + ext }); load() } catch (e: any) { setErr(e.message) }
   }
   async function remove(f: FileOut) {
     if (!confirm(`Eliminare "${f.filename}"?`)) return
@@ -76,6 +82,7 @@ export default function Documents() {
             <span className="row" style={{ gap: 4 }}>
               {canEdit(f.filename, feats) && <Link className="ghost btn-link small" to={editorPath(f.id, f.filename)}>✏️ Modifica</Link>}
               <a className="ghost btn-link small" href={f.url} target="_blank" rel="noreferrer">⬇</a>
+              {f.owner_id === me?.user.id && <button className="icon" title="Rinomina" onClick={() => rename(f)}>✏️</button>}
               {f.owner_id === me?.user.id && <button className="icon" title="Elimina" onClick={() => remove(f)}>🗑</button>}
             </span>
           </li>

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,7 +108,7 @@ async def reindex(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncS
 
 @router.post("/files/wordcraft-save", response_model=FileOut)
 async def wordcraft_save(request: Request, background: BackgroundTasks, file_id: str, conversation_id: str | None = None,
-                         project_id: str | None = None, ctx: AuthContext = Depends(require_auth),
+                         project_id: str | None = None, filename: str | None = None, ctx: AuthContext = Depends(require_auth),
                          db: AsyncSession = Depends(get_db)):
     """Salvataggio dagli editor nel browser, WordCraft e GridCraft (File > Salva / Esporta): il corpo e' il file, il nome arriva
     nell'header X-Filename. `file_id` e' il documento aperto: se esiste e l'estensione coincide viene sovrascritto
@@ -121,11 +122,18 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
         raise HTTPException(400, "file_id non valido")
     name = re.sub(r"[^\w.\- ]", "_", unquote(request.headers.get("X-Filename", "") or "documento.docx"))[:200]
     ext = Path(name).suffix.lower()
+    existing = await db.get(FileAsset, file_id)
     if not ext:
         # nome senza estensione (PdfCraft lo ricava dall'URL): eredita quella del file aperto, altrimenti .docx
-        existing = await db.get(FileAsset, file_id)
         ext = Path(existing.filename).suffix.lower() if existing else ".docx"
-        name = f"{name}{ext}" if not existing else existing.filename
+        name = f"{name}{ext}"
+    if existing is not None and Path(existing.filename).suffix.lower() == ext:
+        # il nome lo decide FamilAI (titolo dell'editor / elenco Documenti), non il nome interno dell'app
+        name = existing.filename
+    elif existing is None and filename:
+        # documento nuovo: il nome scelto nella pagina Editor (l'estensione resta quella del contenuto salvato)
+        stem = Path(re.sub(r"[^\w.\- ]", "_", filename)).stem.strip() or Path(name).stem
+        name = f"{stem}{ext}"[:200]
     if ext not in EDITOR_EXT:
         raise HTTPException(400, f"Formato non consentito ({ext})")
     data = await request.body()
@@ -135,7 +143,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
         raise HTTPException(413, "File troppo grande")
     mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
 
-    asset = await db.get(FileAsset, file_id)
+    asset = existing
     if asset is not None:
         await require_access(db, "file", file_id, ctx.user, write=True)
         if Path(asset.filename).suffix.lower() != ext:
@@ -172,6 +180,23 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
     await db.commit()
     if asset.index_status == "pending":
         background.add_task(rag.index_file_background, asset.id)
+    return _out(asset)
+
+
+class FileRename(BaseModel):
+    filename: str
+
+
+@router.patch("/files/{fid}", response_model=FileOut)
+async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Rinomina un file (proprietario o permesso di scrittura). L'estensione resta quella originale."""
+    asset, _ = await require_access(db, "file", fid, ctx.user, write=True)
+    old_ext = Path(asset.filename).suffix
+    stem = Path(re.sub(r"[^\w.\- ]", "_", body.filename.strip())).stem.strip(". ")
+    if not stem:
+        raise HTTPException(400, "Nome non valido")
+    asset.filename = f"{stem}{old_ext}"[:200]
+    await db.commit()
     return _out(asset)
 
 

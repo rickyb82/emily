@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { get, type FileOut } from '../lib/api'
+import { get, patch, type FileOut } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { APP_ICON, APP_LABEL, UI_LANG, editorFor, type ArtApp } from '../lib/artcraft'
 
@@ -19,7 +19,27 @@ export default function Editor() {
   const [err, setErr] = useState('')
   const [canWrite, setCanWrite] = useState(true)
   const [loaded, setLoaded] = useState(false)
-  const name = file?.filename || params.get('name') || ''
+  const [customName, setCustomName] = useState<string>('')   // nome scelto qui (documento nuovo non ancora salvato)
+  const name = file?.filename || customName || params.get('name') || ''
+
+  async function rename() {
+    if (!canWrite) return
+    const current = name || 'documento'
+    const typed = prompt('Nome del file (l\'estensione resta quella attuale)', current.replace(/\.[^.]+$/, ''))
+    if (!typed || !typed.trim()) return
+    const ext = (current.match(/\.[^.]+$/) || [''])[0]
+    const next = typed.trim().replace(/\.[^.]+$/, '') + ext
+    try {
+      const f = await patch<FileOut>(`/files/${fileId}`, { filename: next })
+      setFile(f)
+      window.dispatchEvent(new Event('familai:conversations'))
+    } catch (e: any) {
+      if (isNew && (e.status === 404 || String(e.message || '').includes('non trovat'))) {
+        // non ancora salvato: il nome vale dal primo salvataggio (l'editor si ricarica)
+        setCustomName(next)
+      } else setErr(`Rinomina non riuscita: ${e.message}`)
+    }
+  }
   const app: ArtApp = (params.get('app') as ArtApp) || editorFor(name) || 'wordcraft'
 
   useEffect(() => {
@@ -60,6 +80,7 @@ export default function Editor() {
         const cid = params.get('conversation_id'); const pid = params.get('project_id')
         if (cid) saveQ.set('conversation_id', cid)
         if (pid) saveQ.set('project_id', pid)
+        if (isNew && name) saveQ.set('filename', name)
         // PdfCraft ricava il nome dall'URL (?file=/files/<id>): senza estensione vale il nome vero del file
         const fname = d.name && /\.[a-z0-9]{1,5}$/i.test(d.name) ? d.name : (name || 'documento.pdf')
         try {
@@ -75,7 +96,7 @@ export default function Editor() {
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [app, canWrite, fileId, name, params])
+  }, [app, canWrite, fileId, name, params, isNew])
 
   const src = useMemo(() => {
     if (!fileId) return ''
@@ -83,6 +104,7 @@ export default function Editor() {
     const cid = params.get('conversation_id'); const pid = params.get('project_id')
     if (cid) saveQ.set('conversation_id', cid)
     if (pid) saveQ.set('project_id', pid)
+    if (isNew && name) saveQ.set('filename', name)
     const q = new URLSearchParams({ lang: UI_LANG })
     if (app === 'pdfcraft') {
       // PdfCraft: parametri nativi (nessuna patch): ?file= apre dal server, host=parent manda i salvataggi alla pagina
@@ -115,8 +137,10 @@ export default function Editor() {
   return (
     <div className="editor-layout">
       <header className="chat-header">
-        <div className="title">{APP_ICON[app]} {isNew ? (app === 'gridcraft' ? 'Nuovo foglio di calcolo' : app === 'deckcraft' ? 'Nuova presentazione' : 'Nuovo documento') : (file?.filename || 'Documento')}
+        <div className="title" title={canWrite ? 'Clicca per rinominare il file' : undefined} style={canWrite ? { cursor: 'text' } : undefined} onClick={rename}>
+          {APP_ICON[app]} {name || 'Documento'}{isNew && !file && <small className="muted"> · nuovo</small>}
           <small className="muted"> · {APP_LABEL[app]}</small>
+          {canWrite && <small className="muted"> ✏️</small>}
           {!canWrite && <small className="muted"> · sola lettura (Salva scarica una copia)</small>}
           {dirty && <small className="muted"> · modifiche non salvate</small>}
           {saved && !dirty && <small className="muted"> · ✓ salvato {saved}</small>}
@@ -132,7 +156,7 @@ export default function Editor() {
           onError={() => setErr(`L'editor non si è caricato: il container ${app}-web è attivo?`)} />
       ) : <div className="editor-frame center muted">Caricamento…</div>}
       <p className="muted small editor-hint">
-        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato{app === 'wordcraft' && ' (e il salvataggio automatico resta attivo)'}.
+        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato{app === 'wordcraft' && ' (e il salvataggio automatico resta attivo)'}. Per cambiare nome al file clicca sul titolo qui sopra.
         {app !== 'pdfcraft' && <><b> File › Esporta</b> (PDF, CSV…) crea un nuovo file accanto a questo.</>} Serve un browser con WebGPU o WebGL2.
       </p>
     </div>
