@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import mimetypes
 import re
 import uuid
@@ -21,6 +22,7 @@ from ..services.access import require_access
 from ..tools.documents import extract_text
 
 settings = get_settings()
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["files"])
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", ".csv", ".tsv", ".json", ".docx", ".xlsx",
@@ -120,6 +122,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
     if ext not in EDITOR_EXT:
         raise HTTPException(400, f"Formato non consentito ({ext})")
     data = await request.body()
+    log.info("editor-save: %s da %s (%d byte, file_id=%s)", name, ctx.user.username, len(data), file_id)
     max_bytes = int(effective_policy(ctx.user).get("max_upload_mb", 20)) * 1024 * 1024
     if len(data) > max_bytes:
         raise HTTPException(413, "File troppo grande")
