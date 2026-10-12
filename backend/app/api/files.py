@@ -101,6 +101,9 @@ async def list_files(project_id: str | None = None, ctx: AuthContext = Depends(r
 @router.get("/files/{fid}")
 async def download(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     asset, _ = await require_access(db, "file", fid, ctx.user)
+    if not asset.path:   # file virtuale (es. archivio cronologia chat): serviamo il testo
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(asset.extracted_text or "", headers={"Content-Disposition": f'inline; filename="{asset.id}.txt"'})
     # file generati in una conversazione: accessibili a chi vede la conversazione
     return FileResponse(asset.path, media_type=asset.mime, filename=asset.filename,
                         content_disposition_type="inline")
@@ -111,7 +114,8 @@ async def delete_file(fid: str, ctx: AuthContext = Depends(require_auth), db: As
     asset, level = await require_access(db, "file", fid, ctx.user)
     if level not in ("owner", "parent"):
         raise HTTPException(403)
-    Path(asset.path).unlink(missing_ok=True)
+    if asset.path:
+        Path(asset.path).unlink(missing_ok=True)
     await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
     await db.delete(asset)
     await db.commit()

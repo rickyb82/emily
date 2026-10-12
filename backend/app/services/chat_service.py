@@ -95,6 +95,11 @@ def repair_history(hist: list[dict]) -> list[dict]:
 
 async def build_history(conv: Conversation, db: AsyncSession) -> list[dict]:
     msgs = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
+    try:
+        from .compaction import maybe_compact
+        msgs = await maybe_compact(db, conv, msgs)
+    except Exception as e:
+        log.warning("Compattazione non riuscita: %s", e)
     hist = []
     for m in msgs:
         blocks = await _hydrate(m.content, db)
@@ -319,6 +324,10 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     # (tool + prompt di sistema) viene riusato dalla cache del provider a ogni turno.
     from ..policy.permissions import dynamic_context
     system_dynamic = dynamic_context()
+    from .compaction import summary_block
+    sb = summary_block(conv)
+    if sb:
+        system_dynamic += "\n\n" + sb
     # Memoria di famiglia: fatti approvati pertinenti (sempre quelli fissati)
     try:
         from . import memory as _memory

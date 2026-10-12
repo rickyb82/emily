@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     sandbox_timeout: int = 60
     artifact_max_history: int = 20
 
+    # Compattazione delle chat lunghe: riassunto cumulativo + archivio cercabile (RAG) dei messaggi vecchi
+    compaction_enabled: str = "true"
+    context_budget_tokens: int = 24000    # oltre questa stima di token di cronologia si compatta
+    context_keep_tokens: int = 8000       # messaggi recenti da tenere integrali
+
     # Memoria di famiglia (fatti estratti dalle chat, con approvazione)
     memory_enabled: str = "true"
     memory_auto_approve: str = "false"    # true = le voci sicure (confidenza alta, autore adulto) entrano senza approvazione

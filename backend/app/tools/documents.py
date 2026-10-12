@@ -68,7 +68,7 @@ async def read_document(args: dict, ctx: ToolContext) -> ToolResult:
         ok = share is not None
     if not ok:
         return ToolResult("Non hai accesso a questo file", is_error=True)
-    if asset.extracted_text is None:
+    if asset.extracted_text is None and asset.path:
         asset.extracted_text = extract_text(Path(asset.path), asset.mime) or ""
         await ctx.db.commit()
     return ToolResult(asset.extracted_text or "(nessun testo estraibile)")

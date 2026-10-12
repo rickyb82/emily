@@ -26,6 +26,8 @@ INDEXABLE_EXT = {".pdf", ".docx", ".xlsx", ".xlsm", ".txt", ".md", ".csv", ".jso
 
 
 def is_indexable(asset: FileAsset) -> bool:
+    if asset.kind == "chat_history":
+        return True
     return asset.mime.startswith(INDEXABLE_PREFIXES) or Path(asset.filename).suffix.lower() in INDEXABLE_EXT
 
 
@@ -190,7 +192,7 @@ async def index_file(file_id: str, db: AsyncSession | None = None) -> int:
         try:
             from ..tools.documents import extract_text  # import locale: evita cicli
 
-            if asset.extracted_text is None:
+            if asset.extracted_text is None and asset.path:
                 asset.extracted_text = extract_text(Path(asset.path), asset.mime) or ""
             chunks = chunk_text(asset.extracted_text or "")
             await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
