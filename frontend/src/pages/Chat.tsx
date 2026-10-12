@@ -23,6 +23,7 @@ export default function Chat() {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [gotText, setGotText] = useState(false)   // true appena arriva il primo token
+  const [approval, setApproval] = useState<{ id: string; text: string; file_ids: string[]; status: string } | null>(null)
   const [err, setErr] = useState('')
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set())
@@ -88,6 +89,7 @@ export default function Chat() {
       setStatus(t.status)
       setGotText(t.gotText)
       if (t.err) setErr(t.err)
+      if (t.approval && (!approval || approval.id !== t.approval.id)) setApproval({ ...t.approval, status: 'pending' })
       if (t.provider) setConv((cv) => (cv && (cv.provider !== t.provider || cv.model !== t.model) ? { ...cv, provider: t.provider!, model: t.model! } : cv))
       while (appliedArtifacts.current < t.artifacts.length) upsertArtifact(t.artifacts[appliedArtifacts.current++])
     }
@@ -96,6 +98,26 @@ export default function Chat() {
     else setBusy(false)
     return subscribe(id, apply)
   }, [id])
+
+  // bambino: aspetta la decisione del genitore e, se approvata, rimanda la domanda da solo
+  useEffect(() => {
+    if (!approval || approval.status !== 'pending' || !conv) return
+    const t = setInterval(async () => {
+      try {
+        const r = await get(`/approvals/mine/${approval.id}`)
+        if (r.status === 'approved') {
+          clearInterval(t)
+          setApproval(null)
+          await startTurn(conv.id, 'messages', { text: approval.text, file_ids: approval.file_ids, provider: conv.provider, model: conv.model,
+            tools: Array.from(enabledTools), approval_id: approval.id }, messagesRef.current)
+        } else if (r.status === 'denied' || r.status === 'expired') {
+          clearInterval(t)
+          setApproval({ ...approval, status: r.status })
+        }
+      } catch {}
+    }, 5000)
+    return () => clearInterval(t)
+  }, [approval?.id, approval?.status, conv?.id])
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth' })
@@ -236,6 +258,13 @@ export default function Chat() {
           <MessageView key={m.id} m={m} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
         ))}
         {busy && (!gotText || status) && <Working status={status} />}
+        {approval && approval.status === 'pending' && (
+          <div className="working approval-wait"><span className="dots"><i /><i /><i /></span><span>📚 Aspetto il permesso di mamma o papà…</span></div>
+        )}
+        {approval && approval.status !== 'pending' && (
+          <div className="status">{approval.status === 'denied' ? '🚫 Il genitore ha detto di no: i compiti si fanno da soli! Posso però spiegarti come si fa.' : '⌛ Nessuna risposta dal genitore: riprova più tardi.'}
+            <button className="ghost small" style={{ marginLeft: 8 }} onClick={() => setApproval(null)}>OK</button></div>
+        )}
         {err && <div className="error">{err}</div>}
         {!busy && canWrite && messages.some((m) => m.role === 'assistant') && (
           <div className="row" style={{ justifyContent: 'flex-start' }}>

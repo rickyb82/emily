@@ -280,6 +280,26 @@ class MemoryItem(Base):
     used_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class ApprovalRequest(Base):
+    """Richiesta di permesso di un bambino a un genitore (es. compiti): notificata agli adulti, decisa dal pannello."""
+    __tablename__ = "approval_requests"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    family_id: Mapped[str] = mapped_column(ForeignKey("families.id"), index=True)
+    child_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), default="homework")
+    text: Mapped[str] = mapped_column(Text)                       # la richiesta del bambino
+    reason: Mapped[str] = mapped_column(String(200), default="")  # motivo del classificatore
+    subject: Mapped[str] = mapped_column(String(40), default="")
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)   # pending | approved | denied | expired
+    decision: Mapped[str | None] = mapped_column(String(16), nullable=True)           # approve | approve_tutor | deny
+    decided_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)   # permesso "per oggi"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)                    # la risposta e' stata poi generata
+
+
 class AppSetting(Base):
     """Impostazioni modificabili dal pannello admin (chiavi API cifrate, modelli di default).
     Sovrascrivono i valori del file .env."""

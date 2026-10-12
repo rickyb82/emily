@@ -110,7 +110,7 @@ async def delete_conversation(cid: str, ctx: AuthContext = Depends(require_auth)
 HEARTBEAT_SECONDS = 8
 
 
-def _stream(db, ctx, conv, text, file_ids, provider, model, tools):
+def _stream(db, ctx, conv, text, file_ids, provider, model, tools, approval_id=None):
     """Incapsula run_turn in uno StreamingResponse SSE. Il turno gira in un task separato: se il modello resta
     in silenzio (ragionamento, ricerca web, generazione lunga) ogni HEARTBEAT_SECONDS mandiamo comunque un
     commento SSE, cosi' il browser e i proxy vedono la connessione viva e il client puo' mostrare l'attesa."""
@@ -123,7 +123,7 @@ def _stream(db, ctx, conv, text, file_ids, provider, model, tools):
 
         async def pump():
             try:
-                async for chunk in run_turn(db, ctx.user, conv, text, file_ids, provider, model, tools):
+                async for chunk in run_turn(db, ctx.user, conv, text, file_ids, provider, model, tools, approval_id=approval_id):
                     await q.put(f"data: {chunk}\n\n")
             except HTTPException as e:
                 await q.put(f"data: {json.dumps({'type': 'error', 'error': e.detail, 'status': e.status_code})}\n\n")
@@ -179,4 +179,4 @@ async def send_message(cid: str, body: SendMessageRequest, ctx: AuthContext = De
     conv, _ = await require_access(db, "conversation", cid, ctx.user, write=True)
     if not body.text.strip() and not body.file_ids:
         raise HTTPException(400, "Messaggio vuoto")
-    return _stream(db, ctx, conv, body.text, body.file_ids, body.provider, body.model, body.tools)
+    return _stream(db, ctx, conv, body.text, body.file_ids, body.provider, body.model, body.tools, approval_id=body.approval_id)

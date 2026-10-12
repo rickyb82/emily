@@ -186,6 +186,14 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
                     {active.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
                 </label>
+                <label>Compiti per la scuola <small className="muted">(richieste tipo "risolvi l'esercizio", "scrivi il tema")</small>
+                  <select value={policy.homework_mode ?? 'ask_parent'} onChange={(e) => setP('homework_mode', e.target.value)}>
+                    <option value="ask_parent">chiedi il permesso a un genitore (notifica nel campanello)</option>
+                    <option value="tutor">aiuto guidato: spiega e fa domande, mai la soluzione pronta</option>
+                    <option value="block">blocca con un messaggio gentile</option>
+                    <option value="allow">consenti sempre</option>
+                  </select>
+                </label>
                 <label>Modello
                   <select value={policy.model ?? ''} onChange={(e) => setP('model', e.target.value)} disabled={!policy.provider}>
                     <option value="">— default del provider —</option>

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from .api import admin, artifacts, auth, chat, files, google_auth, projects, shares, tts
+from .api import admin, approvals, artifacts, auth, chat, files, google_auth, projects, shares, tts
 from .config import get_settings
 from .db import SessionLocal, init_db
 from .models import AgeGroup, Family, Role, User
@@ -57,7 +57,7 @@ if not settings.cookie_secure:  # solo sviluppo: frontend Vite su un'altra porta
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_credentials=True,
                        allow_methods=["*"], allow_headers=["*"])
 
-for r in (auth.router, google_auth.router, chat.router, projects.router, shares.router, admin.router, artifacts.router, tts.router):
+for r in (auth.router, google_auth.router, chat.router, projects.router, shares.router, admin.router, artifacts.router, tts.router, approvals.router):
     app.include_router(r, prefix="/api")
 app.include_router(files.router, prefix="/api")   # /api/files (upload/lista)
 app.include_router(files.router)                  # /files/{id} (download inline, dietro Caddy)

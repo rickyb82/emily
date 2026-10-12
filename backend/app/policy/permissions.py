@@ -26,6 +26,7 @@ DEFAULTS: dict[str, dict] = {
         "time_windows": [{"days": [0, 1, 2, 3, 4, 5, 6], "start": "08:00", "end": "20:00"}],
         "safe_search": True,
         "moderation": True,
+        "homework_mode": "ask_parent",   # allow | tutor | ask_parent | block
         "parent_can_view": True,
         "can_share": True,
         "can_create_projects": True,
@@ -44,6 +45,7 @@ DEFAULTS: dict[str, dict] = {
         "time_windows": [{"days": [0, 1, 2, 3, 4, 5, 6], "start": "07:30", "end": "21:00"}],
         "safe_search": True,
         "moderation": True,
+        "homework_mode": "ask_parent",   # allow | tutor | ask_parent | block
         "parent_can_view": True,
         "can_share": True,
         "can_create_projects": True,
@@ -62,6 +64,7 @@ DEFAULTS: dict[str, dict] = {
         "time_windows": [{"days": [0, 1, 2, 3, 4, 5, 6], "start": "07:00", "end": "23:00"}],
         "safe_search": True,
         "moderation": True,
+        "homework_mode": "ask_parent",   # allow | tutor | ask_parent | block
         "parent_can_view": True,
         "can_share": True,
         "can_create_projects": True,

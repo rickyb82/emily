@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type Conversation } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import Approvals from './Approvals'
 
 export default function Shell({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth()
@@ -51,7 +52,10 @@ export default function Shell({ children }: { children: ReactNode }) {
       <aside className="sidebar">
         <div className="brand">
           <span>🏠 FamilAI</span>
-          <button className="icon" onClick={() => setOpen(false)}>✕</button>
+          <span className="row" style={{ gap: 4 }}>
+            {!isChild && <Approvals />}
+            <button className="icon" onClick={() => setOpen(false)}>✕</button>
+          </span>
         </div>
         <button className="primary wide" onClick={newChat}>＋ Nuova chat</button>
         <nav className="navlinks">

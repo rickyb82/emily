@@ -219,7 +219,8 @@ def resolve_provider_model(user: User, policy: dict, provider_id: str | None, mo
 
 
 async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str | None, file_ids: list[str],
-                   provider_id: str | None, model: str | None, requested_tools: list[str] | None) -> AsyncIterator[str]:
+                   provider_id: str | None, model: str | None, requested_tools: list[str] | None,
+                   approval_id: str | None = None) -> AsyncIterator[str]:
     """Esegue un turno. Con text=None rigenera la risposta all'ultimo messaggio utente (es. dopo un cambio modello)."""
     policy = effective_policy(user)
 
@@ -260,6 +261,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         provider = get_provider(conv.provider)
         model = conv.model
 
+    system_extra_tutor = ""
     if text is None:
         # ---- rigenerazione: elimina tutto ciò che segue l'ultimo messaggio utente ----
         msgs = (await db.execute(select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at))).scalars().all()
@@ -275,15 +277,71 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         yield sse({"type": "regenerating", "removed": removed, "provider": provider.id, "model": model})
     else:
         # ---- messaggio utente + filtro contenuti ----
-        user_blocks = await prepare_user_blocks(text, file_ids, user, db)
+        # Ripresa dopo il permesso del genitore: il messaggio del bambino e' gia' salvato, non lo duplichiamo.
+        approved_decision = None
+        if approval_id:
+            from ..models import ApprovalRequest as _AR
+            req = await db.get(_AR, approval_id)
+            if req and req.child_id == user.id and req.status == "approved" and not req.consumed:
+                approved_decision = req.decision
+                req.consumed = True
+                # togli l'avviso "ho chiesto il permesso" cosi' la cronologia termina con la domanda del bambino
+                notes = (await db.execute(select(Message).where(Message.conversation_id == conv.id, Message.role == "assistant",
+                                                                Message.flag_reason.like("compiti:%"))
+                                          .order_by(Message.created_at.desc()).limit(1))).scalars().all()
+                for n in notes:
+                    await db.delete(n)
+                await db.commit()
+                yield sse({"type": "approval_resumed", "removed": [n.id for n in notes]})
         safety = await check_text(text, policy)
-        umsg = Message(conversation_id=conv.id, author_id=user.id, role="user", content=user_blocks,
-                       flagged=safety.flagged, flag_reason=safety.reason)
-        db.add(umsg)
-        if conv.title == "Nuova chat" and text.strip():
-            conv.title = text.strip()[:60]
-        await db.commit()
-        yield sse({"type": "user_message", "message": _msg_out(umsg)})
+        if not approved_decision:
+            user_blocks = await prepare_user_blocks(text, file_ids, user, db)
+            umsg = Message(conversation_id=conv.id, author_id=user.id, role="user", content=user_blocks,
+                           flagged=safety.flagged, flag_reason=safety.reason)
+            db.add(umsg)
+            if conv.title == "Nuova chat" and text.strip():
+                conv.title = text.strip()[:60]
+            await db.commit()
+            yield sse({"type": "user_message", "message": _msg_out(umsg)})
+
+        # ---- guardia compiti (solo bambini) ----
+        tutor_mode = False
+        from . import homework as _hw
+        hw_mode = _hw.mode_for(policy, user)
+        if hw_mode != "allow" and not safety.block:
+            if not approved_decision:
+                approved_decision = await _hw.has_pass(db, user)   # permesso "per oggi"
+            if approved_decision == "approve_tutor":
+                tutor_mode = True
+            elif not approved_decision:
+                tail_rows = (await db.execute(select(Message).where(Message.conversation_id == conv.id)
+                                              .order_by(Message.created_at.desc()).limit(3))).scalars().all()
+                tail = [" ".join(b.get("text", "") for b in m.content if b.get("type") == "text")[:300] for m in reversed(tail_rows) if m.role == "user"]
+                verdict = await _hw.classify(text, tail)
+                if verdict and verdict.category == "do_homework" and verdict.confidence >= 2:
+                    if hw_mode == "tutor":
+                        tutor_mode = True
+                    else:
+                        if hw_mode == "ask_parent":
+                            req = await _hw.create_request(db, user, conv.id, text, verdict)
+                            note = ("Questo sembra un compito per la scuola 📚: ho chiesto il permesso a un genitore. "
+                                    "Appena risponde continuo! Nel frattempo, se vuoi, posso spiegarti come si fa.")
+                        else:
+                            req = None
+                            note = "Questo sembra un compito per la scuola 📚: i compiti si fanno da soli! Se vuoi ti spiego come si fa, ma la risposta la trovi tu."
+                        amsg = Message(conversation_id=conv.id, role="assistant", content=[{"type": "text", "text": note}],
+                                       flagged=True, flag_reason=f"compiti: {verdict.reason}")
+                        db.add(amsg)
+                        await db.commit()
+                        yield sse({"type": "text_delta", "text": note})
+                        if req:
+                            yield sse({"type": "approval_required", "approval_id": req.id, "message_text": text, "file_ids": file_ids})
+                        yield sse({"type": "done", "message": _msg_out(amsg)})
+                        return
+        if tutor_mode:
+            system_extra_tutor = _hw.TUTOR_RULES
+        else:
+            system_extra_tutor = ""
 
         if safety.block:
             amsg = Message(conversation_id=conv.id, role="assistant", content=[{"type": "text", "text": CHILD_BLOCK_MESSAGE}],
@@ -324,6 +382,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     # (tool + prompt di sistema) viene riusato dalla cache del provider a ogni turno.
     from ..policy.permissions import dynamic_context
     system_dynamic = dynamic_context()
+    if system_extra_tutor:
+        system_dynamic += "\n" + system_extra_tutor
     from .compaction import summary_block
     sb = summary_block(conv)
     if sb:

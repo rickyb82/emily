@@ -109,6 +109,7 @@ class SendMessageRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
     tools: list[str] | None = None  # sottoinsieme dei tool consentiti; None = tutti
+    approval_id: str | None = None   # risposta a una richiesta approvata dal genitore
 
 
 class MessageOut(BaseModel):

@@ -16,6 +16,7 @@ export interface TurnState {
   artifacts: any[]                    // artifact creati/aggiornati durante il turno (in ordine)
   provider?: string                   // aggiornati da un evento 'regenerating'
   model?: string
+  approval?: { id: string; text: string; file_ids: string[] }   // richiesta di permesso al genitore in attesa
   finishedAt?: number
 }
 
@@ -59,7 +60,7 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
   const set = (patch: Partial<TurnState>) => { Object.assign(s, patch); emit(convId) }
   let current: Message | null = null
   let optimisticUserId: string | null = null
-  if (action === 'messages' && (body?.text || body?.file_ids?.length)) {
+  if (action === 'messages' && !body?.approval_id && (body?.text || body?.file_ids?.length)) {
     // la domanda compare subito in chat, prima che il server risponda
     optimisticUserId = 'tmp-user-' + Date.now()
     const att = (body.file_ids || []).length
@@ -77,6 +78,11 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
         const oid = optimisticUserId
         optimisticUserId = null
         set({ status: '', messages: oid && s.messages.some((x) => x.id === oid) ? s.messages.map((x) => (x.id === oid ? ev.message : x)) : [...s.messages, ev.message] })
+      } else if (ev.type === 'approval_resumed') {
+        const rm = new Set<string>(ev.removed || [])
+        set({ messages: s.messages.filter((x) => !rm.has(x.id)), approval: undefined })
+      } else if (ev.type === 'approval_required') {
+        set({ approval: { id: ev.approval_id, text: ev.message_text, file_ids: ev.file_ids || [] } })
       } else if (ev.type === 'route') {
         set({ status: ev.local ? `🏠 Risponde il modello locale (${ev.model})…` : `☁️ Inoltro a ${ev.provider_label} (${ev.model})…` })
       } else if (ev.type === 'status') {
