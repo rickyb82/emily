@@ -537,7 +537,7 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
     outline = str(args.get("outline") or "")
     src_id = str(args.get("source_file_id") or "").strip()
     layout = str(args.get("layout") or "tree").lower()
-    want = [str(f).lower().lstrip(".") for f in (args.get("formats") or ["png", "mm"])]
+    want = [str(f).lower().lstrip(".") for f in (args.get("formats") or ["png", "json"])]
     want = [f for f in want if f in APPS[IDEACRAFT]["formats"]] or ["png"]
     dark = bool(args.get("dark"))
     size = str(args.get("size") or "1600x1000")
@@ -594,8 +594,9 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
         if art:
             artifacts.append(art)
     names = ", ".join(a.get("filename", "immagine") for a in artifacts)
-    return ToolResult(f"Mappa creata con IdeaCraft e mostrata all'utente: {names}. Il .mm si apre con FreeMind/Freeplane/XMind, "
-                      f"l'.opml con qualsiasi outliner. Non inventare link.", artifacts=artifacts)
+    return ToolResult(f"Mappa creata con IdeaCraft e mostrata all'utente: {names}. Il .ideacraft.json si apre nell'editor "
+                      f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner. Non inventare link.",
+                      artifacts=artifacts)
 
 
 # ---------------------------------------------------------------- registrazione ----
@@ -690,7 +691,7 @@ def register_tools(app: str) -> None:
                 "outline": {"type": "string", "description": "Outline Markdown annidato"},
                 "layout": {"type": "string", "enum": ["tree", "radial"], "description": "Disposizione (default tree)"},
                 "formats": {"type": "array", "items": {"type": "string", "enum": list(APPS[IDEACRAFT]["formats"])},
-                            "description": "File da produrre (default png e mm)"},
+                            "description": "File da produrre (default png e json = formato nativo, modificabile nell'editor; mm per FreeMind/XMind)"},
                 "dark": {"type": "boolean", "description": "Immagine con sfondo scuro"},
                 "size": {"type": "string", "description": "Dimensione immagine, es. 1600x1000"},
                 "source_file_id": {"type": "string", "description": "Id di un allegato da importare al posto di outline"}},

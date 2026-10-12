@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth'
 import { APP_ICON, APP_LABEL, UI_LANG, editorFor, type ArtApp } from '../lib/artcraft'
 
 /**
- * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli), PdfCraft (PDF) o DeckCraft (presentazioni), app open source in WebAssembly in un iframe.
+ * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli), PdfCraft (PDF), DeckCraft (presentazioni) o IdeaCraft (mappe), app open source in WebAssembly in un iframe.
  * ?file=<id> apre quel file del server (l'app la decide l'estensione); con &new=1&app=... e' un file nuovo (l'id lo ha
  * scelto il browser). File > Salva nell'editor spedisce il file a /api/files/wordcraft-save, che lo crea o lo sovrascrive.
  */
@@ -25,10 +25,10 @@ export default function Editor() {
   async function rename() {
     if (!canWrite) return
     const current = name || 'documento'
-    const typed = prompt('Nome del file (l\'estensione resta quella attuale)', current.replace(/\.[^.]+$/, ''))
+    const typed = prompt('Nome del file (l\'estensione resta quella attuale)', current.replace(/(\.ideacraft)?\.[^.]+$/, ''))
     if (!typed || !typed.trim()) return
-    const ext = (current.match(/\.[^.]+$/) || [''])[0]
-    const next = typed.trim().replace(/\.[^.]+$/, '') + ext
+    const ext = (current.match(/(\.ideacraft)?\.[^.]+$/) || [''])[0]
+    const next = typed.trim().replace(/(\.ideacraft)?\.[^.]+$/, '') + ext
     try {
       const f = await patch<FileOut>(`/files/${fileId}`, { filename: next })
       setFile(f)

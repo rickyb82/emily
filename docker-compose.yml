@@ -20,6 +20,7 @@ services:
       - DECKCRAFT_HOST=${DECKCRAFT_HOST:-}
       - DECKCRAFT_WEB=${DECKCRAFT_WEB:-0}
       - IDEACRAFT_HOST=${IDEACRAFT_HOST:-}
+      - IDEACRAFT_WEB=${IDEACRAFT_WEB:-0}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -208,7 +209,7 @@ services:
     restart: unless-stopped
     expose: ["80"]
 
-  # IdeaCraft (mappe mentali): per ora solo CLI (niente MCP ne' versione web): il container la espone via HTTP
+  # IdeaCraft (mappe mentali): la CLI non ha ancora MCP, il container la espone via HTTP; l'editor web c'e' (ideacraft-web)
   ideacraft:
     build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: ideacraft, UPSTREAM_SHA: "${IDEACRAFT_SHA:-}" } }
     image: familai-ideacraft
@@ -219,6 +220,13 @@ services:
       - HTTP_PORT=7986
     expose: ["7986"]
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  ideacraft-web:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.web, args: { APP: ideacraft, UPSTREAM_SHA: "${IDEACRAFT_SHA:-}" } }
+    image: familai-ideacraft-web
+    profiles: ["ideacraft"]
+    restart: unless-stopped
+    expose: ["80"]
 
 networks:
   default:

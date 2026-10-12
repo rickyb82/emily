@@ -133,11 +133,11 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")
-    if any(getattr(settings, f"{a}_web", False) for a in ("wordcraft", "gridcraft", "pdfcraft", "deckcraft")):
+    if any(getattr(settings, f"{a}_web", False) for a in ("wordcraft", "gridcraft", "pdfcraft", "deckcraft", "ideacraft")):
         parts.append(
             "\n# Editor integrati\n"
             "Accanto a ogni file in chat (docx, xlsx, pdf, pptx…) l'utente ha gia' il pulsante ✏️ Modifica che lo apre "
-            "nell'editor integrato di FamilAI (WordCraft, GridCraft, PdfCraft, DeckCraft). Se chiede di aprire o modificare un "
+            "nell'editor integrato di FamilAI (WordCraft, GridCraft, PdfCraft, DeckCraft, IdeaCraft). Se chiede di aprire o modificare un "
             "file 'nell'editor', NON dire che non puoi: rispondi che basta cliccare ✏️ Modifica accanto al file (o il menu "
             "📝 Documenti). Per convertire tra formati (Word → PDF, xlsx → csv…) usa i tool write_document/write_spreadsheet/"
             "write_presentation con source_file_id, non script Python.")
@@ -201,7 +201,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "- Per mappe mentali, mappe concettuali, brainstorming, schemi di studio o 'una mappa di…' usa mind_map con un outline "
             "Markdown annidato (titolo come idea centrale, rami e sotto-rami come elenco; 'A -> B: perche'' per collegamenti "
             "trasversali). L'immagine della mappa compare in chat; il .mm si apre in FreeMind/Freeplane/XMind. Con source_file_id "
-            "converte una mappa allegata (.mm, .xmind, .opml, Mermaid).")
+            "converte una mappa allegata (.mm, .xmind, .opml, Mermaid)."
+            + ("\n- L'utente puo' aprire e modificare la mappa con l'editor IdeaCraft integrato (✏️ accanto al file .ideacraft.json)."
+               if settings.ideacraft_web else ""))
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available

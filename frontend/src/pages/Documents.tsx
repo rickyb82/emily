@@ -29,10 +29,10 @@ export default function Documents() {
     load()
   }
   async function rename(f: FileOut) {
-    const ext = (f.filename.match(/\.[^.]+$/) || [''])[0]
-    const typed = prompt('Nuovo nome del file', f.filename.replace(/\.[^.]+$/, ''))
+    const ext = (f.filename.match(/(\.ideacraft)?\.[^.]+$/) || [''])[0]
+    const typed = prompt('Nuovo nome del file', f.filename.replace(/(\.ideacraft)?\.[^.]+$/, ''))
     if (!typed || !typed.trim()) return
-    try { await patch(`/files/${f.id}`, { filename: typed.trim().replace(/\.[^.]+$/, '') + ext }); load() } catch (e: any) { setErr(e.message) }
+    try { await patch(`/files/${f.id}`, { filename: typed.trim().replace(/(\.ideacraft)?\.[^.]+$/, '') + ext }); load() } catch (e: any) { setErr(e.message) }
   }
   async function remove(f: FileOut) {
     if (!confirm(`Eliminare "${f.filename}"?`)) return
@@ -43,7 +43,8 @@ export default function Documents() {
   const gc = !!me?.features?.gridcraft_web
   const pc = !!me?.features?.pdfcraft_web
   const dc = !!me?.features?.deckcraft_web
-  const web = wc || gc || pc || dc
+  const ic = !!me?.features?.ideacraft_web
+  const web = wc || gc || pc || dc || ic
   const feats = me?.features
   const shown = files
     .filter((f) => !onlyDocs || editorFor(f.filename))
@@ -54,14 +55,15 @@ export default function Documents() {
     <div className="page">
       <h2>📝 Documenti</h2>
       <p className="muted">
-        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)', pc && 'PDF (PdfCraft)', dc && 'presentazioni PowerPoint (DeckCraft)'].filter(Boolean).join(', ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
-             : "Gli editor non sono attivi (./familai.sh wordcraft|gridcraft|pdfcraft|deckcraft up): qui trovi comunque i tuoi file."}
+        {web ? `Scrivi e modifica ${[wc && 'documenti Word (WordCraft)', gc && 'fogli di calcolo Excel (GridCraft)', pc && 'PDF (PdfCraft)', dc && 'presentazioni PowerPoint (DeckCraft)', ic && 'mappe mentali (IdeaCraft)'].filter(Boolean).join(', ')} direttamente qui: app open source, niente installazioni, i file restano in casa.`
+             : "Gli editor non sono attivi (./familai.sh wordcraft|gridcraft|pdfcraft|deckcraft|ideacraft up): qui trovi comunque i tuoi file."}
       </p>
       {err && <div className="error">{err}</div>}
       <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
         {wc && <button className="primary" onClick={() => nav(newFilePath('wordcraft'))}>＋ Documento</button>}
         {gc && <button className="primary" onClick={() => nav(newFilePath('gridcraft'))}>＋ Foglio di calcolo</button>}
         {dc && <button className="primary" onClick={() => nav(newFilePath('deckcraft'))}>＋ Presentazione</button>}
+        {ic && <button className="primary" onClick={() => nav(newFilePath('ideacraft'))}>＋ Mappa mentale</button>}
         <button className="ghost" onClick={() => fileInput.current?.click()}>📎 Carica</button>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         <input placeholder="Cerca…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 220 }} />

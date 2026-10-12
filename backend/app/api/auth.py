@@ -253,7 +253,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "gridcraft_web": bool(settings.gridcraft_web) and adult, "gridcraft_mcp": mcp_manager.is_connected("gridcraft"),
                 "pdfcraft_web": bool(settings.pdfcraft_web) and adult, "pdfcraft_mcp": mcp_manager.is_connected("pdfcraft"),
                 "deckcraft_web": bool(settings.deckcraft_web) and adult, "deckcraft_mcp": mcp_manager.is_connected("deckcraft"),
-                "ideacraft": bool(settings.ideacraft_host)}
+                "ideacraft": bool(settings.ideacraft_host), "ideacraft_web": bool(settings.ideacraft_web) and adult}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
 

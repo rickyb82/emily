@@ -100,8 +100,9 @@ class Settings(BaseSettings):
     deckcraft_host: str = ""          # host:porta del container DeckCraft (es. deckcraft:7985): presentazioni via MCP
     deckcraft_web: bool = False       # editor DeckCraft nel browser servito su /deckcraft/ (container deckcraft-web)
     ideacraft_host: str = ""          # host:porta del container IdeaCraft (es. ideacraft:7986): mappe mentali via CLI/HTTP
+    ideacraft_web: bool = False       # editor IdeaCraft nel browser servito su /ideacraft/ (container ideacraft-web)
 
-    @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", mode="before")
+    @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", "ideacraft_web", mode="before")
     @classmethod
     def _empty_is_false(cls, v):
         # docker-compose passa WORDCRAFT_WEB=${WORDCRAFT_WEB:-}: una stringa vuota vale "spento", non e' un errore

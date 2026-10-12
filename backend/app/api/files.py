@@ -33,7 +33,8 @@ ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", 
 WORDCRAFT_EXT = {".docx", ".docm", ".dotx", ".doc", ".odt", ".rtf", ".txt", ".md", ".html", ".htm", ".tex", ".json", ".pdf", ".png"}
 GRIDCRAFT_EXT = {".xlsx", ".xlsm", ".xls", ".xlsb", ".ods", ".csv", ".tsv", ".txt", ".json", ".html", ".pdf", ".png"}
 DECKCRAFT_EXT = {".pptx", ".potx", ".ppsx", ".deckcraft", ".pdf", ".png", ".jpg", ".jpeg", ".txt"}
-EDITOR_EXT = WORDCRAFT_EXT | GRIDCRAFT_EXT | DECKCRAFT_EXT
+IDEACRAFT_EXT = {".json", ".mm", ".opml", ".md", ".txt", ".mmd", ".xmind"}
+EDITOR_EXT = WORDCRAFT_EXT | GRIDCRAFT_EXT | DECKCRAFT_EXT | IDEACRAFT_EXT
 
 
 def _out(f: FileAsset) -> FileOut:
@@ -191,8 +192,10 @@ class FileRename(BaseModel):
 async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Rinomina un file (proprietario o permesso di scrittura). L'estensione resta quella originale."""
     asset, _ = await require_access(db, "file", fid, ctx.user, write=True)
-    old_ext = Path(asset.filename).suffix
-    stem = Path(re.sub(r"[^\w.\- ]", "_", body.filename.strip())).stem.strip(". ")
+    low = asset.filename.lower()
+    old_ext = ".ideacraft.json" if low.endswith(".ideacraft.json") else Path(asset.filename).suffix
+    clean = re.sub(r"[^\w.\- ]", "_", body.filename.strip())
+    stem = re.sub(r"(\.ideacraft)?\.[A-Za-z0-9]{1,8}$", "", clean).strip(". ") if "." in clean else clean.strip(". ")
     if not stem:
         raise HTTPException(400, "Nome non valido")
     asset.filename = f"{stem}{old_ext}"[:200]

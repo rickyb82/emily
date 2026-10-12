@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Piccola patch alle app web ArtCraft (apps/<app>-web) per integrarle in FamilAI.
 
-Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft | deckcraft)
+Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft | deckcraft | ideacraft)
 
 Aggiunge tre parametri all'URL della pagina:
   ?open=<url>&name=<file>   apre il documento scaricandolo dal server (con i cookie di sessione)
@@ -436,6 +436,44 @@ elif app == "deckcraft":
           "        } else {\n            self.save_as_dialog(if FAMILAI_SAVE_PPTX.load(std::sync::atomic::Ordering::Relaxed) { \"pptx\" } else { \"deckcraft\" });\n        }\n",
           "lib.rs: Salva in .pptx")
     italian_deckcraft(root)
+elif app == "ideacraft":
+    main_rs = root / "apps/ideacraft-web/src/main.rs"
+    patch(cargo, '"UrlSearchParams", "Navigator"]', '"UrlSearchParams", "Navigator", "RequestInit", "RequestCredentials", "Response", "Headers"]',
+          "Cargo.toml: feature web-sys")
+    patch(main_rs,
+          "            if let Some(id) = query_param(\"template\") {\n",
+          "            if query_param(\"open\").is_some() {\n"
+          "                // FamilAI: il file arriva da ?open=, niente mappa salvata nel browser ne' galleria dei modelli\n"
+          "                app.new_map();\n"
+          "            } else if let Some(id) = query_param(\"template\") {\n",
+          "main.rs: ?open= (niente galleria)")
+    patch(main_rs,
+          "            Self { app, inbox: Arc::default() }\n",
+          "            let inbox: Inbox = Arc::default();\n"
+          "            familai::open_from_query(inbox.clone(), cc.egui_ctx.clone());\n"
+          "            Self { app, inbox }\n",
+          "main.rs: ?open=")
+    patch(main_rs,
+          "    fn download(name: &str, text: &str, mime: &str) {\n",
+          "    fn download(name: &str, text: &str, mime: &str) {\n"
+          "        if let Some(save_url) = familai::save_url() {\n"
+          "            let _ = familai::save_remote(&save_url, name, text.as_bytes());\n"
+          "            return;\n"
+          "        }\n",
+          "main.rs: ?save=")
+    head_idea = (
+        "\n    /// Integrazione FamilAI: `?open=<url>&name=<file>` apre una mappa presa dal server;\n"
+        "    /// `?save=<url>` fa si' che Salva/Esporta spediscano il file al server (POST) invece di scaricarlo.\n"
+        "    mod familai {\n"
+        "        use eframe::wasm_bindgen;\n"
+        "        use wasm_bindgen::JsCast as _;\n\n"
+        "        use super::Inbox;\n\n"
+        "        mod log {\n"
+        "            macro_rules! error { ($($t:tt)*) => { eframe::web_sys::console::error_1(&format!($($t)*).into()) } }\n"
+        "            macro_rules! info { ($($t:tt)*) => { eframe::web_sys::console::log_1(&format!($($t)*).into()) } }\n"
+        "            pub(crate) use {error, info};\n"
+        "        }\n")
+    patch(main_rs, "\n    pub fn start() {\n", head_idea + SAVE_SIMPLE + COMMON + "\n    pub fn start() {\n", "main.rs: modulo familai")
 else:
     sys.exit(f"!! app sconosciuta: {app}")
 print("Patch completata.")

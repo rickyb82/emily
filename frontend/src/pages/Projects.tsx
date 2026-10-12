@@ -150,6 +150,7 @@ export default function Projects() {
               {me?.features?.wordcraft_web && <button className="ghost" onClick={() => nav(newFilePath('wordcraft', { projectId: proj.id }))}>📝 Nuovo documento</button>}
               {me?.features?.gridcraft_web && <button className="ghost" onClick={() => nav(newFilePath('gridcraft', { projectId: proj.id }))}>📊 Nuovo foglio</button>}
               {me?.features?.deckcraft_web && <button className="ghost" onClick={() => nav(newFilePath('deckcraft', { projectId: proj.id }))}>📽️ Nuova presentazione</button>}
+              {me?.features?.ideacraft_web && <button className="ghost" onClick={() => nav(newFilePath('ideacraft', { projectId: proj.id }))}>🧠 Nuova mappa</button>}
             </div>
             <ul className="file-list">
               {files.map((f) => (
