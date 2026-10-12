@@ -135,7 +135,7 @@ export default function AdminProviders() {
                     <>
                       <input list={`presets-${c.id}`} placeholder={c.model_state.value || (c.id === 'comfyui' ? 'flux-dev' : 'es. openai/gpt-oss-120b')}
                         value={draft[c.model_key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })} />
-                      {c.id === 'comfyui' && <datalist id="presets-comfyui"><option value="flux-dev" /><option value="flux-schnell" /><option value="sdxl" /><option value="sd35" /></datalist>}
+                      {c.id === 'comfyui' && <datalist id="presets-comfyui"><option value="flux-dev" /><option value="flux-schnell" /><option value="flux-dev-gguf" /><option value="flux-schnell-gguf" /><option value="sdxl" /><option value="sd35" /></datalist>}
                     </>
                   )}
                 </label>

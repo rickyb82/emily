@@ -21,15 +21,24 @@ PRESETS: dict[str, dict] = {
     # nome → (tipo, file modello, passi, cfg/guidance)
     "flux-dev": {"kind": "flux", "unet": "flux1-dev.safetensors", "steps": 20, "guidance": 3.5},
     "flux-schnell": {"kind": "flux", "unet": "flux1-schnell.safetensors", "steps": 4, "guidance": 1.0},
+    "flux-dev-gguf": {"kind": "flux", "gguf": True, "unet": "flux1-dev-Q6_K.gguf", "t5": "t5-v1_1-xxl-encoder-Q8_0.gguf", "steps": 20, "guidance": 3.5},
+    "flux-schnell-gguf": {"kind": "flux", "gguf": True, "unet": "flux1-schnell-Q8_0.gguf", "t5": "t5-v1_1-xxl-encoder-Q8_0.gguf", "steps": 4, "guidance": 1.0},
     "sdxl": {"kind": "ckpt", "ckpt": "sd_xl_base_1.0.safetensors", "steps": 28, "cfg": 6.0, "vae": "sdxl_vae.safetensors"},
     "sd35": {"kind": "sd35", "ckpt": "sd3.5_large.safetensors", "steps": 28, "cfg": 4.0},
 }
 
 
 def _flux_workflow(p: dict, prompt: str, w: int, h: int, seed: int) -> dict:
+    if p.get("gguf"):
+        # modelli quantizzati (nodo ComfyUI-GGUF): Flux in 24 GB di memoria (Mac Apple Silicon, GPU piccole)
+        loader = {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": p["unet"]}}
+        clip = {"class_type": "DualCLIPLoaderGGUF", "inputs": {"clip_name1": p.get("t5", "t5-v1_1-xxl-encoder-Q8_0.gguf"), "clip_name2": "clip_l.safetensors", "type": "flux"}}
+    else:
+        loader = {"class_type": "UNETLoader", "inputs": {"unet_name": p["unet"], "weight_dtype": "default"}}
+        clip = {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "t5xxl_fp16.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux"}}
     return {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": p["unet"], "weight_dtype": "default"}},
-        "2": {"class_type": "DualCLIPLoader", "inputs": {"clip_name1": "t5xxl_fp16.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux"}},
+        "1": loader,
+        "2": clip,
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
         "4": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
         "5": {"class_type": "FluxGuidance", "inputs": {"guidance": p["guidance"], "conditioning": ["4", 0]}},
@@ -98,6 +107,9 @@ async def models_available() -> dict:
         ckpts = r.json()["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0]
         r2 = await c.get(f"{base}/object_info/UNETLoader")
         unets = r2.json()["UNETLoader"]["input"]["required"]["unet_name"][0] if r2.status_code == 200 else []
+        r4 = await c.get(f"{base}/object_info/UnetLoaderGGUF")
+        if r4.status_code == 200:
+            unets = list(dict.fromkeys(unets + r4.json()["UnetLoaderGGUF"]["input"]["required"]["unet_name"][0]))
         r3 = await c.get(f"{base}/system_stats")
         stats = r3.json() if r3.status_code == 200 else {}
     return {"checkpoints": ckpts, "unets": unets, "stats": stats}
