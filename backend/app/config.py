@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -96,6 +97,14 @@ class Settings(BaseSettings):
     gridcraft_web: bool = False       # editor GridCraft nel browser servito su /gridcraft/ (container gridcraft-web)
     pdfcraft_host: str = ""           # host:porta del container PdfCraft (es. pdfcraft:7984): PDF via MCP
     pdfcraft_web: bool = False        # editor PdfCraft nel browser servito su /pdfcraft/ (container pdfcraft-web)
+
+    @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", mode="before")
+    @classmethod
+    def _empty_is_false(cls, v):
+        # docker-compose passa WORDCRAFT_WEB=${WORDCRAFT_WEB:-}: una stringa vuota vale "spento", non e' un errore
+        if isinstance(v, str) and not v.strip():
+            return False
+        return v
 
     # Email (SMTP) — configurabile dal pannello
     smtp_host: str = ""

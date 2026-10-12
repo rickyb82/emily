@@ -12,11 +12,11 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
       - SANDBOX_URL=http://sandbox:8080
       - WORDCRAFT_HOST=${WORDCRAFT_HOST:-}
-      - WORDCRAFT_WEB=${WORDCRAFT_WEB:-}
+      - WORDCRAFT_WEB=${WORDCRAFT_WEB:-0}
       - GRIDCRAFT_HOST=${GRIDCRAFT_HOST:-}
-      - GRIDCRAFT_WEB=${GRIDCRAFT_WEB:-}
+      - GRIDCRAFT_WEB=${GRIDCRAFT_WEB:-0}
       - PDFCRAFT_HOST=${PDFCRAFT_HOST:-}
-      - PDFCRAFT_WEB=${PDFCRAFT_WEB:-}
+      - PDFCRAFT_WEB=${PDFCRAFT_WEB:-0}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
