@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type FileOut } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { APP_ICON, APP_LABEL, editorFor, type ArtApp } from '../lib/artcraft'
+import { APP_ICON, APP_LABEL, UI_LANG, editorFor, type ArtApp } from '../lib/artcraft'
 
 /**
  * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli di calcolo) o PdfCraft (PDF), app open source in WebAssembly in un iframe.
@@ -78,7 +78,7 @@ export default function Editor() {
     const cid = params.get('conversation_id'); const pid = params.get('project_id')
     if (cid) saveQ.set('conversation_id', cid)
     if (pid) saveQ.set('project_id', pid)
-    const q = new URLSearchParams()
+    const q = new URLSearchParams({ lang: UI_LANG })
     if (app === 'pdfcraft') {
       // PdfCraft: parametri nativi (nessuna patch): ?file= apre dal server, host=parent manda i salvataggi alla pagina
       q.set('file', `/files/${fileId}`)

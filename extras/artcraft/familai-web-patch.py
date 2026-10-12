@@ -3,9 +3,11 @@
 
 Uso: familai-web-patch.py <cartella-repo> <app>      (app: wordcraft | gridcraft | pdfcraft)
 
-Aggiunge due parametri all'URL della pagina:
+Aggiunge tre parametri all'URL della pagina:
   ?open=<url>&name=<file>   apre il documento scaricandolo dal server (con i cookie di sessione)
   ?save=<url>               File > Salva / Esporta spediscono il file al server con una POST invece di scaricarlo
+  ?lang=<codice>            lingua dell'interfaccia all'avvio (es. it), al posto di quella del browser
+Per GridCraft aggiunge anche l'interfaccia italiana (gridcraft-it.rs) se il sorgente non la contiene ancora.
 Senza questi parametri l'app si comporta come l'originale. Eseguito dal Dockerfile.web sulla copia del repository;
 si ferma con errore se il sorgente e' cambiato e gli ancoraggi non si trovano piu' (aggiornare gli ancoraggi qui).
 """
@@ -27,6 +29,10 @@ COMMON = r'''
 
     pub fn save_url() -> Option<String> {
         param("save")
+    }
+
+    pub fn lang() -> Option<String> {
+        param("lang")
     }
 
     pub fn open_from_query(inbox: Inbox, ctx: egui::Context) {
@@ -154,6 +160,36 @@ def patch(path: Path, old: str, new: str, label: str) -> None:
     print(f"  + {label}")
 
 
+def italian(root: Path) -> None:
+    """GridCraft: interfaccia italiana (Language::It) se il repository non la contiene gia'."""
+    i18n = root / "crates/ui-egui/src/i18n.rs"
+    s = i18n.read_text()
+    if "mod it;" in s:
+        print("  = gridcraft: italiano gia' presente nel sorgente")
+        return
+    src = Path(__file__).with_name("gridcraft-it.rs")
+    (root / "crates/ui-egui/src/i18n/it.rs").write_text(src.read_text())
+    edits = [
+        ("mod fr;\nmod ko;", "mod fr;\nmod it;\nmod ko;"),
+        ("    Cs,\n    Fr,\n}", "    Cs,\n    Fr,\n    It,\n}"),
+        ("pub const ALL: [Self; 10] = [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr];",
+         "pub const ALL: [Self; 11] = [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::It];"),
+        ('            Self::Fr => "Français",\n        }', '            Self::Fr => "Français",\n            Self::It => "Italiano",\n        }'),
+        ('            Self::Fr => "fr",\n        }', '            Self::Fr => "fr",\n            Self::It => "it",\n        }'),
+        ('            "fr" => Some(Self::Fr),\n            _ => None,', '            "fr" => Some(Self::Fr),\n            "it" => Some(Self::It),\n            _ => None,'),
+        ("            Self::Fr => fr::translate(text),\n        };", "            Self::Fr => fr::translate(text),\n            Self::It => it::translate(text),\n        };"),
+    ]
+    for old, new in edits:
+        if old not in s:
+            sys.exit(f"!! gridcraft italiano: ancoraggio non trovato in i18n.rs: {old[:50]!r}")
+        s = s.replace(old, new, 1)
+    i18n.write_text(s)
+    theme = root / "crates/ui-egui/src/theme.rs"
+    t = theme.read_text()
+    theme.write_text(t.replace("Language::De, Language::Cs] {", "Language::De, Language::Cs, Language::It] {", 1))
+    print("  + gridcraft: interfaccia italiana (it.rs + Language::It)")
+
+
 print(f"Patch FamilAI per {app} web in {root}")
 if app == "wordcraft":
     patch(cargo, '"MediaQueryList"]', '"MediaQueryList"' + FEATURES, "Cargo.toml: feature web-sys")
@@ -169,6 +205,13 @@ if app == "wordcraft":
           '        return familai::save_remote(saves, ctx, &save_url, &name, bytes);\n'
           '    }\n\n    // On browsers supporting the File System Access API',
           "web.rs: ?save=")
+    patch(web_rs,
+          "                    app.autosave = false;\n",
+          "                    app.autosave = false;\n"
+          "                    if let Some(lang) = familai::lang() {\n"
+          "                        app.ui.language = lang;\n"
+          "                    }\n",
+          "web.rs: ?lang=")
     patch(web_rs, "\nfn mime_for(", HEAD_WORDCRAFT + SAVE_WORDCRAFT + COMMON + "\nfn mime_for(", "web.rs: modulo familai")
 elif app == "gridcraft":
     patch(cargo, '"ClipboardItem", "Navigator"]', '"ClipboardItem", "Navigator"' + FEATURES, "Cargo.toml: feature web-sys")
@@ -189,11 +232,27 @@ elif app == "gridcraft":
           '    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");\n'
           '    let window = web_sys::window().ok_or("no window")?;\n',
           "web.rs: ?save=")
+    patch(web_rs,
+          "                    SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);\n",
+          "                    if let Some(lang) = familai::lang().and_then(|c| gridcraft_ui_egui::i18n::Language::parse(&c)) {\n"
+          "                        app.ui.language = lang;\n"
+          "                    }\n"
+          "                    SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);\n",
+          "web.rs: ?lang=")
     patch(web_rs, "\nfn mime_for(", HEAD_SIMPLE + SAVE_SIMPLE + COMMON + "\nfn mime_for(", "web.rs: modulo familai")
+    italian(root)
 elif app == "pdfcraft":
     # PdfCraft ha gia' tutto: ?file=<url> apre dal server e ?host=parent spedisce i salvataggi alla pagina che lo
     # incornicia via postMessage (pdfcraft:save); FamilAI li riceve nella pagina Editor. Nessuna patch.
-    print("  = pdfcraft: nessuna patch necessaria (?file= e ?host=parent sono nativi)")
+    print("  = pdfcraft: ?file= e ?host=parent sono nativi")
+    patch(root / "apps/pdfcraft-web/src/main.rs",
+          "                    // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).\n",
+          "                    // FamilAI: `?lang=<code>` picks the interface language instead of the browser's.\n"
+          "                    if let Some(lang) = query_param(\"lang\").filter(|l| !l.is_empty()) {\n"
+          "                        app.language = lang;\n"
+          "                    }\n"
+          "                    // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).\n",
+          "main.rs: ?lang=")
 else:
     sys.exit(f"!! app sconosciuta: {app}")
 print("Patch completata.")

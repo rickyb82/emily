@@ -8,6 +8,8 @@ export const PDFCRAFT_EXT = ['.pdf']
 
 export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft', pdfcraft: 'PdfCraft' }
 export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊', pdfcraft: '📕' }
+/** Lingua dell'interfaccia degli editor (parametro ?lang= aggiunto dalla patch FamilAI; PdfCraft e WordCraft hanno l'italiano nativo). */
+export const UI_LANG = 'it'
 
 /** Quale editor apre questo file (undefined = nessuno). */
 export function editorFor(filename: string): ArtApp | undefined {
