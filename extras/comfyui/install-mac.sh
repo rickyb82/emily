@@ -41,7 +41,7 @@ dl() { local url="$1" dest="$2"; if [ -s "$dest" ]; then echo "   gia' presente:
 say "Scarico encoder e VAE di Flux"
 dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" "$M/clip/clip_l.safetensors"
 dl "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf" "$M/clip/t5-v1_1-xxl-encoder-Q8_0.gguf"
-dl "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors" "$M/vae/ae.safetensors"
+dl "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors" "$M/vae/ae.safetensors"
 say "Scarico Flux.1 schnell Q8 (GGUF, ~12 GB)"
 dl "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q8_0.gguf" "$M/unet/flux1-schnell-Q8_0.gguf"
 if [ "$DEV" = 1 ]; then

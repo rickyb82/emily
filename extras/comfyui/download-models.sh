@@ -21,14 +21,19 @@ dl() {  # dl <url> <destinazione>
 common_flux() {
   dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" "$M/clip/clip_l.safetensors"
   dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors" "$M/clip/t5xxl_fp16.safetensors"
-  dl "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors" "$M/vae/ae.safetensors"
+  dl "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors" "$M/vae/ae.safetensors"
 }
 
 for what in "$@"; do
   case "$what" in
     flux-schnell)
       common_flux
-      dl "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors" "$M/unet/flux1-schnell.safetensors";;
+      if [ -n "${HF_TOKEN:-}" ]; then
+        dl "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors" "$M/unet/flux1-schnell.safetensors"
+      else
+        echo "   (senza HF_TOKEN uso la versione fp8 ripubblicata da Comfy-Org, qualita' quasi identica)"
+        dl "https://huggingface.co/Comfy-Org/flux1-schnell/resolve/main/flux1-schnell-fp8.safetensors" "$M/unet/flux1-schnell.safetensors"
+      fi;;
     flux-dev)
       [ -n "${HF_TOKEN:-}" ] || { echo "!! Flux.1 dev e' 'gated': accetta la licenza su huggingface.co/black-forest-labs/FLUX.1-dev e imposta HF_TOKEN"; exit 1; }
       common_flux
