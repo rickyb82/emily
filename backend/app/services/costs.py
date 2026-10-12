@@ -140,8 +140,8 @@ async def anthropic_spend(admin_key: str, since: datetime) -> dict:
                 if isinstance(amt, dict):
                     amt = amt.get("value")
                 total += float(amt or 0)
-        # l'API riporta importi in centesimi di dollaro (stringa): normalizziamo se sembrano centesimi
-        return {"ok": True, "usd": round(total / 100 if total > 1000 else total, 4), "raw": total, "note": "cost_report"}
+        # L'API Cost Report riporta gli importi in CENTESIMI di dollaro (stringa decimale): convertiamo sempre.
+        return {"ok": True, "usd": round(total / 100, 4), "raw": total, "note": "cost_report (centesimi → USD)"}
     except httpx.HTTPStatusError as e:
         if e.response.status_code in (401, 403, 404):
             return {"ok": False, "error": "la chiave non e' abilitata ai report di costo: serve una Admin key "
