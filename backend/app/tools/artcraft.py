@@ -31,9 +31,9 @@ APPS = {
     GRIDCRAFT: {"save_tools": ("save_workbook",), "native_tool": "write_spreadsheet", "formats": ("xlsx", "csv", "tsv", "json", "html")},
     PDFCRAFT: {"save_tools": (), "native_tool": "pdf_tool", "formats": ("pdf",)},
     DECKCRAFT: {"save_tools": ("save_presentation", "export"), "native_tool": "write_presentation", "formats": ("pptx", "pdf", "deckcraft")},
-    # IdeaCraft non ha (ancora) un server MCP: il container espone la CLI via HTTP (cli-server.py), kind="http"
-    IDEACRAFT: {"save_tools": (), "native_tool": "mind_map", "formats": ("png", "mm", "opml", "json", "md"), "kind": "http"},
+    IDEACRAFT: {"save_tools": ("save_map",), "native_tool": "mind_map", "formats": ("svg", "json", "mm", "opml", "md")},
 }
+# app senza MCP servite via HTTP (cli-server.py): nessuna al momento, il meccanismo resta per quelle future
 HTTP_APPS = {a for a, cfg in APPS.items() if cfg.get("kind") == "http"}
 
 
@@ -155,7 +155,7 @@ async def register_saved_file(ctx: ToolContext, path: str) -> dict | None:
                           path=str(p), kind="generated")
         ctx.db.add(asset)
     await ctx.db.commit()
-    if p.suffix.lower() == ".png":
+    if p.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
         return {"type": "image", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": mime}
     return {"type": "file", "file_id": asset.id, "url": f"/files/{asset.id}", "filename": p.name, "mime": mime}
 
@@ -531,68 +531,48 @@ async def write_presentation(args: dict, ctx: ToolContext) -> ToolResult:
 
 # ---------------------------------------------------------------- IdeaCraft: mind_map ----
 async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
-    if not host_for(IDEACRAFT):
+    import json
+
+    from .mcp_client import mcp_manager
+
+    if not mcp_manager.is_connected(IDEACRAFT):
         return ToolResult("IdeaCraft non e' attivo su questo server (./familai.sh ideacraft up).", is_error=True)
     title = str(args.get("title") or args.get("filename") or "mappa")
     outline = str(args.get("outline") or "")
     src_id = str(args.get("source_file_id") or "").strip()
-    layout = str(args.get("layout") or "tree").lower()
-    want = [str(f).lower().lstrip(".") for f in (args.get("formats") or ["png", "json"])]
-    want = [f for f in want if f in APPS[IDEACRAFT]["formats"]] or ["png"]
-    dark = bool(args.get("dark"))
-    size = str(args.get("size") or "1600x1000")
-    files: dict[str, bytes] = {}
-    if src_id:
-        asset = await _source_asset(ctx, src_id)
-        if isinstance(asset, ToolResult):
-            return asset
-        src_name = "in" + (Path(asset.filename).suffix.lower() or ".md")
-        files[src_name] = Path(asset.path).read_bytes()
-    else:
-        if not outline.strip():
-            return ToolResult("Serve outline (elenco Markdown annidato: '- idea' / '  - sotto-idea') oppure source_file_id.", is_error=True)
-        md = outline if outline.lstrip().startswith(("#", "-", "*")) else f"# {title}\n{outline}"
-        if not md.lstrip().startswith("#"):
-            md = f"# {title}\n{md}"
-        src_name = "in.md"
-        files[src_name] = md.encode("utf-8")
+    layout = "radial" if str(args.get("layout") or "tree").lower() == "radial" else "tree"
+    want = [str(f).lower().lstrip(".") for f in (args.get("formats") or ["svg", "json"])]
+    want = [f for f in want if f in APPS[IDEACRAFT]["formats"]] or ["svg"]
     base = _safe_name(title, "x")[:-2]
+    exts = {"svg": ".svg", "json": ".ideacraft.json", "mm": ".mm", "opml": ".opml", "md": ".md"}
     try:
-        # 1) importa, applica il layout, salva nel formato nativo
-        r = await cli_run(IDEACRAFT, "ideacraft-cli",
-                          ["run", "--in", src_name, "--cmd", "layout.radial" if layout == "radial" else "layout.tree", "--out", "map.ideacraft.json"],
-                          files, ["map.ideacraft.json"])
-        if r["exit"] != 0 or "map.ideacraft.json" not in r["files"]:
-            return ToolResult(f"IdeaCraft: {r.get('stderr') or r.get('stdout') or 'importazione fallita'}"[:500], is_error=True)
-        native = r["files"]["map.ideacraft.json"]
-        produced: dict[str, bytes] = {}
-        if "json" in want:
-            produced[f"{base}.ideacraft.json"] = native
-        # 2) esportazioni testuali
-        for fmt in ("mm", "opml", "md"):
-            if fmt in want:
-                out = f"out.{fmt}"
-                rr = await cli_run(IDEACRAFT, "ideacraft-cli", ["convert", "map.ideacraft.json", out], {"map.ideacraft.json": native}, [out])
-                if out in rr["files"]:
-                    produced[f"{base}.{fmt}"] = rr["files"][out]
-        # 3) immagine della mappa (renderer offscreen)
-        if "png" in want:
-            a = ["map.ideacraft.json", "map.png", "--size", size] + (["--dark"] if dark else [])
-            rr = await cli_run(IDEACRAFT, "ideacraft-snapshot", a, {"map.ideacraft.json": native}, ["map.png"])
-            if "map.png" in rr["files"]:
-                produced[f"{base}.png"] = rr["files"]["map.png"]
+        if src_id:
+            asset = await _source_asset(ctx, src_id)
+            if isinstance(asset, ToolResult):
+                return asset
+            await mcp_manager.call(IDEACRAFT, "open_map", {"path": asset.path})
+        else:
+            if not outline.strip():
+                return ToolResult("Serve outline (elenco Markdown annidato: '- idea' / '  - sotto-idea') oppure source_file_id.", is_error=True)
+            md = outline if outline.lstrip().startswith("#") else f"# {title}\n{outline}"
+            await mcp_manager.call(IDEACRAFT, "import_text", {"text": md, "format": "md"})
+        await mcp_manager.call(IDEACRAFT, "layout", {"kind": layout})
     except Exception as e:
         log.warning("mind_map fallito: %s", e)
         return ToolResult(f"IdeaCraft: {type(e).__name__}: {str(e)[:400]}", is_error=True)
-    if not produced:
-        return ToolResult("IdeaCraft non ha prodotto file.", is_error=True)
     artifacts = []
-    for name, data in produced.items():
-        out = _unique(app_dir(IDEACRAFT) / name)
-        out.write_bytes(data)
-        art = await register_saved_file(ctx, str(out))
-        if art:
-            artifacts.append(art)
+    try:
+        for fmt in want:
+            out = _unique(app_dir(IDEACRAFT) / f"{base}{exts[fmt]}")
+            await mcp_manager.call(IDEACRAFT, "save_map", {"path": str(out)})
+            art = await register_saved_file(ctx, str(out))
+            if art:
+                artifacts.append(art)
+    except Exception as e:
+        log.warning("mind_map fallito: %s", e)
+        return ToolResult(f"IdeaCraft: {type(e).__name__}: {str(e)[:400]}", is_error=True)
+    if not artifacts:
+        return ToolResult("IdeaCraft non ha prodotto file.", is_error=True)
     names = ", ".join(a.get("filename", "immagine") for a in artifacts)
     return ToolResult(f"Mappa creata con IdeaCraft e mostrata all'utente: {names}. Il .ideacraft.json si apre nell'editor "
                       f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner. Non inventare link.",
@@ -684,16 +664,16 @@ def register_tools(app: str) -> None:
             "mind_map",
             "Crea una mappa mentale / mappa concettuale con IdeaCraft a partire da un outline Markdown (prima riga '# Titolo', "
             "poi elenco annidato '- idea' / '  - sotto-idea'; righe 'A -> B: etichetta' aggiungono collegamenti liberi), "
-            "oppure da un file allegato (.mm FreeMind, .xmind, .opml, .md, .mmd Mermaid). Produce l'immagine PNG della mappa "
-            "(mostrata in chat) e i file .mm/.opml/.json/.md richiesti. Ottima per brainstorming, schemi di studio, piani.",
+            "oppure da un file allegato (.mm FreeMind, .xmind, .opml, .md, .mmd Mermaid). Produce l'immagine SVG della mappa "
+            "(mostrata in chat) e il .ideacraft.json modificabile nell'editor; a richiesta .mm/.opml/.md. Ottima per "
+            "brainstorming, schemi di studio, piani. Per ritocchi puntuali usa i tool mcp__ideacraft__* (open_map, add_idea, "
+            "update_idea, link_ideas, layout, save_map).",
             {"type": "object", "properties": {
                 "title": {"type": "string", "description": "Titolo (idea centrale e nome file)"},
                 "outline": {"type": "string", "description": "Outline Markdown annidato"},
                 "layout": {"type": "string", "enum": ["tree", "radial"], "description": "Disposizione (default tree)"},
                 "formats": {"type": "array", "items": {"type": "string", "enum": list(APPS[IDEACRAFT]["formats"])},
-                            "description": "File da produrre (default png e json = formato nativo, modificabile nell'editor; mm per FreeMind/XMind)"},
-                "dark": {"type": "boolean", "description": "Immagine con sfondo scuro"},
-                "size": {"type": "string", "description": "Dimensione immagine, es. 1600x1000"},
+                            "description": "File da produrre (default svg e json = formato nativo, modificabile nell'editor; mm per FreeMind/XMind)"},
                 "source_file_id": {"type": "string", "description": "Id di un allegato da importare al posto di outline"}},
              "required": []},
         )(mind_map)

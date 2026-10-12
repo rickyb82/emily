@@ -209,15 +209,17 @@ services:
     restart: unless-stopped
     expose: ["80"]
 
-  # IdeaCraft (mappe mentali): la CLI non ha ancora MCP, il container la espone via HTTP; l'editor web c'e' (ideacraft-web)
   ideacraft:
     build: { context: extras/artcraft, dockerfile: Dockerfile.cli, args: { APP: ideacraft, UPSTREAM_SHA: "${IDEACRAFT_SHA:-}" } }
     image: familai-ideacraft
     profiles: ["ideacraft"]
     restart: unless-stopped
     environment:
-      - MODE=http
-      - HTTP_PORT=7986
+      - MCP_PORT=7986
+      - MCP_ARGS=
+    volumes:
+      - ./data:/data:ro
+      - ./data/ideacraft:/data/ideacraft
     expose: ["7986"]
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
