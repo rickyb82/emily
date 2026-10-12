@@ -90,6 +90,7 @@ class GeminiProvider(BaseProvider):
                                           parameters=_clean_schema(t.input_schema)) for t in tools])]
             cfg.automatic_function_calling = types.AutomaticFunctionCallingConfig(disable=True)
         usage = {}
+        truncated = False
         stream = await client.aio.models.generate_content_stream(
             model=model or self.default_model, contents=self._convert(messages), config=cfg)
         async for chunk in stream:
@@ -98,6 +99,8 @@ class GeminiProvider(BaseProvider):
                 usage = {"input_tokens": (chunk.usage_metadata.prompt_token_count or 0) - cached, "cache_read_tokens": cached,
                          "output_tokens": chunk.usage_metadata.candidates_token_count or 0}
             for cand in chunk.candidates or []:
+                if str(getattr(cand, "finish_reason", "") or "").upper().endswith("MAX_TOKENS"):
+                    truncated = True
                 if not cand.content or not cand.content.parts:
                     continue
                 for part in cand.content.parts:
@@ -107,4 +110,6 @@ class GeminiProvider(BaseProvider):
                         fc = part.function_call
                         yield ProviderEvent("tool_use", tool_use={"id": fc.id or f"call_{uuid.uuid4().hex[:12]}",
                                                                    "name": fc.name, "input": dict(fc.args or {})})
+        if truncated:
+            yield ProviderEvent("truncated")
         yield ProviderEvent("usage", usage=usage)

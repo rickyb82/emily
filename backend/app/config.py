@@ -52,7 +52,9 @@ class Settings(BaseSettings):
     router_local_provider: str = "auto"   # chi risponde in locale: auto (custom se presente, altrimenti ollama) | ollama | custom
     router_cloud_provider: str = "auto"   # provider cloud a cui inoltrare: auto | anthropic | openai | gemini
     router_mode: str = "locale"           # locale (prima il locale: cloud solo su richiesta) | economico | balanced | qualita | off
-    max_output_tokens: int = 16384      # lunghezza massima di una risposta (serve alta per app/artifact e codice)
+    max_output_tokens: int = 32768      # lunghezza massima di UNA chiamata al modello (serve alta per app/artifact e codice)
+    max_total_output_tokens: int = 256000   # oltre questo totale la risposta si ferma davvero (continuazioni automatiche incluse)
+    auto_continue: str = "true"         # se la risposta si interrompe per lunghezza, il backend chiede di continuare da solo
 
     # Tool
     web_search_provider: str = "auto"      # auto | searxng | anthropic | openai | gemini | tavily | brave

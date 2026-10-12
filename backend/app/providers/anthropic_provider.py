@@ -122,5 +122,5 @@ class AnthropicProvider(BaseProvider):
                     usage["output_tokens"] = getattr(ev.usage, "output_tokens", 0)
                     stop_reason = getattr(ev.delta, "stop_reason", None) or stop_reason
         if stop_reason == "max_tokens" and current_tool is None and not json_buf:
-            yield ProviderEvent("text_delta", text="\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare.")
+            yield ProviderEvent("truncated")
         yield ProviderEvent("usage", usage=usage)

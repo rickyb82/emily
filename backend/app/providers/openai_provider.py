@@ -131,5 +131,5 @@ class OpenAIProvider(BaseProvider):
                 continue
             yield ProviderEvent("tool_use", tool_use={"id": p["id"], "name": p["name"], "input": args})
         if finish_reason == "length" and not pending:
-            yield ProviderEvent("text_delta", text="\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare.")
+            yield ProviderEvent("truncated")
         yield ProviderEvent("usage", usage=usage)

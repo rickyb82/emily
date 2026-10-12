@@ -361,18 +361,45 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tool_uses: list[dict] = []
         yield sse({"type": "status", "text": "Sto pensando…" if _round == 0 else "Sto elaborando i risultati…"})
         try:
-            async for ev in provider.stream(model, system, history, tools, max_tokens=settings.max_output_tokens,
-                                            system_dynamic=system_dynamic):
-                if ev.type == "text_delta":
-                    text_acc += ev.text
-                    yield sse({"type": "text_delta", "text": ev.text})
-                elif ev.type == "tool_use" and ev.tool_use:
-                    tool_uses.append(ev.tool_use)
-                elif ev.type == "status":
-                    yield sse({"type": "status", "text": ev.text})
-                elif ev.type == "usage":
-                    for k in total_usage:
-                        total_usage[k] += int(ev.usage.get(k, 0) or 0)
+            # Continuazione automatica: se il modello si ferma per il limite di token della singola chiamata,
+            # gli chiediamo di proseguire (senza ripetere) finche' finisce o si supera MAX_TOTAL_OUTPUT_TOKENS.
+            cont_history = history
+            continuations = 0
+            while True:
+                truncated = False
+                async for ev in provider.stream(model, system, cont_history, tools, max_tokens=settings.max_output_tokens,
+                                                system_dynamic=system_dynamic):
+                    if ev.type == "text_delta":
+                        text_acc += ev.text
+                        yield sse({"type": "text_delta", "text": ev.text})
+                    elif ev.type == "tool_use" and ev.tool_use:
+                        tool_uses.append(ev.tool_use)
+                    elif ev.type == "status":
+                        yield sse({"type": "status", "text": ev.text})
+                    elif ev.type == "truncated":
+                        truncated = True
+                    elif ev.type == "usage":
+                        for k in total_usage:
+                            total_usage[k] += int(ev.usage.get(k, 0) or 0)
+                auto = str(settings.auto_continue).lower() in ("1", "true", "yes")
+                if not truncated or tool_uses or not auto:
+                    if truncated and not auto:
+                        yield sse({"type": "text_delta", "text": "\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare."})
+                        text_acc += "\n\n⚠️ Risposta interrotta per lunghezza massima: chiedimi di continuare."
+                    break
+                if total_usage["output_tokens"] >= int(settings.max_total_output_tokens) or continuations >= 24:
+                    note = f"\n\n⚠️ Risposta fermata: superato il limite totale di {int(settings.max_total_output_tokens):,} token."
+                    yield sse({"type": "text_delta", "text": note})
+                    text_acc += note
+                    break
+                continuations += 1
+                yield sse({"type": "status", "text": f"✍️ Continuo la risposta ({continuations})…"})
+                cont_history = history + [
+                    {"role": "assistant", "content": [{"type": "text", "text": text_acc}]},
+                    {"role": "user", "content": [{"type": "text", "text":
+                        "Continua ESATTAMENTE da dove ti sei interrotto, senza ripetere nulla di quanto gia' scritto, "
+                        "senza preamboli e mantenendo formato e numerazione."}]},
+                ]
         except Exception as e:
             log.exception("Errore provider")
             err = f"Errore del provider {provider.label}: {e}"
