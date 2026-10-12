@@ -118,7 +118,12 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
     if not re.fullmatch(r"[0-9a-f]{32}", file_id or ""):
         raise HTTPException(400, "file_id non valido")
     name = re.sub(r"[^\w.\- ]", "_", unquote(request.headers.get("X-Filename", "") or "documento.docx"))[:200]
-    ext = Path(name).suffix.lower() or ".docx"
+    ext = Path(name).suffix.lower()
+    if not ext:
+        # nome senza estensione (PdfCraft lo ricava dall'URL): eredita quella del file aperto, altrimenti .docx
+        existing = await db.get(FileAsset, file_id)
+        ext = Path(existing.filename).suffix.lower() if existing else ".docx"
+        name = f"{name}{ext}" if not existing else existing.filename
     if ext not in EDITOR_EXT:
         raise HTTPException(400, f"Formato non consentito ({ext})")
     data = await request.body()
@@ -198,9 +203,10 @@ async def download(fid: str, ctx: AuthContext = Depends(require_auth), db: Async
     if not asset.path:   # file virtuale (es. archivio cronologia chat): serviamo il testo
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(asset.extracted_text or "", headers={"Content-Disposition": f'inline; filename="{asset.id}.txt"'})
-    # file generati in una conversazione: accessibili a chi vede la conversazione
+    # file generati in una conversazione: accessibili a chi vede la conversazione.
+    # no-store: i documenti vengono riscritti dagli editor, il browser non deve riproporre una copia vecchia.
     return FileResponse(asset.path, media_type=asset.mime, filename=asset.filename,
-                        content_disposition_type="inline")
+                        content_disposition_type="inline", headers={"Cache-Control": "no-store, private"})
 
 
 @router.delete("/files/{fid}")

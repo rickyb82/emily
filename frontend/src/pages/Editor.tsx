@@ -60,9 +60,11 @@ export default function Editor() {
         const cid = params.get('conversation_id'); const pid = params.get('project_id')
         if (cid) saveQ.set('conversation_id', cid)
         if (pid) saveQ.set('project_id', pid)
+        // PdfCraft ricava il nome dall'URL (?file=/files/<id>): senza estensione vale il nome vero del file
+        const fname = d.name && /\.[a-z0-9]{1,5}$/i.test(d.name) ? d.name : (name || 'documento.pdf')
         try {
           const r = await fetch(`/api/files/wordcraft-save?${saveQ.toString()}`, { method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/octet-stream', 'X-Requested-With': 'FamilAI', 'X-Filename': encodeURIComponent(d.name || name || 'documento.pdf') }, body: d.bytes })
+            headers: { 'Content-Type': 'application/octet-stream', 'X-Requested-With': 'FamilAI', 'X-Filename': encodeURIComponent(fname) }, body: d.bytes })
           if (!r.ok) throw new Error(`HTTP ${r.status}`)
           setSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
           setErr('')
@@ -84,13 +86,13 @@ export default function Editor() {
     const q = new URLSearchParams({ lang: UI_LANG })
     if (app === 'pdfcraft') {
       // PdfCraft: parametri nativi (nessuna patch): ?file= apre dal server, host=parent manda i salvataggi alla pagina
-      q.set('file', `/files/${fileId}`)
+      q.set('file', `/files/${fileId}?v=${Date.now()}`)
       q.set('host', 'parent')
       if (me?.user.display_name) q.set('author', me.user.display_name)
       return `/pdfcraft/?${q.toString()}`
     }
     if (!isNew) {
-      q.set('open', `/files/${fileId}`)
+      q.set('open', `/files/${fileId}?v=${Date.now()}`)   // mai una copia dalla cache del browser
       q.set('name', name || 'documento')
     } else if (name) {
       q.set('name', name)
