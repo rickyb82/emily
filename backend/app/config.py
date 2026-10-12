@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     comfyui_url: str = ""                 # es. http://192.168.4.2:8188 (vedi extras/comfyui)
     comfyui_model: str = "flux-dev"       # flux-dev | flux-schnell | sdxl | sd35 | nome di un checkpoint .safetensors
     comfyui_workflow: str = ""            # opzionale: percorso di un workflow API JSON personalizzato con segnaposto
+    comfyui_timeout: int = 1800           # secondi di attesa massima per un'immagine (Mac/GPU piccole: la prima e' lenta)
     image_model: str = "gpt-image-1"
     gemini_image_model: str = "imagen-4.0-generate-001"
     video_model: str = "veo-3.0-generate-001"

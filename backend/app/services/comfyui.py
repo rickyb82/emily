@@ -148,7 +148,8 @@ async def resolve_model_name() -> str:
     return name
 
 
-async def generate(prompt: str, size: str = "1024x1024", negative: str = "", timeout_s: int = 300) -> tuple[bytes, str]:
+async def generate(prompt: str, size: str = "1024x1024", negative: str = "", timeout_s: int | None = None) -> tuple[bytes, str]:
+    timeout_s = timeout_s or int(settings.comfyui_timeout or 1800)
     base = host_url(settings.comfyui_url).rstrip("/")
     name = await resolve_model_name()
     wf, label = build_workflow(prompt, size, negative, model_name=name)
@@ -186,4 +187,9 @@ async def generate(prompt: str, size: str = "1024x1024", negative: str = "", tim
                         v.raise_for_status()
                         return v.content, label
             if time.monotonic() - t0 > timeout_s:
-                raise RuntimeError(f"timeout dopo {timeout_s}s (modello in caricamento? riprova)")
+                # non lasciamo il lavoro in coda a occupare la GPU
+                try:
+                    await c.post(f"{base}/interrupt")
+                except Exception:
+                    pass
+                raise RuntimeError(f"timeout dopo {timeout_s}s: la generazione non e' finita (alza COMFYUI_TIMEOUT o usa un modello piu' leggero)")
