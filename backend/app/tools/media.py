@@ -37,7 +37,9 @@ async def _save_generated(ctx: ToolContext, data: bytes, ext: str, mime: str, la
     {"type": "object", "properties": {
         "prompt": {"type": "string", "description": "Descrizione dell'immagine"},
         "size": {"type": "string", "enum": ["1024x1024", "1024x1536", "1536x1024"], "description": "Dimensione"},
-        "negative": {"type": "string", "description": "Cosa evitare (solo modelli locali SDXL/SD3.5)"}},
+        "negative": {"type": "string", "description": "Cosa evitare (solo modelli locali SDXL/SD3.5)"},
+        "provider": {"type": "string", "enum": ["auto", "comfyui", "openai", "gemini"],
+                     "description": "Chi genera: auto (impostazione del server), comfyui (locale/Flux), openai (gpt-image: ottimo con il testo nelle immagini), gemini (Imagen). Usa quello che chiede l'utente."}},
      "required": ["prompt"]},
     usage_kind="image",
 )
@@ -47,8 +49,16 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
         prompt = CHILD_PROMPT_PREFIX + prompt
     size = args.get("size") or "1024x1024"
 
-    # scelta del provider: impostazione esplicita oppure auto (ComfyUI in casa, poi OpenAI, poi Gemini)
+    # scelta del provider: richiesta esplicita nel tool > impostazione del server > auto (ComfyUI in casa, poi OpenAI, poi Gemini)
     pref = settings.image_provider
+    want = str(args.get("provider") or "auto").lower()
+    if want in ("comfyui", "openai", "gemini"):
+        ok = {"comfyui": bool(settings.comfyui_url), "openai": bool(settings.openai_api_key), "gemini": bool(settings.gemini_api_key)}[want]
+        if not ok:
+            return ToolResult(f"Il provider immagini '{want}' non e' configurato su questo server (manca indirizzo/chiave): "
+                              f"disponibili: {', '.join(k for k, v in {'comfyui': bool(settings.comfyui_url), 'openai': bool(settings.openai_api_key), 'gemini': bool(settings.gemini_api_key)}.items() if v) or 'nessuno'}.",
+                              is_error=True)
+        pref = want
     if pref == "comfyui" or (pref == "auto" and settings.comfyui_url):
         backend = "comfyui" if settings.comfyui_url else None
     elif pref == "openai" or (pref == "auto" and settings.openai_api_key):
@@ -104,7 +114,8 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
     {"type": "object", "properties": {
         "prompt": {"type": "string", "description": "Descrizione della scena"},
         "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16"], "description": "Formato"},
-        "image_file_id": {"type": "string", "description": "Opzionale: id di un'immagine (allegata o generata) da animare (immagine→video)"}},
+        "image_file_id": {"type": "string", "description": "Opzionale: id di un'immagine (allegata o generata) da animare (immagine→video)"},
+        "provider": {"type": "string", "enum": ["auto", "comfyui", "gemini"], "description": "Chi genera: auto, comfyui (Wan 2.2 in casa), gemini (Veo). Usa quello che chiede l'utente."}},
      "required": ["prompt"]},
     usage_kind="video",
 )
@@ -115,6 +126,9 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
     if ctx.policy.get("moderation"):
         prompt = CHILD_PROMPT_PREFIX + prompt
     pref = (settings.video_provider or "auto").lower()
+    want = str(args.get("provider") or "auto").lower()
+    if want in ("comfyui", "gemini"):
+        pref = want
     use_comfy = settings.comfyui_url and pref in ("auto", "comfyui")
     if use_comfy and pref == "auto":
         try:

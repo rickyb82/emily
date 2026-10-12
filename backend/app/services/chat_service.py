@@ -118,7 +118,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             if files:
                 parts.append("File del progetto (cerca con search_documents, oppure leggi per intero con read_document):\n" +
                              "\n".join(f"- {f.filename} (id: {f.id}, {f.chunk_count} parti indicizzate)" for f in files))
-    parts.append("\nQuando generi un'immagine o un video, l'utente lo vede automaticamente: non inventare link.")
+    parts.append("\nQuando generi un'immagine o un video, l'utente lo vede automaticamente: non inventare link. "
+                 "Se l'utente chiede un generatore preciso ('falla con OpenAI', 'usa Flux', 'con Gemini') passa provider=... al tool: "
+                 "openai/gpt-image e' il migliore per testo e scritte nelle immagini, comfyui e' quello di casa (gratis).")
     parts.append("\nI tool elencati sono realmente disponibili su questo server (es. web_search cerca davvero su internet): "
                  "non dire mai di non avere internet o di non poter accedere a servizi di casa se il tool corrispondente esiste; "
                  "usalo. Se un tool non e' nell'elenco, spiega semplicemente che qui non e' attivo.")
