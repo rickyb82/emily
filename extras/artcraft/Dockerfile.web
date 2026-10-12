@@ -4,11 +4,14 @@
 ARG APP=wordcraft
 ARG REPO=https://github.com/rickyb82/${APP}
 ARG REF=main
+# commit upstream (solo per invalidare la cache di build quando il repository e' cambiato: ./familai.sh <app> upgrade)
+ARG UPSTREAM_SHA=
 
 FROM rust:1-bookworm AS build
 ARG APP
 ARG REPO
 ARG REF
+ARG UPSTREAM_SHA
 RUN apt-get update && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN rustup target add wasm32-unknown-unknown
@@ -16,7 +19,7 @@ RUN rustup target add wasm32-unknown-unknown
 RUN set -eux; arch="$(uname -m)"; case "$arch" in x86_64) t=x86_64-unknown-linux-gnu;; aarch64|arm64) t=aarch64-unknown-linux-gnu;; *) echo "arch $arch non supportata"; exit 1;; esac; \
     curl -fsSL "https://github.com/trunk-rs/trunk/releases/latest/download/trunk-${t}.tar.gz" | tar xz -C /usr/local/bin trunk; trunk --version
 WORKDIR /src
-RUN git clone --depth 1 --branch "$REF" "$REPO" .
+RUN echo "upstream: ${UPSTREAM_SHA:-latest}" && git clone --depth 1 --branch "$REF" "$REPO" . && git rev-parse HEAD
 COPY familai-web-patch.py /familai-web-patch.py
 RUN python3 /familai-web-patch.py /src ${APP}
 WORKDIR /src/apps/${APP}-web

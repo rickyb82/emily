@@ -9,8 +9,8 @@
 #   ./familai.sh users                   elenca gli utenti
 #   ./familai.sh deploy [user@host]      dal Mac: git push + "update" sulla macchina Ubuntu via SSH (host anche in .deploy)
 #   ./familai.sh portainer up|down|logs  pannello web Docker (Portainer) su https://<ip>:9443 per gestire altri container
-#   ./familai.sh wordcraft up|down|logs  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor nel browser
-#   ./familai.sh gridcraft up|down|logs  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
+#   ./familai.sh wordcraft up|down|logs|upgrade  word processor WordCraft: documenti Word/PDF dalla chat (MCP) + editor nel browser
+#   ./familai.sh gridcraft up|down|logs|upgrade  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -143,7 +143,19 @@ case "${1:-}" in
         set_env "${APPU}_WEB" ""
         compose up -d backend;;
       logs) compose --profile "$app" logs -f --tail=100 "$app" "$app-web";;
-      *) echo "uso: ./familai.sh $app up|down|logs|build"; exit 1;;
+      upgrade)
+        # prende l'ultimo commit del repository dell'app e ricompila (incrementale grazie alla cache di cargo)
+        repo="https://github.com/rickyb82/$app"
+        sha=$(git ls-remote "$repo" HEAD 2>/dev/null | cut -f1)
+        [ -n "$sha" ] || { echo "!! non riesco a leggere $repo (rete?)"; exit 1; }
+        if grep -q "^${APPU}_SHA=$sha" .env; then echo ">> $app e' gia' all'ultimo commit (${sha:0:10})"; exit 0; fi
+        echo ">> $app: aggiorno al commit ${sha:0:10} e ricompilo…"
+        set_env "${APPU}_SHA" "$sha"
+        DOCKER_BUILDKIT=1 compose --profile "$app" build "$app" "$app-web" || { echo "!! Build fallita: se l'errore viene da familai-web-patch.py il sorgente upstream e' cambiato e la patch va aggiornata."; exit 1; }
+        compose --profile "$app" up -d "$app" "$app-web"
+        docker image prune -f >/dev/null
+        echo ">> $app aggiornato.";;
+      *) echo "uso: ./familai.sh $app up|down|logs|upgrade"; exit 1;;
     esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
