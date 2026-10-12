@@ -435,6 +435,8 @@ PROVIDER_CARDS = [
              "Ubuntu: COMPOSE_PROFILES=ollama nel .env e indirizzo http://ollama:11434", "testable": True},
     {"id": "custom", "label": "Server LLM di casa (API compatibile OpenAI)", "key": "custom_llm_url", "model_key": "custom_llm_model", "kind": "url",
      "hint": "vLLM, llama.cpp, LM Studio… es. http://192.168.4.2:8000 (modelli letti da /v1/models). Chiave API e nome in 'Altre impostazioni'", "testable": True},
+    {"id": "comfyui", "label": "Immagini in casa (ComfyUI)", "key": "comfyui_url", "model_key": "comfyui_model", "kind": "url",
+     "hint": "Server con GPU: extras/comfyui (docker compose up -d; ./download-models.sh flux-dev sdxl). Es. http://192.168.4.2:8188", "testable": True},
     {"id": "tavily", "label": "Tavily (ricerca web)", "key": "tavily_api_key", "model_key": None,
      "hint": "app.tavily.com", "testable": True},
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,

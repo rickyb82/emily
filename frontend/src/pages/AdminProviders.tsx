@@ -113,7 +113,7 @@ export default function AdminProviders() {
               {c.kind === 'url' ? (
                 <label>
                   Indirizzo del server <small className="muted">({c.key_state.configured ? c.key_state.value : 'non configurato'})</small>
-                  <input type="url" autoComplete="off" placeholder={c.id === 'custom' ? 'http://192.168.4.2:8000' : 'http://host.docker.internal:11434'}
+                  <input type="url" autoComplete="off" placeholder={c.id === 'custom' ? 'http://192.168.4.2:8000' : c.id === 'comfyui' ? 'http://192.168.4.2:8188' : 'http://host.docker.internal:11434'}
                     value={draft[c.key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value.trim() })} />
                 </label>
               ) : (
@@ -132,8 +132,11 @@ export default function AdminProviders() {
                       {c.models.map((m) => <option key={m.id} value={m.id}>{m.label || m.id}</option>)}
                     </select>
                   ) : (
-                    <input placeholder={c.model_state.value || 'es. openai/gpt-oss-120b'}
-                      value={draft[c.model_key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })} />
+                    <>
+                      <input list={`presets-${c.id}`} placeholder={c.model_state.value || (c.id === 'comfyui' ? 'flux-dev' : 'es. openai/gpt-oss-120b')}
+                        value={draft[c.model_key] ?? ''} onChange={(e) => setDraft({ ...draft, [c.model_key!]: e.target.value })} />
+                      {c.id === 'comfyui' && <datalist id="presets-comfyui"><option value="flux-dev" /><option value="flux-schnell" /><option value="sdxl" /><option value="sd35" /></datalist>}
+                    </>
                   )}
                 </label>
               )}
@@ -253,7 +256,7 @@ export default function AdminProviders() {
           </label>
           <label>Provider immagini <small className="muted">({s.image_provider.value})</small>
             <select value={draft.image_provider ?? s.image_provider.value} onChange={(e) => setDraft({ ...draft, image_provider: e.target.value })}>
-              <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini / Imagen</option>
+              <option value="auto">auto (ComfyUI in casa se c'è, poi OpenAI, poi Gemini)</option><option value="comfyui">ComfyUI (locale: Flux / SDXL)</option><option value="openai">OpenAI</option><option value="gemini">Gemini / Imagen</option>
             </select>
           </label>
           <label>Modello immagini OpenAI <small className="muted">({s.image_model.value})</small>

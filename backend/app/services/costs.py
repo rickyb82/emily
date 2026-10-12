@@ -79,6 +79,8 @@ def estimate_cost(table: dict, provider: str, model: str, kind: str, input_token
                 + output_tokens * float(p.get("out", 0))) / 1_000_000
     if kind == "image":
         # immagini: generate da OpenAI o Gemini a seconda della configurazione; usiamo il prezzo del provider immagini
+        if settings.comfyui_url and settings.image_provider in ("auto", "comfyui"):
+            return 0.0   # generate in casa
         img_prov = "openai" if settings.openai_api_key and settings.image_provider in ("auto", "openai") else "gemini"
         return count * float(table.get(img_prov, {}).get("image", 0.04))
     if kind == "video":

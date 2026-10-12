@@ -31,10 +31,12 @@ async def _save_generated(ctx: ToolContext, data: bytes, ext: str, mime: str, la
 
 @register(
     "generate_image",
-    "Genera un'immagine a partire da una descrizione testuale. Descrivi soggetto, stile e dettagli.",
+    "Genera un'immagine a partire da una descrizione testuale. Descrivi soggetto, stile e dettagli (in inglese rende meglio "
+    "con i modelli locali).",
     {"type": "object", "properties": {
         "prompt": {"type": "string", "description": "Descrizione dell'immagine"},
-        "size": {"type": "string", "enum": ["1024x1024", "1024x1536", "1536x1024"], "description": "Dimensione"}},
+        "size": {"type": "string", "enum": ["1024x1024", "1024x1536", "1536x1024"], "description": "Dimensione"},
+        "negative": {"type": "string", "description": "Cosa evitare (solo modelli locali SDXL/SD3.5)"}},
      "required": ["prompt"]},
     usage_kind="image",
 )
@@ -44,19 +46,25 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
         prompt = CHILD_PROMPT_PREFIX + prompt
     size = args.get("size") or "1024x1024"
 
-    # scelta del provider: impostazione esplicita oppure auto (OpenAI se c'e' la chiave, altrimenti Gemini)
+    # scelta del provider: impostazione esplicita oppure auto (ComfyUI in casa, poi OpenAI, poi Gemini)
     pref = settings.image_provider
-    if pref == "openai" or (pref == "auto" and settings.openai_api_key):
+    if pref == "comfyui" or (pref == "auto" and settings.comfyui_url):
+        backend = "comfyui" if settings.comfyui_url else None
+    elif pref == "openai" or (pref == "auto" and settings.openai_api_key):
         backend = "openai" if settings.openai_api_key else None
     elif pref == "gemini" or (pref == "auto" and settings.gemini_api_key):
         backend = "gemini" if settings.gemini_api_key else None
     else:
         backend = None
     if not backend:
-        return ToolResult("Generazione immagini non disponibile: serve una chiave OpenAI (gpt-image-1) oppure Gemini (Imagen). "
-                          "Un amministratore puo' inserirla in Famiglia → Provider AI.", is_error=True)
+        return ToolResult("Generazione immagini non disponibile: serve ComfyUI in casa, oppure una chiave OpenAI (gpt-image-1) o Gemini (Imagen). "
+                          "Un amministratore puo' configurarli in Famiglia → Provider AI.", is_error=True)
     try:
-        if backend == "openai":
+        if backend == "comfyui":
+            from ..services import comfyui
+
+            data, model_used = await comfyui.generate(prompt, size, negative=str(args.get("negative") or ""))
+        elif backend == "openai":
             from openai import AsyncOpenAI
 
             client = AsyncOpenAI(api_key=settings.openai_api_key)

@@ -46,7 +46,9 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "searxng_url": ("Indirizzo SearXNG (ricerca web in casa)", False),
     "web_search_summarize": ("Ricerca web: riassunto pagine con modello locale (auto/none)", False),
     "anthropic_native_search": ("Ricerca nativa Anthropic con Claude", False),
-    "image_provider": ("Provider immagini (auto/openai/gemini)", False),
+    "image_provider": ("Provider immagini (auto/comfyui/openai/gemini)", False),
+    "comfyui_url": ("Indirizzo ComfyUI (immagini in casa)", False),
+    "comfyui_model": ("Modello ComfyUI (flux-dev/flux-schnell/sdxl/sd35/checkpoint)", False),
     "image_model": ("Modello immagini OpenAI", False),
     "gemini_image_model": ("Modello immagini Gemini (Imagen)", False),
     "video_model": ("Modello video", False),
@@ -235,6 +237,22 @@ async def test_provider(pid: str) -> dict:
             model = settings.custom_llm_model or (names[0] if names else "")
             r = await c.chat.completions.create(model=model, max_tokens=16, messages=[{"role": "user", "content": "Rispondi solo: OK"}])
             detail = f"{len(names)} modelli ({', '.join(names[:5])}); {model}: {r.choices[0].message.content!r}"
+        elif pid == "comfyui":
+            from ..services import comfyui
+
+            info = await comfyui.models_available()
+            dev = ""
+            try:
+                d = info["stats"]["devices"][0]
+                dev = f" — GPU {d.get('name', '')} ({round(d.get('vram_total', 0) / 1e9)} GB)"
+            except Exception:
+                pass
+            want = settings.comfyui_model
+            have = info["checkpoints"] + info["unets"]
+            from ..services.comfyui import PRESETS
+            need = PRESETS.get(want, {}).get("unet") or PRESETS.get(want, {}).get("ckpt") or want
+            missing = "" if any(need in h for h in have) else f" — ATTENZIONE: '{need}' non trovato (./download-models.sh {want})"
+            detail = f"{len(info['checkpoints'])} checkpoint, {len(info['unets'])} unet{dev}{missing}"
         elif pid == "tavily":
             import httpx
 

@@ -68,7 +68,10 @@ class Settings(BaseSettings):
     anthropic_native_search: str = "true"   # con Claude in chat usa il tool di ricerca nativo di Anthropic
     tavily_api_key: str = ""
     brave_api_key: str = ""
-    image_provider: str = "auto"          # auto | openai | gemini
+    image_provider: str = "auto"          # auto | comfyui | openai | gemini  (auto = ComfyUI in casa se c'e', poi OpenAI, poi Gemini)
+    comfyui_url: str = ""                 # es. http://192.168.4.2:8188 (vedi extras/comfyui)
+    comfyui_model: str = "flux-dev"       # flux-dev | flux-schnell | sdxl | sd35 | nome di un checkpoint .safetensors
+    comfyui_workflow: str = ""            # opzionale: percorso di un workflow API JSON personalizzato con segnaposto
     image_model: str = "gpt-image-1"
     gemini_image_model: str = "imagen-4.0-generate-001"
     video_model: str = "veo-3.0-generate-001"

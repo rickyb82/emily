@@ -1,0 +1,27 @@
+# ComfyUI su GPU NVIDIA per FamilAI (generazione immagini in casa).
+# Da lanciare sulla macchina con le GPU (es. il server con Ollama):
+#   cd extras/comfyui && docker compose up -d        → API su http://<ip>:8188
+#   ./download-models.sh flux-dev sdxl               → scarica i modelli nelle cartelle giuste (vedi script)
+# Richiede: driver NVIDIA + nvidia-container-toolkit (sudo apt install nvidia-container-toolkit && sudo systemctl restart docker)
+services:
+  comfyui:
+    image: yanwk/comfyui-boot:cu126-slim
+    container_name: comfyui
+    restart: unless-stopped
+    ports:
+      - "8188:8188"
+    environment:
+      - CLI_ARGS=--listen 0.0.0.0 --port 8188 --preview-method auto
+      # - NVIDIA_VISIBLE_DEVICES=1        # per riservare ComfyUI alla seconda L40S e lasciare la prima a Ollama
+    volumes:
+      - ./storage:/root            # modelli, output, custom nodes (persistenti)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]     # seconda GPU; usa ["0","1"] o count: all per entrambe
+              capabilities: [gpu]
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
