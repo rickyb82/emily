@@ -6,11 +6,31 @@ from collections.abc import AsyncIterator
 from .base import PROGRESS_STEP, truncated_tool_warning, writing_status, BaseProvider, ProviderEvent, ToolSpec
 
 
+class stream_cm_guard:
+    """Chiude il context manager dello stream gia' aperto (entrata gestita a mano per poter riprovare)."""
+    def __init__(self, cm):
+        self.cm = cm
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return await self.cm.__aexit__(*exc)
+
+
 class AnthropicProvider(BaseProvider):
     id = "anthropic"
     label = "Claude (Anthropic)"
 
     fallback_models = ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"]
+    _adaptive_models: set[str] = set()   # modelli recenti: thinking "adaptive" + output_config.effort invece di budget_tokens
+
+    def _thinking_kwargs(self, model: str, max_tokens: int) -> dict:
+        budget = max(1024, min(int(self.thinking_budget or 4096), max_tokens - 1024))
+        if model in self._adaptive_models:
+            effort = "low" if budget <= 2048 else "medium" if budget <= 8192 else "high"
+            return {"thinking": {"type": "adaptive"}, "output_config": {"effort": effort}}
+        return {"thinking": {"type": "enabled", "budget_tokens": budget}}
 
     async def discover_models(self) -> list[dict]:
         from anthropic import AsyncAnthropic
@@ -72,8 +92,7 @@ class AnthropicProvider(BaseProvider):
                 break
         kwargs = dict(model=model or self.default_model, system=sys_blocks, max_tokens=max_tokens, messages=msgs)
         if self.thinking:
-            budget = max(1024, min(int(self.thinking_budget or 4096), max_tokens - 1024))
-            kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+            kwargs.update(self._thinking_kwargs(kwargs["model"], max_tokens))
         if tools:
             spec = []
             for t in tools:
@@ -90,7 +109,27 @@ class AnthropicProvider(BaseProvider):
         stop_reason = None
         think_sig, in_think = "", False
         usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
-        async with client.messages.stream(**kwargs) as s:
+        try:
+            stream_cm = client.messages.stream(**kwargs)
+            s = await stream_cm.__aenter__()
+        except Exception as e:
+            msg = str(e)
+            if self.thinking and "adaptive" in msg and kwargs["model"] not in self._adaptive_models:
+                # modello recente: ripeti con thinking adattivo e ricorda la scelta per questo modello
+                self._adaptive_models.add(kwargs["model"])
+                kwargs.pop("thinking", None)
+                kwargs.update(self._thinking_kwargs(kwargs["model"], max_tokens))
+                stream_cm = client.messages.stream(**kwargs)
+                s = await stream_cm.__aenter__()
+            elif self.thinking and "thinking" in msg.lower():
+                # modello senza supporto al ragionamento: riprova senza
+                kwargs.pop("thinking", None)
+                kwargs.pop("output_config", None)
+                stream_cm = client.messages.stream(**kwargs)
+                s = await stream_cm.__aenter__()
+            else:
+                raise
+        async with stream_cm_guard(stream_cm):
             async for ev in s:
                 et = ev.type
                 if et == "content_block_start":
