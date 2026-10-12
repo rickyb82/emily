@@ -221,6 +221,83 @@ def italian(root: Path) -> None:
     print("  + gridcraft: interfaccia italiana (it.rs + Language::It)")
 
 
+def italian_deckcraft(root: Path) -> None:
+    """DeckCraft non ha un catalogo di traduzioni: le etichette sono letterali nel codice. Qui si aggiunge un modulo
+    `familai_it::tr()` (inglese -> italiano, da deckcraft-it.json) e lo si applica nei punti in cui le etichette vengono
+    disegnate (pulsanti della barra, schede, menu, label/pulsanti/tooltip con testo letterale). Gli id dei comandi e i
+    confronti nel codice restano in inglese: cambia solo cio' che si vede."""
+    import json
+    import re
+
+    ui = root / "crates/ui-egui/src"
+    mod = ui / "familai_it.rs"
+    if mod.exists():
+        print("  = deckcraft: italiano gia' applicato")
+        return
+    table = json.loads(Path(__file__).with_name("deckcraft-it.json").read_text(encoding="utf-8"))
+    # nel JSON gli a capo dei pulsanti grandi sono scritti come \\n: qui diventano veri a capo, come nel sorgente Rust
+    table = {k.replace("\\n", "\n"): v.replace("\\n", "\n") for k, v in table.items() if not k.startswith("_") and v and v != k}
+
+    def lit(s: str) -> str:
+        return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+    arms = "\n".join(f"        {lit(k)} => {lit(v)}," for k, v in sorted(table.items()))
+    mod.write_text(
+        "//! FamilAI: Italian interface labels, applied where labels are drawn. Command ids stay English.\n\n"
+        "/// The Italian label for an English one; unknown text comes back unchanged.\n"
+        "pub fn tr(s: &str) -> &str {\n    match s {\n" + arms + "\n        _ => s,\n    }\n}\n",
+        encoding="utf-8")
+    lib_rs = ui / "lib.rs"
+    patch(lib_rs,
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\n",
+          "pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;\npub mod familai_it;\n",
+          "lib.rs: mod familai_it")
+    widgets = ui / "widgets.rs"
+    for sig in ("pub fn big_button_ex(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, split: bool, selected: bool) -> (Response, Option<Response>) {\n",
+                "pub fn small_button_ex(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool, split: bool) -> (Response, Option<Response>) {\n"):
+        patch(widgets, sig, sig + "    let label = crate::familai_it::tr(label);\n", "widgets.rs: etichette pulsanti")
+    patch(widgets,
+          "pub fn icon_toggle(ui: &mut Ui, icon: Icon, tip: &str, enabled: bool, on: bool) -> Response {\n",
+          "pub fn icon_toggle(ui: &mut Ui, icon: Icon, tip: &str, enabled: bool, on: bool) -> Response {\n    let tip = crate::familai_it::tr(tip);\n",
+          "widgets.rs: tooltip interruttori")
+    ribbon = ui / "ribbon.rs"
+    patch(ribbon,
+          "fn tip(id: &str, label: &str) -> String {\n",
+          "fn tip(id: &str, label: &str) -> String {\n    let label = crate::familai_it::tr(label);\n",
+          "ribbon.rs: tooltip")
+    patch(ribbon,
+          "            let w = ui.fonts_mut(|f| f.layout_no_wrap(name.to_string(), font.clone(), t.text).size().x) + 18.0;\n",
+          "            let w = ui.fonts_mut(|f| f.layout_no_wrap(crate::familai_it::tr(name).to_string(), font.clone(), t.text).size().x) + 18.0;\n",
+          "ribbon.rs: larghezza schede")
+    patch(ribbon,
+          "            ui.painter().text(r.center(), Align2::CENTER_CENTER, name, f, col);\n",
+          "            ui.painter().text(r.center(), Align2::CENTER_CENTER, crate::familai_it::tr(name), f, col);\n",
+          "ribbon.rs: nomi schede")
+    # label/pulsanti/tooltip con testo letterale: ui.label("Testo") -> ui.label(crate::familai_it::tr("Testo"))
+    one = re.compile(r'(\.(?:label|heading|small|strong|button|small_button|collapsing|on_hover_text|hint_text)\()("(?:[^"\\]|\\.)*")')
+    two = re.compile(r'(\.(?:selectable_label|checkbox)\([^,()\n]*,\s*)("(?:[^"\\]|\\.)*")')
+    other = re.compile(r'(\b(?:set_status|buttons\(ui,\s*|egui::Window::new)\(?)("(?:[^"\\]|\\.)*")')
+    total = 0
+
+    def wrap(m):
+        nonlocal total
+        raw = m.group(2)
+        key = raw[1:-1].replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
+        if key not in table:
+            return m.group(0)
+        total += 1
+        return f"{m.group(1)}crate::familai_it::tr({raw})"
+
+    for f in sorted(ui.glob("*.rs")):
+        if f.name in ("familai_it.rs", "icons.rs", "textures.rs", "control.rs"):
+            continue
+        s = f.read_text(encoding="utf-8")
+        s2 = other.sub(wrap, two.sub(wrap, one.sub(wrap, s)))
+        if s2 != s:
+            f.write_text(s2, encoding="utf-8")
+    print(f"  + deckcraft: interfaccia italiana ({len(table)} etichette, {total} chiamate riscritte)")
+
+
 print(f"Patch FamilAI per {app} web in {root}")
 if app == "wordcraft":
     patch(cargo, '"MediaQueryList"]', '"MediaQueryList"' + FEATURES, "Cargo.toml: feature web-sys")
@@ -358,6 +435,7 @@ elif app == "deckcraft":
           "        } else {\n            self.save_as_dialog(\"deckcraft\");\n        }\n",
           "        } else {\n            self.save_as_dialog(if FAMILAI_SAVE_PPTX.load(std::sync::atomic::Ordering::Relaxed) { \"pptx\" } else { \"deckcraft\" });\n        }\n",
           "lib.rs: Salva in .pptx")
+    italian_deckcraft(root)
 else:
     sys.exit(f"!! app sconosciuta: {app}")
 print("Patch completata.")
