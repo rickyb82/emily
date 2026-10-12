@@ -11,6 +11,7 @@ services:
       - DATA_DIR=/data
       - DATABASE_URL=sqlite+aiosqlite:////data/familai.db
       - SANDBOX_URL=http://sandbox:8080
+      - WORDCRAFT_HOST=${WORDCRAFT_HOST:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -108,6 +109,22 @@ services:
     #   resources:
     #     reservations:
     #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  # WordCraft (opzionale): word processor open source con server MCP. Il modello crea/modifica documenti Word, ODT,
+  # PDF... Attiva con COMPOSE_PROFILES=wordcraft e WORDCRAFT_HOST=wordcraft:7982 nel .env (./familai.sh wordcraft up).
+  wordcraft:
+    build:
+      context: extras/wordcraft
+    image: familai-wordcraft
+    profiles: ["wordcraft"]
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    expose:
+      - "7982"
+    logging:
+      driver: json-file
+      options: { max-size: "1m", max-file: "1" }
 
 networks:
   default:

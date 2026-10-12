@@ -133,6 +133,16 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         "- Per calcoli, analisi dati, grafici e per verificare che un programma funzioni usa run_code (sandbox senza internet); "
         "i file prodotti (png, csv…) vengono mostrati all'utente. Se l'esecuzione fallisce, correggi e riprova.\n"
         "- Brevi frammenti di codice o spiegazioni vanno direttamente nel messaggio con blocchi ```lingua```.")
+    if mcp_manager.is_connected("wordcraft"):
+        parts.append(
+            "\n# Documenti Word/PDF (WordCraft)\n"
+            "- Per lettere, relazioni, tesine, curriculum, verbali o qualsiasi documento da stampare/scaricare usa write_document: "
+            "scrivi il contenuto in Markdown (titoli #, elenchi, **grassetto**, tabelle) e scegli format docx/pdf/odt. "
+            "L'utente riceve il file in chat: non proporre di 'copiare il testo in Word'.\n"
+            "- Per convertire o modificare un allegato passa source_file_id (l'id e' indicato accanto all'allegato).\n"
+            "- Per interventi precisi (stili, tabelle, intestazioni, revisioni, anteprima di una pagina) usa i tool mcp__wordcraft__*: "
+            "open_document con il percorso del file, list_commands per trovare il comando, execute/batch, render_page per "
+            "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile).")
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available
@@ -366,7 +376,7 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
         tools.append(t.spec)
 
     if provider.id == "ollama" and getattr(provider, "is_small", lambda m: True)(model):
-        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set())
+        local_ok = set(LOCAL_TOOLS) | ({"web_search"} if settings.searxng_url else set()) | ({"generate_image", "generate_video"} if settings.comfyui_url else set()) | ({"write_document"} if mcp_manager.is_connected("wordcraft") else set())
         # Modelli locali piccoli (Qwen3 8B & co.) usano i tool, ma reggono meglio un set ridotto: artifact e documenti.
         # Ricerca web, immagini, video, sandbox e MCP restano al cloud (il router Auto li inoltra gia' da solo).
         # I modelli grandi (es. gpt-oss:120b) ricevono tutti i tool.

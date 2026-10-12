@@ -166,6 +166,9 @@ A ogni messaggio l'assistente riceve automaticamente i `RAG_TOP_K` passaggi più
 ### Server MCP
 Si gestiscono da **Famiglia → MCP**: aggiungi un server (stdio = comando avviato nel container backend, es. `npx -y @modelcontextprotocol/server-filesystem /data/shared`; http = server Streamable HTTP già in esecuzione), scegli il ruolo minimo (bambini/adulti/admin) e premi **Connetti**: la connessione avviene a caldo, senza riavvio, e i tool compaiono subito come `mcp__<server>__<tool>`. Header e variabili d'ambiente (token, chiavi) sono cifrati nel DB. Dalla tabella puoi provare ogni tool con argomenti JSON. Il file `mcp_servers.json` viene importato solo al primo avvio se il DB è vuoto.
 
+### Documenti Word/PDF con WordCraft
+[WordCraft](https://github.com/rickyb82/wordcraft) è un word processor open source in Rust (legge/scrive .docx, .odt, .rtf, .md, .html, esporta PDF) con un server MCP integrato. `./familai.sh wordcraft up` lo compila in un container (`extras/wordcraft`, solo la CLI headless: la prima build dura 15-40 minuti), lo collega al backend come server MCP `wordcraft` e attiva il tool `write_document`: in chat basta chiedere "scrivimi una lettera in Word", "fammi la tesina in PDF" o "converti questo allegato in docx" e il file compare pronto da scaricare. Per interventi fini il modello usa direttamente i tool `mcp__wordcraft__*` (oltre 270 comandi: stili, tabelle, revisioni, `render_page` per vedere l'anteprima di una pagina). WordCraft legge tutta la cartella `data/` (allegati) ma scrive solo in `data/wordcraft/`. `./familai.sh wordcraft down` lo spegne.
+
 ### Policy per fascia d'età
 Default in `backend/app/policy/permissions.py` (`DEFAULTS` e `SYSTEM_PROMPTS`), sovrascrivibili per singolo utente dal pannello Famiglia (strumenti, provider, quote, orari, filtro, parole bloccate, istruzioni personalizzate).
 

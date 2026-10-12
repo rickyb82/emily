@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     tts_style: str = ""                   # istruzioni di stile (vuoto = default: voce calda e chiara per bambini)
     child_moderation: bool = True
     mcp_config_path: Path = Path("mcp_servers.json")
+    wordcraft_host: str = ""          # host:porta del container WordCraft (es. wordcraft:7982): documenti Word/PDF via MCP
 
     # Email (SMTP) — configurabile dal pannello
     smtp_host: str = ""

@@ -14,6 +14,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_artifacts: '📦 Elenco artifact',
   delete_artifact: '🗑 Eliminazione artifact',
   run_code: '⚙️ Esecuzione codice',
+  write_document: '📝 Documento con WordCraft',
   ask_model: '🤝 Consulto un altro modello',
   remember: '🧠 Memorizzo',
   forget: '🧠 Dimentico',

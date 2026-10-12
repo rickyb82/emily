@@ -155,7 +155,8 @@ def dynamic_context(tz: str = "Europe/Rome") -> str:
 TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei documenti
                 "create_artifact": "artifacts", "update_artifact": "artifacts",
                 "list_artifacts": "artifacts", "delete_artifact": "artifacts",
-                "remember": "memory", "forget": "memory"}
+                "remember": "memory", "forget": "memory",
+                "write_document": "mcp"}   # WordCraft: stesso permesso dei server MCP
 
 
 def tool_allowed(policy: dict, tool_name: str) -> bool:

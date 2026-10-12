@@ -25,6 +25,7 @@ settings = get_settings()
 ROLE_RANK = {Role.child: 0, Role.adult: 1, Role.admin: 2}
 MIN_ROLE_RANK = {"child": 0, "adult": 1, "admin": 2}
 CONNECT_TIMEOUT = 45
+WORDCRAFT = "wordcraft"
 
 
 @dataclass
@@ -84,6 +85,11 @@ class MCPManager:
             for row in rows:
                 if row.enabled:
                     asyncio.create_task(self.connect(self.config_from_row(row)))
+            if settings.wordcraft_host and not any(r.name == WORDCRAFT for r in rows):
+                # container WordCraft (extras/wordcraft): MCP stdio esposto via socat sulla rete Docker
+                asyncio.create_task(self.connect(ServerConfig(
+                    name=WORDCRAFT, type="stdio", command="socat", args=["-", f"TCP:{settings.wordcraft_host}"],
+                    min_role="adult", enabled=True)))
 
     async def stop(self) -> None:
         for name in list(self.conns):
@@ -169,6 +175,9 @@ class MCPManager:
                     conn.session = session
                     conn.connected = True
                     conn.error = ""
+                    if cfg.name == WORDCRAFT:
+                        from .wordcraft import register_tools as _wc_register
+                        _wc_register()
                     conn.ready.set()
                     log.info("MCP %s: connesso, %d tool", cfg.name, len(conn.tools))
                     await conn.stop.wait()
@@ -180,6 +189,8 @@ class MCPManager:
             conn.session = None
             conn.ready.set()
             unregister_prefix(f"mcp__{cfg.name}__")
+            if cfg.name == WORDCRAFT:
+                unregister_prefix("write_document")
 
     def _make_caller(self, server: str, tool: str):
         async def call(args: dict, ctx: ToolContext) -> ToolResult:
@@ -189,17 +200,58 @@ class MCPManager:
             if ROLE_RANK.get(ctx.user.role, 0) < MIN_ROLE_RANK.get(conn.cfg.min_role, 1):
                 return ToolResult("Non hai il permesso di usare questo strumento", is_error=True)
             try:
-                res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=120)
+                res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=180)
             except Exception as e:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
-            parts = []
-            for c in res.content:
-                if getattr(c, "type", "") == "text":
-                    parts.append(c.text)
-                else:
-                    parts.append(f"[{getattr(c, 'type', 'contenuto')} non testuale]")
-            return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(res.isError))
+            parts, artifacts = await self._collect(res, ctx)
+            if server == WORDCRAFT and tool == "save_document" and not res.isError:
+                from .wordcraft import register_saved_file
+                art = await register_saved_file(ctx, str(args.get("path") or ""))
+                if art:
+                    artifacts.append(art)
+                    parts.append(f"File salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
+            return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(res.isError), artifacts=artifacts or None)
         return call
+
+    async def _collect(self, res, ctx: ToolContext) -> tuple[list[str], list[dict]]:
+        """Testo per il modello + allegati per la chat: le immagini restituite da un tool MCP (es. render_page di
+        WordCraft) vengono salvate come file generati e mostrate all'utente."""
+        parts: list[str] = []
+        artifacts: list[dict] = []
+        for c in res.content:
+            ctype = getattr(c, "type", "")
+            if ctype == "text":
+                parts.append(c.text)
+            elif ctype == "image" and getattr(c, "data", None):
+                try:
+                    import base64
+
+                    from .media import _save_generated
+                    mime = getattr(c, "mimeType", "") or "image/png"
+                    ext = "jpg" if "jpeg" in mime else mime.split("/")[-1] or "png"
+                    asset = await _save_generated(ctx, base64.b64decode(c.data), ext, mime, "anteprima")
+                    artifacts.append({"type": "image", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": mime})
+                    parts.append(f"[immagine mostrata all'utente (id {asset.id})]")
+                except Exception as e:
+                    parts.append(f"[immagine non salvata: {e}]")
+            else:
+                parts.append(f"[{ctype or 'contenuto'} non testuale]")
+        return parts, artifacts
+
+    async def call(self, server: str, tool: str, args: dict, timeout: int = 180):
+        """Chiamata diretta a un tool MCP dal codice (usata dai tool nativi che orchestrano WordCraft)."""
+        conn = self.conns.get(server)
+        if not conn or not conn.connected or not conn.session:
+            raise RuntimeError(f"server MCP {server} non connesso")
+        res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=timeout)
+        text = "\n".join(c.text for c in res.content if getattr(c, "type", "") == "text")
+        if res.isError:
+            raise RuntimeError(text[:500] or f"{tool} fallito")
+        return text
+
+    def is_connected(self, server: str) -> bool:
+        c = self.conns.get(server)
+        return bool(c and c.connected)
 
     # ---------------- stato / permessi ----------------
     def allowed_for(self, role: Role, tool_name: str) -> bool:
