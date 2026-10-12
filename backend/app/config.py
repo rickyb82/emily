@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     comfyui_model: str = "flux-dev"       # flux-dev | flux-schnell | sdxl | sd35 | nome di un checkpoint .safetensors
     comfyui_workflow: str = ""            # opzionale: percorso di un workflow API JSON personalizzato con segnaposto
     comfyui_timeout: int = 1800           # secondi di attesa massima per un'immagine (Mac/GPU piccole: la prima e' lenta)
+    video_provider: str = "auto"          # auto | comfyui | gemini (auto = ComfyUI se ha il modello video, altrimenti Veo)
+    comfyui_video_model: str = "wan22-5b"
+    comfyui_video_size: str = "832x480"   # Mac: 832x480; L40S: 1280x704
+    comfyui_video_frames: int = 49        # 4n+1; 49 frame = 2 s a 24 fps, 121 = 5 s
+    comfyui_video_timeout: int = 5400
     image_model: str = "gpt-image-1"
     gemini_image_model: str = "imagen-4.0-generate-001"
     video_model: str = "veo-3.0-generate-001"

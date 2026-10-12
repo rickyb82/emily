@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import base64
 import logging
 import uuid
@@ -102,7 +103,8 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
     "Genera un breve video (circa 8 secondi) da una descrizione testuale. L'operazione può richiedere qualche minuto.",
     {"type": "object", "properties": {
         "prompt": {"type": "string", "description": "Descrizione della scena"},
-        "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16"], "description": "Formato"}},
+        "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16"], "description": "Formato"},
+        "image_file_id": {"type": "string", "description": "Opzionale: id di un'immagine (allegata o generata) da animare (immagine→video)"}},
      "required": ["prompt"]},
     usage_kind="video",
 )
@@ -112,6 +114,33 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
     prompt = str(args.get("prompt", "")).strip()
     if ctx.policy.get("moderation"):
         prompt = CHILD_PROMPT_PREFIX + prompt
+    pref = (settings.video_provider or "auto").lower()
+    use_comfy = settings.comfyui_url and pref in ("auto", "comfyui")
+    if use_comfy and pref == "auto":
+        try:
+            from ..services import comfyui as _cf
+            have = await _cf.video_files_available()
+            use_comfy = any(_cf.VIDEO_PRESETS.get(settings.comfyui_video_model or "wan22-5b", {}).get("unet", "wan2.2") in h for h in have)
+        except Exception:
+            use_comfy = False
+    if use_comfy:
+        try:
+            from ..services import comfyui as _cf
+            start = None
+            fid = args.get("image_file_id")
+            if fid:
+                asset_in = await ctx.db.get(FileAsset, str(fid))
+                if asset_in and asset_in.family_id == ctx.user.family_id and asset_in.path:
+                    start = Path(asset_in.path).read_bytes()
+            data, label = await _cf.generate_video(prompt, args.get("aspect_ratio") or "16:9", start)
+            asset = await _save_generated(ctx, data, "mp4", "video/mp4", "video")
+        except Exception as e:
+            log.exception("Generazione video (ComfyUI) fallita")
+            return ToolResult(f"Generazione video fallita (comfyui): {type(e).__name__}: {e}", is_error=True)
+        return ToolResult(f"Video generato con {label} e mostrato all'utente (id {asset.id}).",
+                          artifacts=[{"type": "video", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": "video/mp4"}])
+    if not settings.gemini_api_key:
+        return ToolResult("Generazione video non disponibile: serve ComfyUI con il modello Wan 2.2 oppure una chiave Gemini (Veo).", is_error=True)
     try:
         from google import genai
         from google.genai import types

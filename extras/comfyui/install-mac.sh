@@ -3,11 +3,12 @@
 #   ./install-mac.sh                 installa in ~/ComfyUI e scarica Flux.1 schnell Q8 (Apache 2.0, nessun token)
 #   ./install-mac.sh --dev           anche Flux.1 dev Q6 (serve HF_TOKEN dopo aver accettato la licenza su Hugging Face)
 #   ./install-mac.sh --sdxl          anche SDXL base (piu' leggero e veloce)
+#   ./install-mac.sh --video         anche Wan 2.2 5B per i video (~17 GB; sul Mac decine di minuti per clip)
 # Avvio: ~/ComfyUI/start.sh   → API su http://localhost:8188 (da FamilAI in Docker: http://host.docker.internal:8188)
 set -euo pipefail
 DIR="$HOME/ComfyUI"
-DEV=0; SDXL=0
-for a in "$@"; do case "$a" in --dev) DEV=1;; --sdxl) SDXL=1;; esac; done
+DEV=0; SDXL=0; VIDEO=0
+for a in "$@"; do case "$a" in --dev) DEV=1;; --sdxl) SDXL=1;; --video) VIDEO=1;; esac; done
 say() { printf '\n\033[1;34m>> %s\033[0m\n' "$*"; }
 
 command -v brew >/dev/null || { echo "!! Serve Homebrew (https://brew.sh)"; exit 1; }
@@ -33,7 +34,7 @@ if [ ! -d custom_nodes/ComfyUI-GGUF ]; then
 fi
 pip install -q -r custom_nodes/ComfyUI-GGUF/requirements.txt
 
-M="$DIR/models"; mkdir -p "$M"/{unet,clip,vae,checkpoints}
+M="$DIR/models"; mkdir -p "$M"/{unet,clip,vae,checkpoints,diffusion_models,text_encoders}
 AUTH=(); [ -n "${HF_TOKEN:-}" ] && AUTH=(-H "Authorization: Bearer $HF_TOKEN")
 dl() { local url="$1" dest="$2"; if [ -s "$dest" ]; then echo "   gia' presente: $(basename "$dest")"; return; fi
       echo ">> $(basename "$dest")"; curl -L --fail --retry 3 --progress-bar ${AUTH[@]+"${AUTH[@]}"} -o "$dest.part" "$url" && mv "$dest.part" "$dest"; }
@@ -52,6 +53,13 @@ if [ "$SDXL" = 1 ]; then
   say "Scarico SDXL base"
   dl "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors" "$M/checkpoints/sd_xl_base_1.0.safetensors"
   dl "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors" "$M/vae/sdxl_vae.safetensors"
+fi
+
+if [ "$VIDEO" = 1 ]; then
+  say "Scarico Wan 2.2 5B TI2V (video) + encoder umt5 + VAE"
+  dl "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors" "$M/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
+  dl "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" "$M/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+  dl "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors" "$M/vae/wan2.2_vae.safetensors"
 fi
 
 cat > "$DIR/start.sh" <<'EOS'

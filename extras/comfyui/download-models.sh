@@ -4,6 +4,7 @@
 #   ./download-models.sh flux-dev            Flux.1 [dev] — qualita' massima, licenza non commerciale, serve HF_TOKEN
 #   ./download-models.sh sdxl                Stable Diffusion XL base + refiner + VAE fp16
 #   ./download-models.sh sd35                Stable Diffusion 3.5 Large (serve HF_TOKEN e accettazione licenza su HF)
+#   ./download-models.sh wan22-5b            Wan 2.2 5B TI2V: video testo→video e immagine→video (Apache 2.0, nessun token)
 # Token Hugging Face (per i modelli "gated"):  export HF_TOKEN=hf_xxx   (huggingface.co/settings/tokens)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -47,7 +48,11 @@ for what in "$@"; do
       dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" "$M/clip/clip_l.safetensors"
       dl "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors" "$M/clip/t5xxl_fp16.safetensors"
       dl "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_g.safetensors" "$M/clip/clip_g.safetensors";;
-    *) echo "sconosciuto: $what (usa flux-schnell | flux-dev | sdxl | sd35)"; exit 1;;
+    wan22-5b)
+      dl "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors" "$M/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
+      dl "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" "$M/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+      dl "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors" "$M/vae/wan2.2_vae.safetensors";;
+    *) echo "sconosciuto: $what (usa flux-schnell | flux-dev | sdxl | sd35 | wan22-5b)"; exit 1;;
   esac
 done
 echo ">> Fatto. Riavvia ComfyUI se era gia' avviato: docker compose restart comfyui"

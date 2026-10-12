@@ -265,7 +265,14 @@ export default function AdminProviders() {
             </select>
           </label>
           <label>Modello immagini Gemini<input placeholder={s.gemini_image_model.value} value={draft.gemini_image_model ?? ''} onChange={(e) => setDraft({ ...draft, gemini_image_model: e.target.value })} /></label>
-          <label>Modello video<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
+          <label>Provider video <small className="muted">({s.video_provider.value})</small>
+            <select value={draft.video_provider ?? s.video_provider.value} onChange={(e) => setDraft({ ...draft, video_provider: e.target.value })}>
+              <option value="auto">auto (ComfyUI se ha Wan 2.2, altrimenti Veo)</option><option value="comfyui">ComfyUI (Wan 2.2, in casa)</option><option value="gemini">Gemini / Veo</option>
+            </select>
+          </label>
+          <label>Video ComfyUI: risoluzione <small className="muted">(Mac 832x480 · L40S 1280x704)</small><input placeholder={s.comfyui_video_size.value} value={draft.comfyui_video_size ?? ''} onChange={(e) => setDraft({ ...draft, comfyui_video_size: e.target.value.trim() })} /></label>
+          <label>Video ComfyUI: frame <small className="muted">(49 = 2 s, 81 = 3 s, 121 = 5 s a 24 fps)</small><input type="number" min={9} step={4} placeholder={s.comfyui_video_frames.value} value={draft.comfyui_video_frames ?? ''} onChange={(e) => setDraft({ ...draft, comfyui_video_frames: e.target.value })} /></label>
+          <label>Modello video Veo<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
           <label>Router Auto (locale + cloud) <small className="muted">({s.router_mode.value})</small>
             <select value={draft.router_mode ?? s.router_mode.value} onChange={(e) => setDraft({ ...draft, router_mode: e.target.value })}>
               <option value="locale">prima il locale (risponde sempre il modello di casa; cloud solo se lo chiedi o per immagini/video/codice)</option>
@@ -347,7 +354,7 @@ export default function AdminProviders() {
           </label>
           <label>Modello embedding <small className="muted">(Ollama: bge-m3 consigliato per l'italiano; cambiandolo va rifatta l'indicizzazione)</small><input placeholder={s.embedding_model.value || 'bge-m3 / text-embedding-3-small / gemini-embedding-001'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'compaction_enabled', 'auto_continue', 'thinking_mode', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'video_provider', 'comfyui_video_size', 'comfyui_video_frames', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'compaction_enabled', 'auto_continue', 'thinking_mode', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
   )

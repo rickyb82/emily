@@ -193,3 +193,110 @@ async def generate(prompt: str, size: str = "1024x1024", negative: str = "", tim
                 except Exception:
                     pass
                 raise RuntimeError(f"timeout dopo {timeout_s}s: la generazione non e' finita (alza COMFYUI_TIMEOUT o usa un modello piu' leggero)")
+
+
+# ------------------------------------------------------------------ video (Wan 2.2 5B TI2V: testo→video e immagine→video)
+VIDEO_PRESETS: dict[str, dict] = {
+    "wan22-5b": {"unet": "wan2.2_ti2v_5B_fp16.safetensors", "clip": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "vae": "wan2.2_vae.safetensors",
+                 "steps": 20, "cfg": 5.0, "shift": 8.0, "fps": 24},
+}
+
+
+def _wan_workflow(p: dict, prompt: str, negative: str, w: int, h: int, frames: int, seed: int, start_image: str | None) -> dict:
+    wf = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": p["unet"], "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": p["clip"], "type": "wan", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": p["vae"]}},
+        "4": {"class_type": "ModelSamplingSD3", "inputs": {"shift": p["shift"], "model": ["1", 0]}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
+        "7": {"class_type": "Wan22ImageToVideoLatent", "inputs": {"width": w, "height": h, "length": frames, "batch_size": 1, "vae": ["3", 0]}},
+        "8": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": p["steps"], "cfg": p["cfg"], "sampler_name": "uni_pc", "scheduler": "simple",
+                                                   "denoise": 1.0, "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0]}},
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "CreateVideo", "inputs": {"fps": p["fps"], "images": ["9", 0]}},
+        "11": {"class_type": "SaveVideo", "inputs": {"filename_prefix": "familai/video", "format": "mp4", "codec": "h264", "video": ["10", 0]}},
+    }
+    if start_image:
+        wf["12"] = {"class_type": "LoadImage", "inputs": {"image": start_image}}
+        wf["7"]["inputs"]["start_image"] = ["12", 0]
+    return wf
+
+
+WAN_NEGATIVE = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
+                "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
+
+
+async def upload_image(data: bytes, name: str = "familai_start.png") -> str:
+    base = host_url(settings.comfyui_url).rstrip("/")
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.post(f"{base}/upload/image", files={"image": (name, data, "image/png")}, data={"overwrite": "true"})
+        r.raise_for_status()
+        return r.json().get("name", name)
+
+
+async def generate_video(prompt: str, aspect: str = "16:9", start_image_bytes: bytes | None = None,
+                         timeout_s: int | None = None) -> tuple[bytes, str]:
+    """Video con Wan 2.2 (5B) via ComfyUI. Dimensioni/durata da impostazioni (Mac: piccole; GPU grandi: 1280x704, 121 frame)."""
+    timeout_s = timeout_s or int(settings.comfyui_video_timeout or 5400)
+    base = host_url(settings.comfyui_url).rstrip("/")
+    name = (settings.comfyui_video_model or "wan22-5b").strip()
+    p = VIDEO_PRESETS.get(name) or VIDEO_PRESETS["wan22-5b"]
+    try:
+        w, h = (int(x) for x in (settings.comfyui_video_size or "832x480").lower().split("x"))
+    except ValueError:
+        w, h = 832, 480
+    if aspect == "9:16" and w > h:
+        w, h = h, w
+    w, h = max(256, w) // 32 * 32, max(256, h) // 32 * 32
+    frames = int(settings.comfyui_video_frames or 49)
+    frames = max(9, (frames - 1) // 4 * 4 + 1)        # Wan: 4n+1
+    seed = random.randint(0, 2**31 - 1)
+    start = await upload_image(start_image_bytes) if start_image_bytes else None
+    wf = _wan_workflow(p, prompt, WAN_NEGATIVE, w, h, frames, seed, start)
+    client_id = uuid.uuid4().hex
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.post(f"{base}/prompt", json={"prompt": wf, "client_id": client_id})
+        if r.status_code >= 400:
+            detail = r.text[:600]
+            try:
+                j = r.json()
+                errs = j.get("node_errors") or {}
+                if errs:
+                    first = next(iter(errs.values()))
+                    detail = "; ".join(e.get("message", "") + (" " + e.get("details", "") if e.get("details") else "") for e in first.get("errors", [])) or detail
+            except Exception:
+                pass
+            raise RuntimeError(f"ComfyUI ha rifiutato il workflow video: {detail}")
+        pid = r.json()["prompt_id"]
+        t0 = time.monotonic()
+        while True:
+            await asyncio.sleep(3)
+            hres = await c.get(f"{base}/history/{pid}")
+            data = hres.json().get(pid) if hres.status_code == 200 else None
+            if data:
+                st = data.get("status", {})
+                if st.get("status_str") == "error":
+                    msgs = [m[1].get("exception_message", "") for m in st.get("messages", []) if m[0] == "execution_error"]
+                    raise RuntimeError("errore in ComfyUI: " + ("; ".join(msgs) or "sconosciuto"))
+                for node in data.get("outputs", {}).values():
+                    for key in ("video", "images", "gifs"):
+                        for it in node.get(key, []) or []:
+                            fn = it.get("filename", "")
+                            if fn.lower().endswith((".mp4", ".webm", ".mov")):
+                                v = await c.get(f"{base}/view", params={"filename": fn, "subfolder": it.get("subfolder", ""), "type": it.get("type", "output")})
+                                v.raise_for_status()
+                                return v.content, f"ComfyUI / {name} ({w}x{h}, {frames} frame)"
+            if time.monotonic() - t0 > timeout_s:
+                try:
+                    await c.post(f"{base}/interrupt")
+                except Exception:
+                    pass
+                raise RuntimeError(f"timeout dopo {timeout_s}s: il video non e' finito (alza COMFYUI_VIDEO_TIMEOUT o riduci frame/risoluzione)")
+
+
+async def video_files_available() -> list[str]:
+    base = host_url(settings.comfyui_url).rstrip("/")
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"{base}/object_info/UNETLoader")
+        return r.json()["UNETLoader"]["input"]["required"]["unet_name"][0] if r.status_code == 200 else []

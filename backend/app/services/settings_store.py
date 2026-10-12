@@ -51,7 +51,11 @@ MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "comfyui_model": ("Modello ComfyUI (flux-dev/flux-schnell/sdxl/sd35/checkpoint)", False),
     "image_model": ("Modello immagini OpenAI", False),
     "gemini_image_model": ("Modello immagini Gemini (Imagen)", False),
-    "video_model": ("Modello video", False),
+    "video_model": ("Modello video (Veo)", False),
+    "video_provider": ("Provider video (auto/comfyui/gemini)", False),
+    "comfyui_video_model": ("Modello video ComfyUI", False),
+    "comfyui_video_size": ("Video ComfyUI: risoluzione", False),
+    "comfyui_video_frames": ("Video ComfyUI: frame (4n+1)", False),
     "tts_provider": ("Provider voce (auto/openai/gemini/none)", False),
     "tts_model_openai": ("Modello voce OpenAI", False),
     "tts_voice_openai": ("Voce OpenAI", False),
@@ -126,7 +130,14 @@ async def apply(db: AsyncSession) -> None:
     """Applica env + override DB all'oggetto Settings e ricarica i provider."""
     overrides = await load_overrides(db)
     for k in MANAGED_KEYS:
-        setattr(settings, k, overrides.get(k) or _env_defaults[k])
+        val = overrides.get(k) or _env_defaults[k]
+        # campi numerici del Settings: i valori dal pannello arrivano come stringa
+        if isinstance(_env_defaults[k], int) and not isinstance(_env_defaults[k], bool):
+            try:
+                val = int(str(val).strip() or _env_defaults[k])
+            except ValueError:
+                val = _env_defaults[k]
+        setattr(settings, k, val)
     from ..providers.registry import refresh_models, reload_providers
 
     reload_providers()

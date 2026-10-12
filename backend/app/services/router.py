@@ -92,8 +92,8 @@ async def decide(text: str, has_files: bool, policy: dict, history_tail: list[st
         # (generare immagini/video, eseguire codice nella sandbox, MCP). L'utente chiede il cloud quando vuole.
         if re.search(r"(genera|crea|fai|disegna|fammi|realizza)\w*\s+(un'?|una|la|le|delle?)?\s*(immagin|foto|illustrazion|disegn|logo)", low) and not settings.comfyui_url:
             return to_cloud("generazione immagini: solo nel cloud (nessun ComfyUI configurato)")
-        if re.search(r"(genera|crea|fai|fammi|realizza)\w*\s+(un'?|una|la|le|delle?)?\s*(video|filmato|clip)", low):
-            return to_cloud("generazione video: solo nel cloud")
+        if re.search(r"(genera|crea|fai|fammi|realizza|anima)\w*\s+(un'?|una|la|le|delle?|questa)?\s*(video|filmato|clip|foto|immagine)", low) and not settings.comfyui_url:
+            return to_cloud("generazione video: solo nel cloud (nessun ComfyUI configurato)")
         if re.search(r"\b(esegui|eseguil[oa]|lancia|runna|testa il codice|calcola con python)\b", low):
             return to_cloud("esecuzione codice: solo nel cloud")
         return Route(local_id, local_model, True, "modalita' 'prima il locale'")
