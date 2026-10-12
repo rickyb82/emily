@@ -113,6 +113,40 @@ async def generate_image(args: dict, ctx: ToolContext) -> ToolResult:
                       artifacts=[{"type": "image", "file_id": asset.id, "url": url, "mime": "image/png"}], usage=tool_usage)
 
 
+_veo_cache: dict = {"model": "", "checked": False}
+
+
+async def _resolve_veo_model(client) -> str:
+    """Il modello Veo impostato, se esiste nell'account; altrimenti il piu' recente che supporta la generazione video.
+    (Gli id cambiano spesso: veo-3.1-generate-preview, veo-3.0-generate-001, veo-3.0-fast-generate-001, veo-2.0-generate-001...)"""
+    if _veo_cache["checked"] and _veo_cache["model"]:
+        return _veo_cache["model"]
+    want = settings.video_model
+    try:
+        names = []
+        async for m in await client.aio.models.list():
+            name = (m.name or "").replace("models/", "")
+            actions = list(getattr(m, "supported_actions", None) or [])
+            if "veo" in name and (not actions or "predictLongRunning" in actions):
+                names.append(name)
+        _veo_cache["checked"] = True
+        if want in names or not names:
+            _veo_cache["model"] = want
+            return want
+        # ordina: versione piu' alta prima, 'generate' prima di 'fast'
+        def key(n: str):
+            import re as _re
+            v = _re.search(r"veo-(\d+)\.(\d+)", n)
+            return (int(v.group(1)) if v else 0, int(v.group(2)) if v else 0, "fast" not in n, "preview" not in n)
+        names.sort(key=key, reverse=True)
+        log.warning("Modello video %s non disponibile: uso %s", want, names[0])
+        _veo_cache["model"] = names[0]
+        return names[0]
+    except Exception as e:
+        log.warning("Elenco modelli Veo non disponibile: %s", e)
+        return want
+
+
 @register(
     "generate_video",
     "Genera un breve video (circa 8 secondi) da una descrizione testuale. L'operazione può richiedere qualche minuto.",
@@ -166,8 +200,9 @@ async def generate_video(args: dict, ctx: ToolContext) -> ToolResult:
         from google.genai import types
 
         client = genai.Client(api_key=settings.gemini_api_key)
+        veo_model = await _resolve_veo_model(client)
         op = await client.aio.models.generate_videos(
-            model=settings.video_model, prompt=prompt,
+            model=veo_model, prompt=prompt,
             config=types.GenerateVideosConfig(aspect_ratio=args.get("aspect_ratio") or "16:9", number_of_videos=1))
         for _ in range(60):  # max ~10 minuti
             if op.done:
