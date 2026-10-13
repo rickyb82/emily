@@ -77,9 +77,10 @@ export default function Editor() {
           return
         }
         const saveQ = new URLSearchParams({ file_id: fileId })
-        const cid = params.get('conversation_id'); const pid = params.get('project_id')
+        const cid = params.get('conversation_id'); const pid = params.get('project_id'); const fo = params.get('folder_id')
         if (cid) saveQ.set('conversation_id', cid)
         if (pid) saveQ.set('project_id', pid)
+        if (fo) saveQ.set('folder_id', fo)
         if (isNew && name) saveQ.set('filename', name)
         // PdfCraft ricava il nome dall'URL (?file=/files/<id>): senza estensione vale il nome vero del file
         const fname = d.name && /\.[a-z0-9]{1,5}$/i.test(d.name) ? d.name : (name || 'documento.pdf')
@@ -101,9 +102,10 @@ export default function Editor() {
   const src = useMemo(() => {
     if (!fileId) return ''
     const saveQ = new URLSearchParams({ file_id: fileId })
-    const cid = params.get('conversation_id'); const pid = params.get('project_id')
+    const cid = params.get('conversation_id'); const pid = params.get('project_id'); const fo = params.get('folder_id')
     if (cid) saveQ.set('conversation_id', cid)
     if (pid) saveQ.set('project_id', pid)
+    if (fo) saveQ.set('folder_id', fo)
     if (isNew && name) saveQ.set('filename', name)
     const q = new URLSearchParams({ lang: UI_LANG })
     if (app === 'pdfcraft') {
@@ -156,7 +158,7 @@ export default function Editor() {
           onError={() => setErr(`L'editor non si è caricato: il container ${app}-web è attivo?`)} />
       ) : <div className="editor-frame center muted">Caricamento…</div>}
       <p className="muted small editor-hint">
-        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su FamilAI, non scaricato{app === 'wordcraft' && ' (e il salvataggio automatico resta attivo)'}. Per cambiare nome al file clicca sul titolo qui sopra.
+        Salva con <b>File › Salva</b> (o Ctrl/Cmd+S) dentro l'editor: il file viene aggiornato qui su Emily, non scaricato{app === 'wordcraft' && ' (e il salvataggio automatico resta attivo)'}. Per cambiare nome al file clicca sul titolo qui sopra.
         {app !== 'pdfcraft' && <><b> File › Esporta</b> (PDF, CSV…) crea un nuovo file accanto a questo.</>} Serve un browser con WebGPU o WebGL2.
       </p>
     </div>

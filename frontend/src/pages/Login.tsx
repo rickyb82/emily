@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import Brand from '../components/Brand'
 import { Link, useSearchParams } from 'react-router-dom'
 import { startAuthentication } from '@simplewebauthn/browser'
 import { get, post } from '../lib/api'
@@ -11,7 +12,7 @@ export default function Login() {
   const [step, setStep] = useState<'password' | 'passkey' | 'recovery' | 'emailcode' | 'totp'>('password')
   const [methods, setMethods] = useState<{ passkey: boolean; totp: boolean }>({ passkey: true, totp: false })
   const [code, setCode] = useState('')
-  const [features, setFeatures] = useState<{ email: boolean; email_mfa: boolean; google: boolean }>({ email: false, email_mfa: false, google: false })
+  const [features, setFeatures] = useState<{ email: boolean; email_mfa: boolean; google: boolean; org_mode?: boolean }>({ email: false, email_mfa: false, google: false })
   const [params] = useSearchParams()
   const GOOGLE_ERRORS: Record<string, string> = {
     google_non_configurato: "L'accesso con Google non è configurato.",
@@ -127,7 +128,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>🏠 FamilAI</h1>
+        <h1><Brand size="large" /></h1>
         {step === 'password' && (
           <form onSubmit={submitPassword} className="stack">
             <p className="muted">Accesso adulti</p>
@@ -142,7 +143,7 @@ export default function Login() {
               </a>
             )}
             {features.email && <Link to="/forgot" className="link-btn small">Password dimenticata?</Link>}
-            <Link to="/kids" className="link-btn">👧 Sono un bambino: entra con il PIN</Link>
+            {!features.org_mode && <Link to="/kids" className="link-btn">👧 Sono un bambino: entra con il PIN</Link>}
           </form>
         )}
         {step === 'passkey' && (

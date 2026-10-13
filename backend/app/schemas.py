@@ -202,6 +202,7 @@ class FileOut(BaseModel):
     created_at: datetime
     index_status: str = "none"
     chunk_count: int = 0
+    folder_id: str | None = None
     url: str = ""
 
     model_config = {"from_attributes": True}

@@ -278,3 +278,69 @@ button.small { font-size: 13px; padding: 4px 10px; }
 .editor-frame { flex: 1; width: 100%; border: 0; background: #e6e6e6; min-height: 0; }
 .editor-hint { margin: 0; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--panel); }
 .btn-link { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* marchio: logo Sirius + nome Emily */
+.brand-mark { display: inline-flex; align-items: center; gap: 8px; }
+.brand-logo { height: 22px; width: auto; display: block; }
+.brand-name { font-weight: 700; letter-spacing: .02em; }
+.brand-mark.large { flex-direction: column; gap: 6px; }
+.brand-mark.large .brand-logo { height: 54px; }
+.brand-mark.large .brand-name { font-size: 1.6rem; }
+.brand-tagline { font-weight: 400; font-size: .8rem; }
+@media (prefers-color-scheme: dark) { .brand-logo { background: #fff; border-radius: 6px; padding: 2px 6px; box-sizing: content-box; } }
+
+/* condivisione: ricerca persone con suggerimenti */
+.share-search { position: relative; }
+.suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--card, #fff); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: 260px; overflow: auto; }
+.suggest li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.suggest li.active { background: var(--bg); }
+.share-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+
+/* ---- Documenti stile Finder ---- */
+.finder-bar { margin-bottom: 12px; gap: 8px; }
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 1.05rem; }
+.crumb { background: none; border: 0; padding: 4px 6px; border-radius: 8px; color: var(--text); font: inherit; }
+.crumb:hover { background: var(--bg); }
+.crumb.current { padding: 4px 6px; }
+.finder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px 6px; padding: 8px; min-height: 240px; border-radius: 14px; }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 8px; background: none; border: 1px solid transparent; border-radius: 12px; text-align: center; font: inherit; color: var(--text); cursor: pointer; }
+.tile:hover { background: var(--bg); }
+.tile.selected { background: color-mix(in srgb, #1f6feb 14%, var(--bg)); border-color: color-mix(in srgb, #1f6feb 40%, transparent); }
+.tile.drop { background: color-mix(in srgb, #1f6feb 22%, var(--bg)); border-color: #1f6feb; }
+.tile-name { font-size: .85rem; line-height: 1.2; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.tile small { font-size: .72rem; }
+.tile-menu { position: absolute; top: 4px; right: 6px; opacity: 0; font-weight: 700; padding: 0 6px; border-radius: 6px; }
+.tile:hover .tile-menu { opacity: .8; }
+.tile-menu:hover { background: var(--border); }
+/* cartella macOS */
+.folder-icon { --folder: #6cb4ff; position: relative; width: 68px; height: 52px; margin-top: 8px; background: linear-gradient(180deg, color-mix(in srgb, var(--folder) 90%, #fff) 0%, var(--folder) 100%); border-radius: 6px 6px 8px 8px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.12); }
+.folder-tab { position: absolute; top: -7px; left: 0; width: 28px; height: 10px; background: color-mix(in srgb, var(--folder) 80%, #000 6%); border-radius: 5px 5px 0 0; }
+.folder-icon.project { --folder: #7bc8a4; }
+/* icone file: foglio con angolo piegato e tinta dell'app */
+.file-icon { width: 54px; height: 66px; margin: 2px 0 2px; display: flex; align-items: center; justify-content: center; font-size: 34px; }
+.file-icon.doc { position: relative; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,.1); overflow: hidden; }
+.file-icon.doc b { font-size: 16px; color: #fff; padding: 2px 6px; border-radius: 5px; background: var(--app, #1f6feb); letter-spacing: .02em; }
+.file-icon-corner { position: absolute; top: 0; right: 0; width: 14px; height: 14px; background: linear-gradient(225deg, var(--bg) 50%, var(--border) 50%); }
+.app-word { --app: #2b5fd9; } .app-excel { --app: #1e8e4b; } .app-deck { --app: #d35b1f; } .app-map { --app: #7a3fd8; } .app-pdf { --app: #d9272e; } .app-mail { --app: #0e7fa6; }
+/* cartella APP e icone app stile iOS */
+.ios-folder { width: 68px; height: 68px; margin-top: 2px; padding: 7px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: color-mix(in srgb, var(--text) 10%, var(--panel)); border: 1px solid var(--border); border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
+.mini-app { display: flex; align-items: center; justify-content: center; border-radius: 5px; background: var(--app); color: #fff; font-size: 8px; font-weight: 700; }
+.app-icon { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(160deg, color-mix(in srgb, var(--app) 80%, #fff) 0%, var(--app) 60%, color-mix(in srgb, var(--app) 80%, #000) 100%); color: #fff; font-size: 24px; font-weight: 800; box-shadow: 0 6px 14px color-mix(in srgb, var(--app) 40%, transparent); letter-spacing: .02em; }
+.app-icon.app-pdf { font-size: 15px; }
+.ios-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.25); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); animation: fade .15s ease; }
+.ios-panel { width: min(92vw, 520px); padding: 18px 22px 16px; background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid rgba(255,255,255,.25); border-radius: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.3); animation: pop .18s ease; }
+.ios-panel h3 { margin: 0 0 12px; text-align: center; font-weight: 600; }
+.ios-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 14px 8px; justify-items: center; }
+.ios-app { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; padding: 6px; font: inherit; font-size: .82rem; color: var(--text); border-radius: 12px; }
+.ios-app:hover .app-icon { transform: scale(1.06); }
+.ios-app .app-icon { transition: transform .12s ease; }
+@keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+/* menu contestuale e "sposta in" */
+.ctx-menu { position: fixed; z-index: 70; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.ctx-menu li { padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.ctx-menu li:hover { background: var(--bg); }
+.ctx-menu li.danger { color: #c0392b; }
+.move-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.move-list li { padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.move-list li:hover { background: var(--bg); }

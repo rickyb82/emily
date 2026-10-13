@@ -23,6 +23,7 @@ settings = get_settings()
 
 # chiave -> (etichetta, è segreto)
 MANAGED_KEYS: dict[str, tuple[str, bool]] = {
+    "org_mode": ("Modalita' azienda (1 = nessun bambino, etichette organizzazione)", False),
     "anthropic_api_key": ("Chiave API Anthropic", True),
     "anthropic_default_model": ("Modello di default Claude", False),
     "openai_api_key": ("Chiave API OpenAI", True),

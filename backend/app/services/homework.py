@@ -121,9 +121,9 @@ async def _notify_parents(db: AsyncSession, child: User, req: ApprovalRequest) -
                                                        User.is_active == True, User.email != None))).scalars().all()  # noqa: E711,E712
         base = f"https://{settings.public_host}" if settings.public_host and settings.public_host != "localhost" else settings.webauthn_origin
         for p in parents:
-            text = (f"Ciao {p.display_name},\n{child.display_name} ha chiesto a FamilAI di fare un compito:\n\n\"{req.text[:300]}\"\n\n"
+            text = (f"Ciao {p.display_name},\n{child.display_name} ha chiesto a {settings.app_name} di fare un compito:\n\n\"{req.text[:300]}\"\n\n"
                     f"Apri {base} e decidi dal campanello in alto (approva, aiuto guidato, nega).")
-            await mailer.send_email(p.email, f"FamilAI: {child.display_name} chiede il permesso per i compiti", text, None)
+            await mailer.send_email(p.email, f"{settings.app_name}: {child.display_name} chiede il permesso per i compiti", text, None)
     except Exception as e:
         log.warning("Notifica email ai genitori non inviata: %s", e)
 

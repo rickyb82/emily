@@ -55,7 +55,7 @@ export default function Settings() {
         <h2>⚙️ Le mie impostazioni</h2>
         <p>Ciao {me!.user.display_name}! {me!.user.avatar}</p>
         <p className="muted">Puoi mandare fino a {pol.daily_message_limit || '∞'} messaggi e creare {pol.daily_image_limit || '∞'} immagini al giorno.</p>
-        {pol.time_windows?.length > 0 && <p className="muted">Orari in cui puoi usare FamilAI: {pol.time_windows.map((w: any) => `${w.start}–${w.end}`).join(', ')}</p>}
+        {pol.time_windows?.length > 0 && <p className="muted">Orari in cui puoi usare Emily: {pol.time_windows.map((w: any) => `${w.start}–${w.end}`).join(', ')}</p>}
       </div>
     )
   }
@@ -96,12 +96,12 @@ export default function Settings() {
       </section>
 
       <section className="card stack">
-        <h3>🧠 Cosa ricorda di te e della famiglia</h3>
+        <h3>🧠 Cosa ricorda di te{me?.features?.org_mode ? '' : ' e della famiglia'}</h3>
         <p className="muted">Fatti che l'assistente usa per personalizzare le risposte. Puoi cancellare quelli che ti riguardano; l'amministratore gestisce tutto dalla pagina Famiglia → Memoria. In chat puoi dire "ricordati che…" o "dimentica…".</p>
         {mem.length === 0 ? <small className="muted">Ancora nulla.</small> : (
           <ul className="file-list">
             {mem.map((m) => (
-              <li key={m.id}>{m.text} <small className="muted">({m.scope === 'family' ? 'famiglia' : 'solo tu'}{m.status === 'pending' ? ' · in attesa di approvazione' : ''})</small>
+              <li key={m.id}>{m.text} <small className="muted">({m.scope === 'family' ? (me?.features?.org_mode ? 'tutti' : 'famiglia') : 'solo tu'}{m.status === 'pending' ? ' · in attesa di approvazione' : ''})</small>
                 {(m.mine || me?.user.role === 'admin') && <button className="icon" title="Cancella" onClick={() => run(() => del(`/auth/memory/${m.id}`), 'Voce cancellata')}>🗑</button>}
               </li>
             ))}
@@ -109,14 +109,14 @@ export default function Settings() {
         )}
       </section>
 
-      <section className="card stack">
+      {!me?.features?.org_mode && <section className="card stack">
         <h3>👧 Dispositivo per i bambini</h3>
         <p className="muted">Approvando questo dispositivo (browser), i bambini potranno accedere da qui con il loro PIN. Fallo solo su tablet/PC di casa.</p>
         <div className="row">
           <input placeholder="Nome dispositivo (es. iPad salotto)" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
           <button disabled={!deviceName} onClick={() => run(() => post('/auth/device/trust', { name: deviceName }), 'Dispositivo approvato')}>Approva</button>
         </div>
-      </section>
+      </section>}
 
       <section className="card stack">
         <h3>🔑 Password</h3>

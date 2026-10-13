@@ -247,6 +247,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     mfa_required = ctx.user.role != Role.child and (
         not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
+    from ..config import org_mode_on
     from ..tools.mcp_client import mcp_manager
     adult = ctx.user.role != Role.child
     features = {"wordcraft_web": bool(settings.wordcraft_web) and adult, "wordcraft_mcp": mcp_manager.is_connected("wordcraft"),
@@ -254,7 +255,8 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "pdfcraft_web": bool(settings.pdfcraft_web) and adult, "pdfcraft_mcp": mcp_manager.is_connected("pdfcraft"),
                 "deckcraft_web": bool(settings.deckcraft_web) and adult, "deckcraft_mcp": mcp_manager.is_connected("deckcraft"),
                 "ideacraft_mcp": mcp_manager.is_connected("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and adult,
-                "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft")}
+                "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft"),
+                "org_mode": org_mode_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
 
@@ -311,9 +313,10 @@ async def features():
     """Funzioni disponibili alla schermata di login (nessuna autenticazione)."""
     from . import google_auth
 
+    from ..config import org_mode_on
     return {"email": mailer.email_enabled(),
             "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes"),
-            "google": google_auth.enabled()}
+            "google": google_auth.enabled(), "org_mode": org_mode_on(), "app_name": settings.app_name}
 
 
 @router.post("/forgot")
@@ -394,7 +397,7 @@ async def totp_setup(ctx: AuthContext = Depends(require_adult_for_enrollment), d
     await db.commit()
     account = ctx.user.email or ctx.user.username
     fam = await db.get(Family, ctx.user.family_id)
-    issuer = f"FamilAI {fam.name}" if fam and fam.name else "FamilAI"
+    issuer = f"{settings.app_name} {fam.name}" if fam and fam.name else settings.app_name
     uri = totp_svc.provisioning_uri(secret, account, issuer)
     return {"secret": secret, "uri": uri, "qr_svg": totp_svc.qr_svg(uri)}
 

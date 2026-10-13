@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Brand from '../components/Brand'
 import { Link } from 'react-router-dom'
 import { get, post } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -37,7 +38,7 @@ export default function KidLogin() {
     return (
       <div className="auth-page">
         <div className="auth-card stack">
-          <h1>🏠 FamilAI</h1>
+          <h1><Brand size="large" /></h1>
           <p>Questo dispositivo non è ancora stato approvato da mamma o papà.</p>
           <p className="muted">Un genitore deve accedere da qui e, nelle Impostazioni, scegliere “Approva questo dispositivo per i bambini”.</p>
           <Link to="/login" className="link-btn">Accesso genitori</Link>

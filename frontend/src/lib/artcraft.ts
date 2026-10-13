@@ -45,10 +45,11 @@ export function editorPath(fileId: string, filename?: string): string {
 }
 
 /** Rotta interna dell'editor per un file nuovo (documento o foglio), collegato a una chat e/o a un progetto. */
-export function newFilePath(app: ArtApp, opts: { conversationId?: string | null; projectId?: string | null; name?: string } = {}): string {
+export function newFilePath(app: ArtApp, opts: { conversationId?: string | null; projectId?: string | null; folderId?: string | null; name?: string } = {}): string {
   const q = new URLSearchParams({ file: newFileId(), new: '1', app })
   if (opts.conversationId) q.set('conversation_id', opts.conversationId)
   if (opts.projectId) q.set('project_id', opts.projectId)
+  if (opts.folderId) q.set('folder_id', opts.folderId)
   q.set('name', opts.name || (app === 'gridcraft' ? 'foglio.xlsx' : app === 'deckcraft' ? 'presentazione.pptx' : app === 'ideacraft' ? 'mappa.ideacraft.json' : 'documento.docx'))
   return `/editor?${q.toString()}`
 }

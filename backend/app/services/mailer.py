@@ -55,7 +55,7 @@ async def _send_gmail_api(to: str, subject: str, text: str, html: str | None) ->
     import httpx
 
     msg = EmailMessage()
-    msg["From"] = formataddr((settings.smtp_from_name or "FamilAI", settings.gmail_oauth_email))
+    msg["From"] = formataddr((settings.smtp_from_name or settings.app_name, settings.gmail_oauth_email))
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(text)
@@ -72,7 +72,7 @@ async def _send_gmail_api(to: str, subject: str, text: str, html: str | None) ->
 
 def _send_sync(to: str, subject: str, text: str, html: str | None) -> None:
     msg = EmailMessage()
-    msg["From"] = formataddr((settings.smtp_from_name or "FamilAI", settings.smtp_from))
+    msg["From"] = formataddr((settings.smtp_from_name or settings.app_name, settings.smtp_from))
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(text)

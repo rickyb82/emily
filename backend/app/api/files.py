@@ -45,7 +45,7 @@ def _out(f: FileAsset) -> FileOut:
 
 @router.post("/files", response_model=FileOut)
 async def upload(background: BackgroundTasks, file: UploadFile = File(...), project_id: str | None = Form(None),
-                 conversation_id: str | None = Form(None),
+                 conversation_id: str | None = Form(None), folder_id: str | None = Form(None),
                  ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     pol = effective_policy(ctx.user)
     name = re.sub(r"[^\w.\- ]", "_", file.filename or "file")[:200]
@@ -68,7 +68,8 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     path.write_bytes(data)
     mime = file.content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
     asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
-                      conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path))
+                      conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
+                      folder_id=folder_id or None)
     if not mime.startswith(("image/", "video/", "audio/")):
         asset.extracted_text = extract_text(path, mime) or ""
     asset.index_status = "pending" if rag.is_indexable(asset) else "none"
@@ -107,9 +108,41 @@ async def reindex(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncS
     return _out(asset)
 
 
+class BlankPdf(BaseModel):
+    filename: str = "documento.pdf"
+    pages: int = 1
+    project_id: str | None = None
+    folder_id: str | None = None
+
+
+@router.post("/files/blank-pdf", response_model=FileOut)
+async def blank_pdf(body: BlankPdf, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """PDF vuoto (A4) da aprire subito in PdfCraft: e' il "nuovo PDF" della cartella APP."""
+    if ctx.user.role == Role.child:
+        raise HTTPException(403, "Gli editor sono riservati agli adulti")
+    from pypdf import PdfWriter
+    w = PdfWriter()
+    for _ in range(max(1, min(int(body.pages or 1), 20))):
+        w.add_blank_page(width=595.28, height=841.89)
+    nid = uuid.uuid4().hex
+    path = settings.generated_dir / f"{nid}.pdf"
+    settings.generated_dir.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as fh:
+        w.write(fh)
+    stem = re.sub(r"[^\w.\- ]", "_", body.filename.strip()).strip(". ") or "documento"
+    stem = re.sub(r"\.pdf$", "", stem, flags=re.I) or "documento"
+    asset = FileAsset(id=nid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=body.project_id,
+                      filename=f"{stem}.pdf"[:200], mime="application/pdf", size=path.stat().st_size, path=str(path),
+                      kind="generated", folder_id=body.folder_id or None)
+    db.add(asset)
+    await db.commit()
+    return _out(asset)
+
+
 @router.post("/files/wordcraft-save", response_model=FileOut)
 async def wordcraft_save(request: Request, background: BackgroundTasks, file_id: str, conversation_id: str | None = None,
-                         project_id: str | None = None, filename: str | None = None, ctx: AuthContext = Depends(require_auth),
+                         project_id: str | None = None, filename: str | None = None, folder_id: str | None = None,
+                         ctx: AuthContext = Depends(require_auth),
                          db: AsyncSession = Depends(get_db)):
     """Salvataggio dagli editor nel browser, WordCraft e GridCraft (File > Salva / Esporta): il corpo e' il file, il nome arriva
     nell'header X-Filename. `file_id` e' il documento aperto: se esiste e l'estensione coincide viene sovrascritto
@@ -154,7 +187,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
             path.write_bytes(data)
             new = FileAsset(id=nid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=asset.project_id,
                             conversation_id=asset.conversation_id, filename=name, mime=mime, size=len(data),
-                            path=str(path), kind="generated")
+                            path=str(path), kind="generated", folder_id=asset.folder_id)
             db.add(new)
             await db.commit()
             return _out(new)
@@ -172,7 +205,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
         path.write_bytes(data)
         asset = FileAsset(id=file_id, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
                           conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
-                          kind="generated")
+                          kind="generated", folder_id=folder_id or None)
         db.add(asset)
     if not mime.startswith(("image/", "video/", "audio/")):
         asset.extracted_text = extract_text(Path(asset.path), mime) or ""
@@ -185,20 +218,31 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
 
 
 class FileRename(BaseModel):
-    filename: str
+    filename: str | None = None
+    folder_id: str | None = None   # "" = radice; spostamento in una cartella di Documenti (solo il proprietario)
 
 
 @router.patch("/files/{fid}", response_model=FileOut)
 async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Rinomina un file (proprietario o permesso di scrittura). L'estensione resta quella originale."""
     asset, _ = await require_access(db, "file", fid, ctx.user, write=True)
-    low = asset.filename.lower()
-    old_ext = ".ideacraft.json" if low.endswith(".ideacraft.json") else Path(asset.filename).suffix
-    clean = re.sub(r"[^\w.\- ]", "_", body.filename.strip())
-    stem = re.sub(r"(\.ideacraft)?\.[A-Za-z0-9]{1,8}$", "", clean).strip(". ") if "." in clean else clean.strip(". ")
-    if not stem:
-        raise HTTPException(400, "Nome non valido")
-    asset.filename = f"{stem}{old_ext}"[:200]
+    if body.folder_id is not None:
+        if asset.owner_id != ctx.user.id:
+            raise HTTPException(403, "Solo il proprietario puo' spostare il file nelle sue cartelle")
+        if body.folder_id:
+            from ..models import Folder
+            fo = await db.get(Folder, body.folder_id)
+            if not fo or fo.owner_id != ctx.user.id:
+                raise HTTPException(404, "Cartella non trovata")
+        asset.folder_id = body.folder_id or None
+    if body.filename is not None:
+        low = asset.filename.lower()
+        old_ext = ".ideacraft.json" if low.endswith(".ideacraft.json") else Path(asset.filename).suffix
+        clean = re.sub(r"[^\w.\- ]", "_", body.filename.strip())
+        stem = re.sub(r"(\.ideacraft)?\.[A-Za-z0-9]{1,8}$", "", clean).strip(". ") if "." in clean else clean.strip(". ")
+        if not stem:
+            raise HTTPException(400, "Nome non valido")
+        asset.filename = f"{stem}{old_ext}"[:200]
     await db.commit()
     return _out(asset)
 

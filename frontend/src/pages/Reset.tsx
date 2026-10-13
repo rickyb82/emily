@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import Brand from '../components/Brand'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { post } from '../lib/api'
 
@@ -15,7 +16,7 @@ export default function Reset() {
   const invite = !!params.get('code')
 
   useEffect(() => {
-    document.title = invite ? 'Imposta la password — FamilAI' : 'Password dimenticata — FamilAI'
+    document.title = invite ? 'Imposta la password — Emily' : 'Password dimenticata — Emily'
   }, [invite])
 
   async function sendCode(e: FormEvent) {
@@ -49,7 +50,7 @@ export default function Reset() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>🏠 FamilAI</h1>
+        <h1><Brand size="large" /></h1>
         {step === 'ask' && (
           <form onSubmit={sendCode} className="stack">
             <p>Inserisci la tua email: ti mandiamo un codice per impostare una nuova password.</p>

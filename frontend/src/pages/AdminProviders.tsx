@@ -33,7 +33,7 @@ export default function AdminProviders() {
   const [mailTo, setMailTo] = useState('')
   const [mail, setMail] = useState<{ transport: string; sender: string; gmail_linked: boolean; gmail_email: string; gmail_redirect_uri: string; google_client_ready: boolean } | null>(null)
   const [params] = useSearchParams()
-  const GMAIL_MSG: Record<string, string> = { ok: 'Account Google collegato: da ora le email partono tramite Gmail.', annullato: 'Collegamento Google annullato.', scaduto: 'Sessione scaduta, riprova.', errore: 'Google non ha completato il collegamento, riprova.', norefresh: 'Google non ha rilasciato il permesso permanente: rimuovi FamilAI da myaccount.google.com/permissions e ricollega.' }
+  const GMAIL_MSG: Record<string, string> = { ok: 'Account Google collegato: da ora le email partono tramite Gmail.', annullato: 'Collegamento Google annullato.', scaduto: 'Sessione scaduta, riprova.', errore: 'Google non ha completato il collegamento, riprova.', norefresh: 'Google non ha rilasciato il permesso permanente: rimuovi Emily da myaccount.google.com/permissions e ricollega.' }
   const loadMail = () => get('/admin/email/status').then(setMail).catch(() => {})
   const [mailResult, setMailResult] = useState<{ ok: boolean; text: string } | null>(null)
 

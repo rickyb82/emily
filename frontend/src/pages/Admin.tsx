@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { del, get, patch, post, type User } from '../lib/api'
+import { del, get, patch, post, put, type User } from '../lib/api'
 import AdminProviders from './AdminProviders'
 import AdminBackup from './AdminBackup'
 import AdminMemory from './AdminMemory'
@@ -18,14 +18,16 @@ export default function Admin() {
   const [params] = useSearchParams()
   const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'members')
   const [version, setVersion] = useState('')
+  const { me } = useAuth()
+  const org = !!me?.features?.org_mode
   useEffect(() => {
     get('/health').then((h) => setVersion(h.version)).catch(() => {})
   }, [])
   return (
     <div className="page stack">
-      <h2>👪 Famiglia <small className="muted">FamilAI v{version}</small></h2>
+      <h2>{org ? '🏢 Organizzazione' : '👪 Famiglia'} <small className="muted">Emily v{version}</small></h2>
       <div className="tabs">
-        {(['members', 'memory', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp', 'backup'] as Tab[]).map((t) => (
+        {(['members', 'memory', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp', 'backup'] as Tab[]).filter((t) => !org || !['supervision', 'devices'].includes(t)).map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
             {{ members: 'Membri', providers: 'Provider AI', costs: 'Costi', supervision: 'Supervisione', usage: 'Utilizzo', devices: 'Dispositivi', audit: 'Eventi', mcp: 'MCP', backup: 'Backup', memory: 'Memoria' }[t]}
           </button>
@@ -53,22 +55,32 @@ function Members() {
   const [edit, setEdit] = useState<User | null>(null)
   const [adding, setAdding] = useState(false)
   const [err, setErr] = useState('')
+  const { refresh } = useAuth()
+  const org = !!me?.features?.org_mode
   const load = () => get<User[]>('/admin/members').then(setMembers)
   useEffect(() => {
     load()
     get('/admin/policy-defaults').then(setDefaults)
   }, [])
+  async function setOrg(on: boolean) {
+    if (on && members.some((m) => m.role === 'child') && !confirm('Ci sono utenti bambini: in modalità azienda non potranno più accedere con il PIN. Continuare?')) return
+    try { await put('/admin/providers', { values: { org_mode: on ? '1' : '' } }); await refresh() } catch (e: any) { setErr(e.message) }
+  }
 
   return (
     <div className="stack">
       {err && <div className="error">{err}</div>}
+      <label className="row card" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={org} onChange={(e) => setOrg(e.target.checked)} />
+        <span><b>🏢 Modalità azienda</b><br /><small className="muted">Nessun bambino: niente accesso con PIN, supervisione, compiti e controllo genitori; gli utenti sono colleghi e si condivide cercandoli per nome o email. Vale per tutta l'installazione.</small></span>
+      </label>
       <table className="table">
         <thead><tr><th>Membro</th><th>Ruolo</th><th>Fascia</th><th>2FA</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
               <td>{m.avatar} {m.display_name} <small className="muted">{m.email ?? m.username}</small></td>
-              <td>{{ admin: 'Amministratore', adult: 'Adulto', child: 'Bambino/a' }[m.role]}</td>
+              <td>{{ admin: 'Amministratore', adult: org ? 'Utente' : 'Adulto', child: 'Bambino/a' }[m.role]}</td>
               <td>{m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
               <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : '⚠️ no') : '—'}</td>
               <td className="row wrap">
@@ -89,12 +101,14 @@ function Members() {
 }
 
 function MemberForm({ user, defaults, onClose, onError }: { user?: User; defaults: Record<string, any>; onClose: () => void; onError: (s: string) => void }) {
+  const { me } = useAuth()
+  const org = !!me?.features?.org_mode
   const [f, setF] = useState<any>({
     username: user?.username ?? '', display_name: user?.display_name ?? '', avatar: user?.avatar ?? '🙂',
-    role: user?.role ?? 'child', age_group: user?.age_group ?? 'kid', birth_year: user?.birth_year ?? '',
+    role: user?.role ?? (org ? 'adult' : 'child'), age_group: user?.age_group ?? 'kid', birth_year: user?.birth_year ?? '',
     email: user?.email ?? '', password: '', pin: '', is_active: user?.is_active ?? true,
   })
-  const [policy, setPolicy] = useState<any>(user ? { ...user.effective_policy } : { ...(defaults['kid'] ?? {}) })
+  const [policy, setPolicy] = useState<any>(user ? { ...user.effective_policy } : { ...(defaults[org ? 'adult' : 'kid'] ?? {}) })
   const [advanced, setAdvanced] = useState(!!user)
   const [active, setActive] = useState<{ id: string; label: string; models: { id: string; label: string }[] }[]>([])
   useEffect(() => {
@@ -150,7 +164,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
           {!user && <label>Username<input value={f.username} onChange={(e) => set('username', e.target.value)} /></label>}
           <label>Ruolo
             <select value={f.role} onChange={(e) => set('role', e.target.value)}>
-              <option value="child">Bambino/a</option><option value="adult">Adulto</option><option value="admin">Amministratore</option>
+              {!org && <option value="child">Bambino/a</option>}<option value="adult">{org ? 'Utente' : 'Adulto'}</option><option value="admin">Amministratore</option>
             </select>
           </label>
           {isChild && (

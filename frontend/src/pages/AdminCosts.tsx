@@ -48,7 +48,7 @@ export default function AdminCosts() {
   const s = rep.settings
   return (
     <div className="stack">
-      <p className="muted">Mese corrente dal {new Date(rep.since).toLocaleDateString()}. I provider non espongono il credito residuo alle normali chiavi API: la <b>stima</b> viene dai log di FamilAI × listino prezzi; la <b>spesa reale</b> compare se inserisci una chiave Admin (Anthropic/OpenAI). Il <b>rimanente</b> è budget − spesa (reale se disponibile, altrimenti stimata).</p>
+      <p className="muted">Mese corrente dal {new Date(rep.since).toLocaleDateString()}. I provider non espongono il credito residuo alle normali chiavi API: la <b>stima</b> viene dai log di Emily × listino prezzi; la <b>spesa reale</b> compare se inserisci una chiave Admin (Anthropic/OpenAI). Il <b>rimanente</b> è budget − spesa (reale se disponibile, altrimenti stimata).</p>
       {msg && <div className="ok">{msg}</div>}
       {err && <div className="error">{err}</div>}
 
@@ -68,7 +68,7 @@ export default function AdminCosts() {
           <section key={p.provider} className="card stack" style={{ opacity: p.configured ? 1 : 0.55 }}>
             <h3 style={{ margin: 0 }}>{LABEL[p.provider]}</h3>
             {!p.configured && <small className="muted">chiave non configurata</small>}
-            <div><small className="muted">Stima FamilAI</small><div style={{ fontSize: 22, fontWeight: 600 }}>{usd(p.estimated_usd)}</div></div>
+            <div><small className="muted">Stima Emily</small><div style={{ fontSize: 22, fontWeight: 600 }}>{usd(p.estimated_usd)}</div></div>
             <div><small className="muted">Spesa reale (chiave Admin)</small>
               <div>{p.real ? (p.real.ok ? <><b>{usd(p.real.usd)}</b> <small className="muted">({p.real.via === 'api_key' ? 'con la chiave normale' : 'chiave Admin'})</small></> : <span className="error" style={{ padding: '2px 6px' }}>{p.real.error}</span>) : <span className="muted">{p.provider === 'gemini' ? 'non disponibile via API' : 'inserisci la chiave Admin sotto'}</span>}</div>
             </div>

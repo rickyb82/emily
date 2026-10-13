@@ -36,6 +36,9 @@ async def members(ctx: AuthContext = Depends(require_admin), db: AsyncSession = 
 async def create_member(body: CreateMemberRequest, request: Request, ctx: AuthContext = Depends(require_admin),
                         db: AsyncSession = Depends(get_db)):
     role = Role(body.role)
+    from ..config import org_mode_on
+    if role == Role.child and org_mode_on():
+        raise HTTPException(400, "In modalita' azienda non si creano utenti bambini")
     if role == Role.child:
         if not body.pin:
             raise HTTPException(400, "Per un bambino serve un PIN")
@@ -109,7 +112,7 @@ async def email_test(body: EmailTestIn, request: Request, ctx: AuthContext = Dep
     if not mailer.email_enabled():
         raise HTTPException(400, "Configura almeno Server SMTP e Mittente, poi Salva")
     try:
-        await mailer.send_email(to, "FamilAI: email di prova", "Se leggi questo messaggio la configurazione SMTP funziona. 🎉")
+        await mailer.send_email(to, f"{settings.app_name}: email di prova", "Se leggi questo messaggio la configurazione SMTP funziona. 🎉")
     except smtplib.SMTPAuthenticationError as e:
         raise HTTPException(502, "Credenziali rifiutate dal server SMTP. Con Gmail serve una 'password per le app' "
                                  f"(non quella normale) e la verifica in due passaggi attiva. Dettaglio: {e.smtp_code} {e.smtp_error!r}"[:400])

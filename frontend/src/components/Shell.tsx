@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import Brand from './Brand'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type Conversation } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -69,7 +70,7 @@ export default function Shell({ children }: { children: ReactNode }) {
     <div className={`shell ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
-          <span>🏠 FamilAI</span>
+          <Brand />
           <span className="row" style={{ gap: 4 }}>
             {!isChild && <Approvals />}
             <button className="icon" onClick={() => setOpen(false)}>✕</button>
@@ -102,14 +103,14 @@ export default function Shell({ children }: { children: ReactNode }) {
         {!isChild && (
           <nav className="navlinks bottom">
             <NavLink to="/settings" onClick={() => setOpen(false)}>⚙️ Impostazioni</NavLink>
-            {me?.user.role === 'admin' && <NavLink to="/admin" onClick={() => setOpen(false)}>👪 Famiglia</NavLink>}
+            {me?.user.role === 'admin' && <NavLink to="/admin" onClick={() => setOpen(false)}>{me?.features?.org_mode ? '🏢 Organizzazione' : '👪 Famiglia'}</NavLink>}
           </nav>
         )}
         <div className="userbox">
           <span className="kid-avatar small">{me?.user.avatar}</span>
           <div>
             <div>{me?.user.display_name}</div>
-            <small className="muted">{isChild ? 'bambino/a' : me?.user.role === 'admin' ? 'amministratore' : 'adulto'} · {me?.family_name}</small>
+            <small className="muted">{isChild ? 'bambino/a' : me?.user.role === 'admin' ? 'amministratore' : (me?.features?.org_mode ? 'utente' : 'adulto')} · {me?.family_name}</small>
           </div>
           <button className="icon" onClick={logout} title="Esci">⏻</button>
         </div>

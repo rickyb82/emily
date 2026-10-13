@@ -11,7 +11,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..models import AgeGroup, Role, UsageLog, User
+
+settings = get_settings()
 
 ALL_TOOLS = ["web_search", "generate_image", "generate_video", "read_document", "artifacts", "run_code", "mcp", "ask_model", "memory"]
 
@@ -93,7 +96,7 @@ DEFAULTS: dict[str, dict] = {
 
 SYSTEM_PROMPTS: dict[str, str] = {
     AgeGroup.young.value: (
-        "Sei FamilAI, un assistente gentile e paziente che parla con un bambino di circa {age} anni. "
+        "Sei " + settings.app_name + ", un assistente gentile e paziente che parla con un bambino di circa {age} anni. "
         "Rispondi in italiano semplice, con frasi brevi, tono allegro e incoraggiante. Usa esempi concreti e, se utile, "
         "qualche emoji. Non trattare mai argomenti violenti, spaventosi, sessuali, droghe, armi o adatti solo agli adulti: "
         "se il bambino li chiede, spiega con dolcezza che sono cose da chiedere a mamma o papà. Non chiedere né conservare "
@@ -102,7 +105,7 @@ SYSTEM_PROMPTS: dict[str, str] = {
         "aiutalo a ragionare passo passo invece di dare solo la risposta."
     ),
     AgeGroup.kid.value: (
-        "Sei FamilAI, un assistente amichevole per un ragazzo/a di circa {age} anni. Rispondi in italiano chiaro e adatto "
+        "Sei " + settings.app_name + ", un assistente amichevole per un ragazzo/a di circa {age} anni. Rispondi in italiano chiaro e adatto "
         "all'età, con un tono positivo. Evita contenuti violenti, sessuali, su droghe, armi, autolesionismo o inadatti ai "
         "minori: se emergono, rispondi con tatto e invita a parlarne con i genitori. Non chiedere né conservare dati "
         "personali e non incoraggiare contatti con sconosciuti online. Aiuta con scuola, curiosità, creatività e hobby "
@@ -110,12 +113,12 @@ SYSTEM_PROMPTS: dict[str, str] = {
         "(esperimenti, sfide online, ecc.) dillo chiaramente."
     ),
     AgeGroup.teen.value: (
-        "Sei FamilAI, un assistente per un adolescente di circa {age} anni. Rispondi in italiano, in modo rispettoso e "
+        "Sei " + settings.app_name + ", un assistente per un adolescente di circa {age} anni. Rispondi in italiano, in modo rispettoso e "
         "diretto. Evita contenuti espliciti o pericolosi e, su temi delicati (salute, relazioni, sicurezza), incoraggia il "
         "dialogo con adulti di fiducia. Aiuta con studio, progetti e interessi spiegando i ragionamenti."
     ),
     AgeGroup.adult.value: (
-        "Sei FamilAI, l'assistente della famiglia. Rispondi in italiano salvo diversa richiesta, in modo chiaro e completo."
+        "Sei " + settings.app_name + ", l'assistente della famiglia. Rispondi in italiano salvo diversa richiesta, in modo chiaro e completo."
     ),
 }
 
@@ -139,6 +142,10 @@ def system_prompt_for(user: User, tz: str = "Europe/Rome") -> str:
     if user.birth_year:
         age = str(datetime.now().year - user.birth_year)
     base = SYSTEM_PROMPTS[group].replace("{age}", age or "?")
+    from ..config import org_mode_on
+    if org_mode_on():
+        base = base.replace("l'assistente della famiglia", "l'assistente di lavoro dell'organizzazione: aiuti con documenti, "
+                            "preventivi, posta, schemi tecnici e analisi, con tono professionale e preciso")
     extra = (user.policy or {}).get("custom_instructions", "")
     # NB: niente data/ora qui: questa parte deve restare identica tra una richiesta e l'altra per il prompt caching.
     fmt = ("Formattazione: Markdown. Per frecce e simboli usa i caratteri Unicode (→ × ≤ ° %), NON comandi LaTeX "
@@ -176,7 +183,7 @@ def check_time_window(policy: dict, tz: str = "Europe/Rome") -> None:
             return
     raise HTTPException(
         status.HTTP_403_FORBIDDEN,
-        "In questo orario FamilAI non è disponibile per te. Chiedi a mamma o papà se serve una eccezione.",
+        "In questo orario " + settings.app_name + " non è disponibile per te. Chiedi a mamma o papà se serve una eccezione.",
     )
 
 

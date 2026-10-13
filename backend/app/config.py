@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     deckcraft_web: bool = False       # editor DeckCraft nel browser servito su /deckcraft/ (container deckcraft-web)
     ideacraft_host: str = ""          # host:porta del container IdeaCraft (es. ideacraft:7986): mappe mentali via CLI/HTTP
     ideacraft_web: bool = False       # editor IdeaCraft nel browser servito su /ideacraft/ (container ideacraft-web)
+    org_mode: str = ""                # "1" = modalita' azienda: niente bambini (login PIN, supervisione, compiti), etichette organizzazione
+    app_name: str = "Emily"           # nome con cui l'assistente si presenta e firma le email (i nomi tecnici restano FamilAI)
     mailcraft_url: str = ""           # URL del server MailCraft multi-utente (es. http://mailcraft:7878): posta per utente
     mailcraft_mcp_host: str = ""      # host:porta del ponte MCP per utente di MailCraft (es. mailcraft:7889)
     mailcraft_token: str = ""         # token di servizio del server MailCraft (conia i token utente); generato da familai.sh
@@ -180,3 +182,8 @@ def get_settings() -> Settings:
     s = Settings()
     s.data_dir.mkdir(parents=True, exist_ok=True)
     return s
+
+
+def org_mode_on() -> bool:
+    """Modalita' azienda attiva (impostazione dal pannello o ORG_MODE nel .env)."""
+    return str(get_settings().org_mode).strip().lower() in ("1", "true", "yes", "on")

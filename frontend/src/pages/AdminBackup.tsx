@@ -122,7 +122,7 @@ export default function AdminBackup() {
 
       <section className="card stack">
         <h3>♻️ Ripristina da backup</h3>
-        <p className="muted">Per un'installazione nuova: avvia FamilAI, entra con l'amministratore iniziale del <code>.env</code>, vieni qui e carica il file. <b>Sostituisce tutti i dati attuali</b> (ne viene tenuta una copia in <code>data/pre-restore-…</code>). Le chiavi vengono ricifrate con la SECRET_KEY di questa installazione, quindi non serve che coincida con quella vecchia. Al termine tutti devono accedere di nuovo.</p>
+        <p className="muted">Per un'installazione nuova: avvia Emily, entra con l'amministratore iniziale del <code>.env</code>, vieni qui e carica il file. <b>Sostituisce tutti i dati attuali</b> (ne viene tenuta una copia in <code>data/pre-restore-…</code>). Le chiavi vengono ricifrate con la SECRET_KEY di questa installazione, quindi non serve che coincida con quella vecchia. Al termine tutti devono accedere di nuovo.</p>
         <div className="grid2">
           <label>File di backup (.fab)<input type="file" accept=".fab" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
           <label>Password del backup<input type="password" autoComplete="off" value={ipw} onChange={(e) => setIpw(e.target.value)} /></label>

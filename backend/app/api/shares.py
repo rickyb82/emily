@@ -15,9 +15,24 @@ router = APIRouter(prefix="/shares", tags=["shares"])
 
 
 @router.get("/members")
-async def family_members(ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+async def family_members(q: str = "", limit: int = 8, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Membri con cui condividere. Con ?q= cerca in tempo reale per nome, username o email (prefisso di parola o sottostringa)."""
     rows = (await db.execute(select(User).where(User.family_id == ctx.user.family_id, User.is_active == True))).scalars().all()  # noqa: E712
-    return [{"id": u.id, "display_name": u.display_name, "avatar": u.avatar, "role": u.role.value} for u in rows if u.id != ctx.user.id]
+    out = [{"id": u.id, "display_name": u.display_name, "avatar": u.avatar, "role": u.role.value,
+            "email": u.email or "", "username": u.username} for u in rows if u.id != ctx.user.id]
+    ql = q.strip().lower()
+    if ql:
+        def score(m: dict) -> int:
+            hay = [m["display_name"].lower(), m["email"].lower(), m["username"].lower()]
+            if any(h == ql for h in hay):
+                return 0
+            if any(h.startswith(ql) or any(w.startswith(ql) for w in h.replace(".", " ").replace("@", " ").split()) for h in hay):
+                return 1
+            if any(ql in h for h in hay):
+                return 2
+            return 9
+        out = sorted((m for m in out if score(m) < 9), key=lambda m: (score(m), m["display_name"].lower()))[:max(1, min(limit, 50))]
+    return out
 
 
 @router.get("", response_model=list[ShareOut])

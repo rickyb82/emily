@@ -37,7 +37,7 @@ export default function TotpSetup({ onDone, onCancel }: { onDone: (recoveryCodes
           )}
           <details>
             <summary className="muted small">Non riesci a inquadrare? Inserisci il codice a mano</summary>
-            <p className="muted small">Account: <b>FamilAI</b> · Tipo: basato sul tempo (TOTP)</p>
+            <p className="muted small">Account: <b>Emily</b> · Tipo: basato sul tempo (TOTP)</p>
             <code className="secret">{setup.secret.replace(/(.{4})/g, '$1 ').trim()}</code>
           </details>
           <input placeholder="Codice a 6 cifre mostrato dall'app" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus />

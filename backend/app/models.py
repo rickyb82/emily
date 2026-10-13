@@ -199,6 +199,21 @@ class FileAsset(Base):
     # RAG: none (non indicizzabile) | pending | indexed | failed
     index_status: Mapped[str] = mapped_column(String(12), default="none")
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    # cartella dell'utente in Documenti (None = radice)
+    folder_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+
+
+class Folder(Base):
+    """Cartella di Documenti, creata dall'utente (annidabile). I file dei progetti restano visibili anche come cartelle
+    automatiche, questa e' l'organizzazione personale."""
+    __tablename__ = "folders"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    family_id: Mapped[str] = mapped_column(ForeignKey("families.id"), index=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    color: Mapped[str] = mapped_column(String(20), default="")   # tinta dell'icona (opzionale)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class Chunk(Base):

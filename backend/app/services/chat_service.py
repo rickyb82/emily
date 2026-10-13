@@ -137,7 +137,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
         parts.append(
             "\n# Editor integrati\n"
             "Accanto a ogni file in chat (docx, xlsx, pdf, pptx…) l'utente ha gia' il pulsante ✏️ Modifica che lo apre "
-            "nell'editor integrato di FamilAI (WordCraft, GridCraft, PdfCraft, DeckCraft, IdeaCraft). Se chiede di aprire o modificare un "
+            "nell'editor integrato di " + settings.app_name + " (WordCraft, GridCraft, PdfCraft, DeckCraft, IdeaCraft). Se chiede di aprire o modificare un "
             "file 'nell'editor', NON dire che non puoi: rispondi che basta cliccare ✏️ Modifica accanto al file (o il menu "
             "📝 Documenti). Per convertire tra formati (Word → PDF, xlsx → csv…) usa i tool write_document/write_spreadsheet/"
             "write_presentation con source_file_id, non script Python.")
@@ -160,7 +160,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "Dopo open_document ogni modifica viene salvata automaticamente sullo stesso file: l'anteprima (render_page) NON e' il "
             "file, e per dare all'utente un file con un altro nome usa save_document con il nuovo percorso. Le immagini si "
             "inseriscono con insert.picture da un PNG/JPG presente in data/ (per una mappa IdeaCraft usa il .png, non l'.svg): come path "
-            "va bene l'id del file in chat, FamilAI lo traduce nel percorso; non "
+            "va bene l'id del file in chat, " + settings.app_name + " lo traduce nel percorso; non "
             "chiedere mai all'utente di inserire a mano cio' che puoi fare tu."
             + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
                "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
@@ -218,7 +218,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
     if mcp_manager.is_connected("mailcraft") and user.role != Role.child:
         parts.append(
             "\n# Posta elettronica (MailCraft)\n"
-            "- L'utente ha la sua posta in FamilAI (menu Produttivita' > Posta): i tool mcp__mailcraft__* agiscono SOLO sulle caselle "
+            "- L'utente ha la sua posta in " + settings.app_name + " (menu Produttivita' > Posta): i tool mcp__mailcraft__* agiscono SOLO sulle caselle "
             "dell'utente con cui stai parlando. Per leggere: sync, list_messages (unread_only), search (from:, subject:, is:unread, "
             "has:attachment, newer_than:7d), read_message; con piu' caselle account=\"*\" interroga tutte insieme (le righe indicano @account). Per scrivere: reply/forward/send_mail — mostra SEMPRE prima destinatari, "
             "oggetto e testo e invia solo dopo un si' esplicito; stessa regola per trash, spam, remove_account.\n"
