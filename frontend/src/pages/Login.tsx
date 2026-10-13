@@ -131,7 +131,7 @@ export default function Login() {
         <h1><Brand size="large" /></h1>
         {step === 'password' && (
           <form onSubmit={submitPassword} className="stack">
-            <p className="muted">Accesso adulti</p>
+            <p className="muted">{features.org_mode ? 'Accesso Enterprise' : 'Accesso adulti'}</p>
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             {err && <div className="error">{err}</div>}

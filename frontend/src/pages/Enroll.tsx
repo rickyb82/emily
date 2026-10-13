@@ -101,7 +101,7 @@ export default function Enroll() {
           <>
             {optional
               ? <p>Vuoi proteggere il tuo account con un <b>secondo fattore</b>? È facoltativo: puoi attivarlo ora o più avanti dalle impostazioni.</p>
-              : <p>Per proteggere l'accesso da remoto, Emily richiede agli adulti un <b>secondo fattore</b>. Scegli quello che preferisci (potrai aggiungere anche l'altro dalle impostazioni):</p>}
+              : <p>Per proteggere l'accesso da remoto, Emily richiede {me?.features?.org_mode ? 'agli utenti' : 'agli adulti'} un <b>secondo fattore</b>. Scegli quello che preferisci (potrai aggiungere anche l'altro dalle impostazioni):</p>}
             {err && <div className="error">{err}</div>}
             {passkeys && <button onClick={register} disabled={busy}>{busy ? 'In attesa…' : '🔑 Passkey (Face ID, Touch ID, Windows Hello, chiave di sicurezza)'}</button>}
             <button onClick={() => setMode('totp')} disabled={busy}>📱 App authenticator (codice a 6 cifre)</button>
