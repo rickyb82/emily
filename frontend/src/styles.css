@@ -434,3 +434,6 @@ button.small { font-size: 13px; padding: 4px 10px; }
   .guide-step { flex-shrink: 0; } .guide-hero { flex-direction: column; align-items: flex-start; } .demo-mail { grid-template-columns: 1fr; } .mock-side { display: none; }
   .guide-modal { height: 96vh; }
 }
+
+.editable { cursor: text; border-bottom: 1px dashed var(--border); }
+.editable:hover { border-bottom-color: var(--text); }

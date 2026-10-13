@@ -18,14 +18,14 @@ export default function Admin() {
   const [params] = useSearchParams()
   const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'members')
   const [version, setVersion] = useState('')
-  const { me } = useAuth()
+  const { me, refresh } = useAuth()
   const org = !!me?.features?.org_mode
   useEffect(() => {
     get('/health').then((h) => setVersion(h.version)).catch(() => {})
   }, [])
   return (
     <div className="page stack">
-      <h2>{org ? '🏢 Organizzazione' : '👪 Famiglia'} <small className="muted">Emily v{version}</small></h2>
+      <h2>{org ? '🏢' : '👪'} <span className="editable" title="Clicca per cambiare il nome" onClick={async () => { const n = prompt(org ? 'Nome dell\'organizzazione' : 'Nome della famiglia', me?.family_name || ''); if (n?.trim()) { try { await patch('/admin/family', { name: n.trim() }); await refresh() } catch (e: any) { alert(e.message) } } }}>{me?.family_name || (org ? 'Organizzazione' : 'Famiglia')} ✏️</span> <small className="muted">Emily v{version}</small></h2>
       <div className="tabs">
         {(['members', 'memory', 'providers', 'costs', 'supervision', 'usage', 'devices', 'audit', 'mcp', 'backup'] as Tab[]).filter((t) => !org || !['supervision', 'devices'].includes(t)).map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>

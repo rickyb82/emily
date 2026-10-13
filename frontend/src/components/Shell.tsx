@@ -113,7 +113,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <span className="kid-avatar small">{me?.user.avatar}</span>
           <div>
             <div>{me?.user.display_name}</div>
-            <small className="muted">{isChild ? 'bambino/a' : me?.user.role === 'admin' ? 'amministratore' : (me?.features?.org_mode ? 'utente' : 'adulto')} · {me?.family_name}</small>
+            <small className="muted">{isChild ? 'bambino/a' : me?.user.role === 'admin' ? 'amministratore' : (me?.features?.org_mode ? 'utente' : 'adulto')} · {me?.family_name && me.family_name !== 'Famiglia' ? me.family_name : (me?.features?.org_mode ? 'organizzazione' : 'famiglia')}</small>
           </div>
           <button className="icon" onClick={logout} title="Esci">⏻</button>
         </div>

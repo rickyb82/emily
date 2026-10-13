@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db import get_db
-from ..models import AgeGroup, AuditLog, Conversation, Message, Role, Session, TrustedDevice, UsageLog, User
+from ..models import Family, AgeGroup, AuditLog, Conversation, Message, Role, Session, TrustedDevice, UsageLog, User
 from ..policy.permissions import DEFAULTS, effective_policy
 from ..schemas import CreateMemberRequest, UpdateMemberRequest, UserOut
 from ..security.passwords import hash_secret
@@ -48,6 +48,23 @@ async def members(ctx: AuthContext = Depends(require_admin), db: AsyncSession = 
         o.mfa_choice = u.mfa_choice or ""
         out.append(o)
     return out
+
+
+class FamilyName(BaseModel):
+    name: str
+
+
+@router.patch("/family")
+async def rename_family(body: FamilyName, request: Request, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Nome della famiglia / organizzazione mostrato sotto il nome utente e nel titolo del pannello."""
+    name = body.name.strip()[:120]
+    if not name:
+        raise HTTPException(400, "Nome non valido")
+    fam = await db.get(Family, ctx.user.family_id)
+    fam.name = name
+    await db.commit()
+    await audit(db, "family_renamed", request, ctx.user, name)
+    return {"name": name}
 
 
 @router.post("/members", response_model=UserOut)
