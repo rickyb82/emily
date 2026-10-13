@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import Brand from './Brand'
+import Guide from '../pages/Guide'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type Conversation } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -66,6 +67,8 @@ export default function Shell({ children }: { children: ReactNode }) {
   }
 
   const isChild = me?.user.role === 'child'
+  const [guide, setGuide] = useState(false)
+  useEffect(() => { const h = () => setGuide(true); window.addEventListener('familai:guide', h); return () => window.removeEventListener('familai:guide', h) }, [])
   return (
     <div className={`shell ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <aside className="sidebar">
@@ -120,6 +123,14 @@ export default function Shell({ children }: { children: ReactNode }) {
         <button className="icon expand-btn" onClick={toggleSidebar} title="Mostra la barra laterale (⌘/Ctrl+B)">☰</button>
         {children}
       </main>
+      <button className="guide-fab" onClick={() => setGuide(true)} title="Guida interattiva">?</button>
+      {guide && (
+        <div className="guide-modal-bg" onClick={() => setGuide(false)}>
+          <div className="guide-modal" onClick={(e) => e.stopPropagation()}>
+            <Guide onClose={() => setGuide(false)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
