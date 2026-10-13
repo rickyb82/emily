@@ -196,8 +196,10 @@ async def index_file(file_id: str, db: AsyncSession | None = None) -> int:
             if asset.extracted_text is None and asset.path:
                 asset.extracted_text = extract_text(Path(asset.path), asset.mime) or ""
             chunks = chunk_text(asset.extracted_text or "")
-            await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
+            # Prima gli embedding (chiamata di rete, anche decine di secondi), poi la transazione di scrittura: SQLite ha un
+            # solo scrittore e tenerlo bloccato durante la rete faceva fallire le chat con "database is locked".
             vecs, model = await embed_texts(chunks)
+            await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
             for i, c in enumerate(chunks):
                 db.add(Chunk(family_id=asset.family_id, file_id=asset.id, project_id=asset.project_id,
                              conversation_id=asset.conversation_id, idx=i, text=c,

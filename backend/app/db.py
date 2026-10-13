@@ -13,15 +13,21 @@ def _json_dumps(o) -> str:
     return json.dumps(o, ensure_ascii=False, default=str)
 
 
-engine = create_async_engine(settings.database_url, echo=False, future=True, json_serializer=_json_dumps)
+_is_sqlite = settings.database_url.startswith("sqlite")
+# SQLite: un solo scrittore alla volta. timeout=30 (invece dei 5 s di default) fa attendere il lock invece di fallire
+# subito con "database is locked" quando un altro task sta scrivendo (indicizzazione RAG, salvataggi dagli editor…).
+engine = create_async_engine(settings.database_url, echo=False, future=True, json_serializer=_json_dumps,
+                             connect_args={"timeout": 30} if _is_sqlite else {})
 
-if settings.database_url.startswith("sqlite"):
+if _is_sqlite:
     from sqlalchemy import event
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _sqlite_pragmas(dbapi_conn, _record):  # foreign key ON per ogni connessione
+    def _sqlite_pragmas(dbapi_conn, _record):  # per ogni connessione: foreign key ON, attesa sui lock, WAL meno sincrono
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
+        cur.execute("PRAGMA busy_timeout=30000")
+        cur.execute("PRAGMA synchronous=NORMAL")
         cur.close()
 
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
