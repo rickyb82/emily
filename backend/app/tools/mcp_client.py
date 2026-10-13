@@ -138,7 +138,9 @@ class MCPManager:
 
     async def _connect_mailcraft(self) -> None:
         from ..services import mailcraft
-        cmd = 'printf "%s\\n" "$MAILCRAFT_USER_TOKEN"; exec socat - TCP:' + settings.mailcraft_mcp_host
+        # il token va NEL flusso TCP (prima riga), seguito dal dialogo MCP che arriva dal nostro stdin: printf da solo lo
+        # avrebbe scritto sullo stdout verso il backend, non verso il container
+        cmd = '{ printf "%s\\n" "$MAILCRAFT_USER_TOKEN"; exec cat; } | exec socat - TCP:' + settings.mailcraft_mcp_host
         cfg = ServerConfig(name="mailcraft", type="stdio", command="sh", args=["-c", cmd], min_role="adult", enabled=True, per_user=True)
         for attempt in range(6):   # il container puo' partire dopo il backend
             try:
