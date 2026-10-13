@@ -53,7 +53,9 @@
     # MailCraft: web app + API (/mailcraft/api/...) del server multi-utente; il token utente viaggia nell'header Authorization
     handle_path /mailcraft/* {
         encode zstd gzip
-        reverse_proxy mailcraft:7878
+        reverse_proxy mailcraft:7878 {
+            header_up X-Forwarded-Prefix /mailcraft   # cosi' MailCraft costruisce bene l'URL di ritorno OAuth (/mailcraft/api/oauth/callback)
+        }
     }
 
     # Webapp

@@ -245,6 +245,12 @@ services:
       - MAILCRAFT_TOKEN=${MAILCRAFT_TOKEN:-}
       - MAILCRAFT_LANG=it
       - MCP_PORT=7889
+      # OAuth Gmail / Microsoft 365 (facoltativo): client creati nelle console dei provider, vedi README
+      - MAILCRAFT_GOOGLE_CLIENT_ID=${MAILCRAFT_GOOGLE_CLIENT_ID:-}
+      - MAILCRAFT_GOOGLE_CLIENT_SECRET=${MAILCRAFT_GOOGLE_CLIENT_SECRET:-}
+      - MAILCRAFT_MICROSOFT_CLIENT_ID=${MAILCRAFT_MICROSOFT_CLIENT_ID:-}
+      - MAILCRAFT_MICROSOFT_CLIENT_SECRET=${MAILCRAFT_MICROSOFT_CLIENT_SECRET:-}
+      - MAILCRAFT_PUBLIC_URL=${MAILCRAFT_PUBLIC_URL:-}
     volumes:
       - ./private/mailcraft:/mail            # account, password, cache per utente (fuori da ./data)
       - ./data:/data:ro                      # i file di FamilAI: allegati da inviare (/data/<app>/…)
