@@ -81,6 +81,40 @@ def _mutating(tool: str) -> bool:
 _HEX_ID = re.compile(r"^(?:/files/)?([0-9a-f]{32})(?:\?.*)?$")
 
 
+async def _resolve_file_ids(args, ctx: ToolContext):
+    """Il modello indica spesso un file con il suo id di chat (o /files/<id>) dove l'app vuole un percorso: ovunque negli
+    argomenti una stringa cosi' corrisponda a un file della famiglia, la sostituiamo con il percorso su disco (visibile alle
+    app in /data). Stringhe che non sono id di file restano com'erano."""
+    from ..models import FileAsset
+
+    cache: dict[str, str | None] = {}
+
+    async def path_for(fid: str) -> str | None:
+        if fid not in cache:
+            asset = await ctx.db.get(FileAsset, fid)
+            cache[fid] = asset.path if asset and asset.family_id == ctx.user.family_id and asset.path else None
+        return cache[fid]
+
+    async def walk(v):
+        if isinstance(v, str):
+            m = _HEX_ID.match(v.strip())
+            if m:
+                p = await path_for(m.group(1))
+                return p or v
+            return v
+        if isinstance(v, list):
+            return [await walk(x) for x in v]
+        if isinstance(v, dict):
+            return {k: await walk(x) for k, x in v.items()}
+        return v
+
+    try:
+        return await walk(args)
+    except Exception as e:
+        log.debug("risoluzione id file negli argomenti MCP fallita: %s", e)
+        return args
+
+
 async def _mail_args(tool: str, args: dict, ctx: ToolContext):
     """MailCraft: gli allegati di send_mail possono essere indicati con l'id di un file della chat (o /files/<id>): li
     traduciamo nel percorso su disco, che il container MailCraft vede in /data. Il percorso di save_attachment deve stare
@@ -369,6 +403,9 @@ class MCPManager:
                     return ToolResult(f"{server}: sessione utente non disponibile: {type(e).__name__}: {str(e)[:200]}", is_error=True)
                 if not conn.connected or not conn.session:
                     return ToolResult(f"{server}: sessione utente non connessa ({conn.error or 'errore sconosciuto'})", is_error=True)
+            from .artcraft import APPS as _ARTCRAFT_APPS
+            if server in _ARTCRAFT_APPS or server == "mailcraft":
+                args = await _resolve_file_ids(args, ctx)   # id di un file della chat al posto di un percorso -> percorso in /data
             if server == "mailcraft":
                 args = await _mail_args(tool, args, ctx)
                 if isinstance(args, ToolResult):

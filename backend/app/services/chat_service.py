@@ -159,7 +159,8 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile). "
             "Dopo open_document ogni modifica viene salvata automaticamente sullo stesso file: l'anteprima (render_page) NON e' il "
             "file, e per dare all'utente un file con un altro nome usa save_document con il nuovo percorso. Le immagini si "
-            "inseriscono con insert.picture da un PNG/JPG presente in data/ (per una mappa IdeaCraft usa il .png, non l'.svg); non "
+            "inseriscono con insert.picture da un PNG/JPG presente in data/ (per una mappa IdeaCraft usa il .png, non l'.svg): come path "
+            "va bene l'id del file in chat, FamilAI lo traduce nel percorso; non "
             "chiedere mai all'utente di inserire a mano cio' che puoi fare tu."
             + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
                "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
@@ -219,7 +220,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "\n# Posta elettronica (MailCraft)\n"
             "- L'utente ha la sua posta in FamilAI (menu Produttivita' > Posta): i tool mcp__mailcraft__* agiscono SOLO sulle caselle "
             "dell'utente con cui stai parlando. Per leggere: sync, list_messages (unread_only), search (from:, subject:, is:unread, "
-            "has:attachment, newer_than:7d), read_message. Per scrivere: reply/forward/send_mail — mostra SEMPRE prima destinatari, "
+            "has:attachment, newer_than:7d), read_message; con piu' caselle account=\"*\" interroga tutte insieme (le righe indicano @account). Per scrivere: reply/forward/send_mail — mostra SEMPRE prima destinatari, "
             "oggetto e testo e invia solo dopo un si' esplicito; stessa regola per trash, spam, remove_account.\n"
             "- Per configurare una casella: suggest_settings con l'indirizzo (conosce Gmail, Outlook, Aruba, PEC, Libero, TIM, Fastweb…), "
             "poi add_account con test=true; se manca la password chiedila (non inventarla) e ricorda che Gmail/Outlook vogliono una "
