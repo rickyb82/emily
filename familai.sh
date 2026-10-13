@@ -80,6 +80,7 @@ case "${1:-}" in
     grep -q "PUBLIC_HOST=familai.example.com" .env && { echo "!! Imposta PUBLIC_HOST (nome DNS o IP del server), ACME_EMAIL e WEBAUTHN_* nel .env prima della produzione"; exit 1; }
     compose up -d --build
     host=$(grep ^PUBLIC_HOST= .env | cut -d= -f2)
+    hp=$(grep ^HTTPS_PORT= .env | cut -d= -f2); [ -n "$hp" ] && [ "$hp" != 443 ] && host="$host:$hp"
     echo ">> Emily in produzione su https://$host"
     if grep -q '^TLS_MODE=internal' .env; then
       echo ">> TLS con CA interna: sui PC va installata la CA (./familai.sh ca-cert → data/emily-ca.crt)"
