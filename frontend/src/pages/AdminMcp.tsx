@@ -4,7 +4,7 @@ import { del, get, post, put } from '../lib/api'
 interface Srv {
   id: string; name: string; type: 'stdio' | 'http'; command: string; args: string[]; url: string
   min_role: 'child' | 'adult' | 'admin'; enabled: boolean; description: string
-  headers_keys: string[]; env_keys: string[]; connected: boolean; error: string; tools: string[]
+  headers_keys: string[]; env_keys: string[]; connected: boolean; error: string; tools: string[]; builtin?: boolean
 }
 
 const EMPTY = { name: '', type: 'stdio' as 'stdio' | 'http', command: 'npx', args: '', url: '', headers: '', env: '', min_role: 'adult' as Srv['min_role'], enabled: true, description: '' }
@@ -115,11 +115,15 @@ export default function AdminMcp() {
               </td>
               <td>{s.min_role}</td>
               <td className="row wrap">
-                {s.connected
-                  ? <button className="ghost" disabled={busy !== ''} onClick={() => run('d' + s.id, () => post(`/admin/mcp/${s.id}/disconnect`))}>Scollega</button>
-                  : <button disabled={busy !== ''} onClick={() => run('c' + s.id, () => post(`/admin/mcp/${s.id}/connect`))}>{busy === 'c' + s.id ? 'Connessione…' : 'Connetti'}</button>}
-                <button className="ghost" onClick={() => openEdit(s)}>Modifica</button>
-                <button className="ghost danger" disabled={busy !== ''} onClick={() => confirm(`Eliminare ${s.name}?`) && run('x', () => del(`/admin/mcp/${s.id}`))}>Elimina</button>
+                {s.builtin ? (
+                  <button className="ghost" disabled={busy !== ''} onClick={() => run('c' + s.id, () => post(`/admin/mcp/${s.id}/connect`))}>{busy === 'c' + s.id ? 'Connessione…' : 'Riconnetti'}</button>
+                ) : <>
+                  {s.connected
+                    ? <button className="ghost" disabled={busy !== ''} onClick={() => run('d' + s.id, () => post(`/admin/mcp/${s.id}/disconnect`))}>Scollega</button>
+                    : <button disabled={busy !== ''} onClick={() => run('c' + s.id, () => post(`/admin/mcp/${s.id}/connect`))}>{busy === 'c' + s.id ? 'Connessione…' : 'Connetti'}</button>}
+                  <button className="ghost" onClick={() => openEdit(s)}>Modifica</button>
+                  <button className="ghost danger" disabled={busy !== ''} onClick={() => confirm(`Eliminare ${s.name}?`) && run('x', () => del(`/admin/mcp/${s.id}`))}>Elimina</button>
+                </>}
               </td>
             </tr>
           ))}

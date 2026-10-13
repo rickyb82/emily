@@ -304,10 +304,26 @@ def _mcp_out(row: McpServer) -> dict:
             "updated_at": row.updated_at}
 
 
+def _builtin_mcp_out(name: str) -> dict:
+    """Le app ArtCraft (./familai.sh <app> up) sono server MCP integrati: nel pannello si vedono in sola lettura."""
+    conn = mcp_manager.conns[name]
+    st = mcp_manager.status.get(name, {})
+    return {"id": f"builtin:{name}", "name": name, "type": "stdio", "command": conn.cfg.command, "args": list(conn.cfg.args or []),
+            "url": None, "min_role": conn.cfg.min_role, "enabled": conn.cfg.enabled, "builtin": True,
+            "description": f"app integrata ({name}: ./familai.sh {name} up|build|upgrade|down)", "headers_keys": [], "env_keys": [],
+            "connected": st.get("connected", False), "error": st.get("error", ""), "tools": st.get("tools", []), "updated_at": None}
+
+
+def _builtin_names(rows) -> list[str]:
+    from ..tools.artcraft import APPS
+    named = {r.name for r in rows}
+    return [n for n in APPS if n in mcp_manager.conns and n not in named]
+
+
 @router.get("/mcp")
 async def mcp_list(ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     rows = (await db.execute(select(McpServer).order_by(McpServer.name))).scalars().all()
-    return [_mcp_out(r) for r in rows]
+    return [_builtin_mcp_out(n) for n in _builtin_names(rows)] + [_mcp_out(r) for r in rows]
 
 
 async def _save_mcp(db: AsyncSession, row: McpServer | None, body: McpServerIn, user_id: str) -> McpServer:
@@ -382,6 +398,12 @@ async def mcp_delete(sid: str, request: Request, ctx: AuthContext = Depends(requ
 
 @router.post("/mcp/{sid}/connect")
 async def mcp_connect(sid: str, ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    if sid.startswith("builtin:"):   # app integrata: riconnessione (es. dopo un rebuild del container)
+        name = sid.split(":", 1)[1]
+        if name not in mcp_manager.conns:
+            raise HTTPException(404)
+        conn = await mcp_manager.connect(mcp_manager.conns[name].cfg)
+        return {**_builtin_mcp_out(name), "ok": conn.connected, "error": conn.error}
     row = await db.get(McpServer, sid)
     if not row:
         raise HTTPException(404)
@@ -409,10 +431,14 @@ async def mcp_call(sid: str, body: dict, ctx: AuthContext = Depends(require_admi
     from ..tools.registry import get_tool
     from ..tools.registry import ToolContext as TC
 
-    row = await db.get(McpServer, sid)
-    if not row:
-        raise HTTPException(404)
-    tool = get_tool(f"mcp__{row.name}__{body.get('tool', '')}")
+    if sid.startswith("builtin:"):
+        name = sid.split(":", 1)[1]
+    else:
+        row = await db.get(McpServer, sid)
+        if not row:
+            raise HTTPException(404)
+        name = row.name
+    tool = get_tool(f"mcp__{name}__{body.get('tool', '')}")
     if not tool:
         raise HTTPException(404, "Tool non trovato (server connesso?)")
     res = await tool.fn(body.get("args") or {}, TC(user=ctx.user, policy=effective_policy(ctx.user), db=db))
