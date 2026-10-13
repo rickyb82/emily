@@ -13,7 +13,8 @@
 #   ./familai.sh gridcraft up|down|logs|upgrade  foglio di calcolo GridCraft: file Excel dalla chat (MCP) + editor nel browser
 #   ./familai.sh pdfcraft up|down|logs|upgrade   PdfCraft: unire/dividere/modificare PDF dalla chat (MCP) + editor PDF nel browser
 #   ./familai.sh deckcraft up|down|logs|upgrade  DeckCraft: presentazioni PowerPoint dalla chat (MCP) + editor nel browser
-#   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali dalla chat (immagine + .mm/.opml) + editor nel browser
+#   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali e diagrammi dalla chat (SVG + file nativo) + editor nel browser
+#   ./familai.sh mailcraft up|down|logs|upgrade  MailCraft: posta elettronica (IMAP/SMTP) per utente, web app + tool in chat
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -62,7 +63,7 @@ need_env() {
 backup() {
   mkdir -p backups
   local out="backups/familai-$(date +%Y%m%d-%H%M%S).tar.gz"
-  tar czf "$out" data .env 2>/dev/null || tar czf "$out" data
+  tar czf "$out" data .env $( [ -d private ] && echo private ) 2>/dev/null || tar czf "$out" data
   ls -t backups/familai-*.tar.gz | tail -n +15 | xargs -r rm -f   # tieni gli ultimi 14
   echo ">> Backup: $out"
 }
@@ -165,14 +166,48 @@ case "${1:-}" in
         DOCKER_BUILDKIT=1 compose --profile "$app" build $svcs || { echo "!! Build fallita: se l'errore viene da familai-web-patch.py il sorgente upstream e' cambiato e la patch va aggiornata."; exit 1; }
         # shellcheck disable=SC2086
         compose --profile "$app" up -d $svcs
-        # .env coerente (un'app attivata prima dell'editor web non aveva ${APPU}_WEB) e backend riavviato:
-        # i tool MCP dell'app si registrano alla (ri)connessione, altrimenti il modello vede "Strumento non disponibile".
-        set_env "${APPU}_HOST" "$app:$port"
-        [ "$web" = 1 ] && set_env "${APPU}_WEB" 1
-        compose up -d --build backend
         docker image prune -f >/dev/null
-        echo ">> $app aggiornato (backend riavviato).";;
+        echo ">> $app aggiornato.";;
       *) echo "uso: ./familai.sh $app up|down|logs|upgrade"; exit 1;;
+    esac;;
+  mailcraft)
+    # MailCraft (extras/artcraft/Dockerfile.mailcraft): posta elettronica per utente (IMAP/SMTP), web app su /mailcraft/,
+    # tool MCP per utente in chat. Un solo container; dati in ./private/mailcraft (fuori da ./data).
+    need_env
+    set_env() { if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi; }
+    case "${2:-up}" in
+      up|build|upgrade)
+        mkdir -p private/mailcraft
+        if grep -q '^COMPOSE_PROFILES=' .env; then
+          grep -q "^COMPOSE_PROFILES=.*mailcraft" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,mailcraft/" .env && rm -f .env.bak; }
+        else
+          echo "COMPOSE_PROFILES=mailcraft" >> .env
+        fi
+        # token di servizio (backend <-> server MailCraft): generato una volta, mai mostrato agli utenti
+        grep -q '^MAILCRAFT_TOKEN=.\+' .env || set_env MAILCRAFT_TOKEN "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        set_env MAILCRAFT_URL "http://mailcraft:7878"
+        set_env MAILCRAFT_MCP_HOST "mailcraft:7889"
+        if [ "$2" = upgrade ]; then
+          sha=$(git ls-remote https://github.com/rickyb82/mailcraft HEAD 2>/dev/null | cut -f1)
+          [ -n "$sha" ] || { echo "!! non riesco a leggere il repository mailcraft (rete?)"; exit 1; }
+          if grep -q "^MAILCRAFT_SHA=$sha" .env; then echo ">> mailcraft e' gia' all'ultimo commit (${sha:0:10})"; exit 0; fi
+          echo ">> mailcraft: aggiorno al commit ${sha:0:10} e ricompilo…"
+          set_env MAILCRAFT_SHA "$sha"
+        fi
+        echo ">> Build di MailCraft (compila Rust + WebAssembly: la prima volta anche 20-40 minuti)…"
+        DOCKER_BUILDKIT=1 compose --profile mailcraft build mailcraft
+        compose --profile mailcraft up -d mailcraft
+        compose up -d --build backend
+        compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
+        echo ">> MailCraft attivo. Menu 🧰 Produttivita' > ✉️ Posta: ogni adulto configura le sue caselle (anche piu' di una)."
+        echo "   In chat: 'leggi le mail non lette', 'rispondi a Luca…', 'configura la mia casella Aruba…'.";;
+      down)
+        compose --profile mailcraft stop mailcraft
+        set_env MAILCRAFT_URL ""
+        set_env MAILCRAFT_MCP_HOST ""
+        compose up -d backend;;
+      logs) compose --profile mailcraft logs -f --tail=100 mailcraft;;
+      *) echo "uso: ./familai.sh mailcraft up|build|down|logs|upgrade"; exit 1;;
     esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
@@ -188,5 +223,5 @@ case "${1:-}" in
     fi
     echo ">> update su $rhost:$rdir"
     ssh -t "$rhost" "cd '$rdir' && ./familai.sh update";;
-  *) sed -n '2,10p' "$0";;
+  *) sed -n '2,17p' "$0";;
 esac

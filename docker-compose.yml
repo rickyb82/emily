@@ -21,6 +21,9 @@ services:
       - DECKCRAFT_WEB=${DECKCRAFT_WEB:-0}
       - IDEACRAFT_HOST=${IDEACRAFT_HOST:-}
       - IDEACRAFT_WEB=${IDEACRAFT_WEB:-0}
+      - MAILCRAFT_URL=${MAILCRAFT_URL:-}
+      - MAILCRAFT_MCP_HOST=${MAILCRAFT_MCP_HOST:-}
+      - MAILCRAFT_TOKEN=${MAILCRAFT_TOKEN:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -229,6 +232,23 @@ services:
     profiles: ["ideacraft"]
     restart: unless-stopped
     expose: ["80"]
+
+  # MailCraft (extras/artcraft/Dockerfile.mailcraft): posta elettronica per utente, web app su /mailcraft/ e MCP per utente.
+  # I dati (account, password cifrate 0600, cache) stanno in ./private/mailcraft, FUORI da ./data: le altre app montano
+  # ./data in lettura e non devono poter leggere le caselle degli altri utenti.
+  mailcraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.mailcraft, args: { UPSTREAM_SHA: "${MAILCRAFT_SHA:-}" } }
+    image: familai-mailcraft
+    profiles: ["mailcraft"]
+    restart: unless-stopped
+    environment:
+      - MAILCRAFT_TOKEN=${MAILCRAFT_TOKEN:-}
+      - MAILCRAFT_LANG=it
+      - MCP_PORT=7889
+    volumes:
+      - ./private/mailcraft:/data
+    expose: ["7878", "7889"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
 networks:
   default:

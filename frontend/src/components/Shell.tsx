@@ -20,7 +20,7 @@ export default function Shell({ children }: { children: ReactNode }) {
     try { localStorage.setItem('familai:sidebar', next ? 'collapsed' : 'open') } catch {}
   }
   useEffect(() => {
-    const inEditor = loc.pathname.startsWith('/editor')
+    const inEditor = loc.pathname.startsWith('/editor') || loc.pathname.startsWith('/mail')
     if (inEditor && !collapsed) { setCollapsed(true); setAutoCollapsed(true) }
     else if (!inEditor && autoCollapsed) { setCollapsed(false); setAutoCollapsed(false) }
   }, [loc.pathname])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -79,7 +79,13 @@ export default function Shell({ children }: { children: ReactNode }) {
         <button className="primary wide" onClick={newChat}>＋ Nuova chat</button>
         <nav className="navlinks">
           <NavLink to="/projects" onClick={() => setOpen(false)}>📁 Progetti</NavLink>
-          {!isChild && <NavLink to="/documents" onClick={() => setOpen(false)}>📝 Documenti</NavLink>}
+          {!isChild && (
+            <div className="navgroup">
+              <span className="navgroup-title">🧰 Produttività</span>
+              <NavLink to="/documents" onClick={() => setOpen(false)}>📝 Documenti</NavLink>
+              {me?.features?.mailcraft_web && <NavLink to="/mail" onClick={() => setOpen(false)}>✉️ Posta</NavLink>}
+            </div>
+          )}
         </nav>
         <div className="conv-list">
           {convs.map((c) => (

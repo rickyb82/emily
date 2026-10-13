@@ -214,6 +214,18 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "prima di salvare; riporta all'utente i rilievi rimasti. mcp__ideacraft__list_stencils elenca le forme disponibili."
             + ("\n- L'utente puo' aprire e modificare mappe e diagrammi con l'editor IdeaCraft integrato (✏️ accanto al file .ideacraft.json, .mm, .opml, .drawio)."
                if settings.ideacraft_web else ""))
+    if mcp_manager.is_connected("mailcraft") and user.role != Role.child:
+        parts.append(
+            "\n# Posta elettronica (MailCraft)\n"
+            "- L'utente ha la sua posta in FamilAI (menu Produttivita' > Posta): i tool mcp__mailcraft__* agiscono SOLO sulle caselle "
+            "dell'utente con cui stai parlando. Per leggere: sync, list_messages (unread_only), search (from:, subject:, is:unread, "
+            "has:attachment, newer_than:7d), read_message. Per scrivere: reply/forward/send_mail — mostra SEMPRE prima destinatari, "
+            "oggetto e testo e invia solo dopo un si' esplicito; stessa regola per trash, spam, remove_account.\n"
+            "- Per configurare una casella: suggest_settings con l'indirizzo (conosce Gmail, Outlook, Aruba, PEC, Libero, TIM, Fastweb…), "
+            "poi add_account con test=true; se manca la password chiedila (non inventarla) e ricorda che Gmail/Outlook vogliono una "
+            "password per le app. Piu' caselle per utente sono normali (default_account in set_preferences).\n"
+            "- Riassumi, non copiare intere mail; non leggere o inviare posta di altri membri della famiglia (non puoi comunque)."
+        )
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available

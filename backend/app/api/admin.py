@@ -310,14 +310,15 @@ def _builtin_mcp_out(name: str) -> dict:
     st = mcp_manager.status.get(name, {})
     return {"id": f"builtin:{name}", "name": name, "type": "stdio", "command": conn.cfg.command, "args": list(conn.cfg.args or []),
             "url": None, "min_role": conn.cfg.min_role, "enabled": conn.cfg.enabled, "builtin": True,
-            "description": f"app integrata ({name}: ./familai.sh {name} up|build|upgrade|down)", "headers_keys": [], "env_keys": [],
+            "description": f"app integrata ({name}: ./familai.sh {name} up|build|upgrade|down)"
+                           + (f" — sessioni utente attive: {sum(1 for k in mcp_manager.user_conns if k[0] == name)}" if conn.cfg.per_user else ""),
+            "headers_keys": [], "env_keys": [],
             "connected": st.get("connected", False), "error": st.get("error", ""), "tools": st.get("tools", []), "updated_at": None}
 
 
 def _builtin_names(rows) -> list[str]:
-    from ..tools.artcraft import APPS
     named = {r.name for r in rows}
-    return [n for n in APPS if n in mcp_manager.conns and n not in named]
+    return [n for n in mcp_manager.conns if n not in named]   # app integrate (ArtCraft, MailCraft): non sono righe del DB
 
 
 @router.get("/mcp")

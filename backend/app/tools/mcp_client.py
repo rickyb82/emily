@@ -13,6 +13,7 @@ import asyncio
 from pathlib import Path
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 
 from ..config import get_settings
@@ -39,11 +40,14 @@ class ServerConfig:
     env: dict = field(default_factory=dict)
     min_role: str = "adult"
     enabled: bool = True
+    per_user: bool = False   # una sessione MCP per utente (MailCraft): la connessione "madre" serve solo a elencare i tool
 
 
 @dataclass
 class Connection:
     cfg: ServerConfig
+    user_id: str = ""        # connessione per utente (per_user): a chi appartiene
+    last_used: float = 0.0
     task: asyncio.Task | None = None
     stop: asyncio.Event = field(default_factory=asyncio.Event)
     ready: asyncio.Event = field(default_factory=asyncio.Event)
@@ -85,6 +89,7 @@ class MCPManager:
     def __init__(self):
         self._open: dict[tuple[str, str], str] = {}   # (server, conversazione) -> file aperto con i tool MCP
         self.conns: dict[str, Connection] = {}
+        self.user_conns: dict[tuple[str, str], Connection] = {}   # (server, utente) -> sessione per utente (MailCraft)
 
     # ---------------- ciclo di vita ----------------
     async def start(self) -> None:
@@ -125,6 +130,28 @@ class MCPManager:
                     asyncio.create_task(self.connect(ServerConfig(
                         name=app, type="stdio", command="socat", args=["-", f"TCP:{host_for(app)}"],
                         min_role="adult", enabled=True)))
+            # MailCraft: una sessione MCP per utente. La connessione principale (token di un utente di servizio) serve solo
+            # a elencare i tool; ogni chiamata vera passa dalla sessione dell'utente (user_connection).
+            from ..services import mailcraft
+            if mailcraft.enabled() and settings.mailcraft_mcp_host and not any(r.name == "mailcraft" for r in rows):
+                asyncio.create_task(self._connect_mailcraft())
+
+    async def _connect_mailcraft(self) -> None:
+        from ..services import mailcraft
+        cmd = 'printf "%s\\n" "$MAILCRAFT_USER_TOKEN"; exec socat - TCP:' + settings.mailcraft_mcp_host
+        cfg = ServerConfig(name="mailcraft", type="stdio", command="sh", args=["-c", cmd], min_role="adult", enabled=True, per_user=True)
+        for attempt in range(6):   # il container puo' partire dopo il backend
+            try:
+                cfg.env = {"MAILCRAFT_USER_TOKEN": await mailcraft.user_token("familai-system")}
+                break
+            except Exception as e:
+                cfg.env = {}
+                log.info("MailCraft non ancora raggiungibile (%s), riprovo…", e)
+                await asyncio.sleep(10 * (attempt + 1))
+        if not cfg.env:
+            self.conns["mailcraft"] = Connection(cfg=cfg, error="server MailCraft non raggiungibile (token di servizio?)")
+            return
+        await self.connect(cfg)
 
     async def stop(self) -> None:
         for name in list(self.conns):
@@ -142,6 +169,61 @@ class MCPManager:
 
         return ServerConfig(name=row.name, type=row.type, command=row.command, args=list(row.args or []), url=row.url,
                             headers=dec(row.headers_enc), env=dec(row.env_enc), min_role=row.min_role, enabled=row.enabled)
+
+    # ---------------- connessioni per utente (MailCraft) ----------------
+    USER_IDLE_S = 30 * 60
+
+    async def user_connection(self, server: str, user_id: str) -> Connection:
+        """Sessione MCP dell'utente verso un server per_user: creata al primo uso con il token dell'utente (MailCraft lo conia
+        con il token di servizio), riusata finche' resta attiva, chiusa dopo 30 minuti di inattivita'."""
+        key = (server, user_id)
+        conn = self.user_conns.get(key)
+        if conn and conn.connected and conn.session:
+            conn.last_used = time.time()
+            return conn
+        if conn:
+            await self._close(conn)
+            self.user_conns.pop(key, None)
+        # pulizia di quelle inattive
+        now = time.time()
+        for k, c in list(self.user_conns.items()):
+            if now - c.last_used > self.USER_IDLE_S:
+                await self._close(c)
+                self.user_conns.pop(k, None)
+        base = self.conns[server].cfg
+        env = dict(base.env or {})
+        if server == "mailcraft":
+            from ..services import mailcraft
+            env["MAILCRAFT_USER_TOKEN"] = await mailcraft.user_token(user_id)
+        cfg = ServerConfig(name=base.name, type=base.type, command=base.command, args=list(base.args), url=base.url,
+                           headers=dict(base.headers), env=env, min_role=base.min_role, enabled=True, per_user=True)
+        conn = Connection(cfg=cfg, user_id=user_id)
+        self.user_conns[key] = conn
+        conn.task = asyncio.create_task(self._run(conn), name=f"mcp-{server}-{user_id[:8]}")
+        try:
+            await asyncio.wait_for(conn.ready.wait(), timeout=CONNECT_TIMEOUT)
+        except asyncio.TimeoutError:
+            conn.error = f"timeout di connessione ({CONNECT_TIMEOUT}s)"
+            await self._close(conn)
+        return conn
+
+    async def drop_user_connections(self, user_id: str) -> None:
+        for k, c in list(self.user_conns.items()):
+            if k[1] == user_id:
+                await self._close(c)
+                self.user_conns.pop(k, None)
+
+    async def _close(self, conn: Connection) -> None:
+        conn.stop.set()
+        if conn.task:
+            try:
+                await asyncio.wait_for(conn.task, timeout=15)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                conn.task.cancel()
+            except Exception as e:
+                log.debug("MCP %s: chiusura con errore %s", conn.cfg.name, e)
+        conn.connected = False
+        conn.session = None
 
     # ---------------- connessione / disconnessione a caldo ----------------
     async def connect(self, cfg: ServerConfig) -> Connection:
@@ -176,8 +258,10 @@ class MCPManager:
             self.conns.pop(name, None)
 
     async def _run(self, conn: Connection) -> None:
-        """Task dedicato: apre la sessione, registra i tool, attende lo stop, chiude tutto nello stesso task."""
+        """Task dedicato: apre la sessione, registra i tool, attende lo stop, chiude tutto nello stesso task.
+        Una connessione per utente (conn.user_id) non tocca il registro dei tool: li ha gia' registrati quella principale."""
         cfg = conn.cfg
+        main = not conn.user_id
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
@@ -196,25 +280,28 @@ class MCPManager:
                 read, write = streams[0], streams[1]
                 async with ClientSession(read, write) as session:
                     await session.initialize()
-                    listed = await session.list_tools()
-                    unregister_prefix(f"mcp__{cfg.name}__")
-                    conn.tools = []
-                    for t in listed.tools:
-                        full = f"mcp__{cfg.name}__{t.name}"
-                        conn.tools.append({"name": t.name, "description": t.description or ""})
-                        register_tool(Tool(
-                            spec=ToolSpec(full, f"[MCP {cfg.name}] {t.description or t.name}",
-                                          _attr(t, "inputSchema", "input_schema") or {"type": "object", "properties": {}}),
-                            fn=self._make_caller(cfg.name, t.name),
-                        ))
+                    if main:
+                        listed = await session.list_tools()
+                        unregister_prefix(f"mcp__{cfg.name}__")
+                        conn.tools = []
+                        for t in listed.tools:
+                            full = f"mcp__{cfg.name}__{t.name}"
+                            conn.tools.append({"name": t.name, "description": t.description or ""})
+                            register_tool(Tool(
+                                spec=ToolSpec(full, f"[MCP {cfg.name}] {t.description or t.name}",
+                                              _attr(t, "inputSchema", "input_schema") or {"type": "object", "properties": {}}),
+                                fn=self._make_caller(cfg.name, t.name),
+                            ))
                     conn.session = session
                     conn.connected = True
                     conn.error = ""
+                    conn.last_used = time.time()
                     from .artcraft import APPS as _ARTCRAFT, register_tools as _ac_register
-                    if cfg.name in _ARTCRAFT:
+                    if main and cfg.name in _ARTCRAFT:
                         _ac_register(cfg.name)
                     conn.ready.set()
-                    log.info("MCP %s: connesso, %d tool", cfg.name, len(conn.tools))
+                    log.info("MCP %s%s: connesso%s", cfg.name, f" (utente {conn.user_id[:8]})" if conn.user_id else "",
+                             f", {len(conn.tools)} tool" if main else "")
                     await conn.stop.wait()
         except Exception as e:
             conn.error = _describe(e)
@@ -223,10 +310,11 @@ class MCPManager:
             conn.connected = False
             conn.session = None
             conn.ready.set()
-            unregister_prefix(f"mcp__{cfg.name}__")
-            from .artcraft import APPS as _ARTCRAFT, unregister_tools as _ac_unregister
-            if cfg.name in _ARTCRAFT:
-                _ac_unregister(cfg.name)
+            if main:
+                unregister_prefix(f"mcp__{cfg.name}__")
+                from .artcraft import APPS as _ARTCRAFT, unregister_tools as _ac_unregister
+                if cfg.name in _ARTCRAFT:
+                    _ac_unregister(cfg.name)
 
     def _make_caller(self, server: str, tool: str):
         async def call(args: dict, ctx: ToolContext) -> ToolResult:
@@ -235,6 +323,13 @@ class MCPManager:
                 return ToolResult(f"Server MCP {server} non connesso", is_error=True)
             if ROLE_RANK.get(ctx.user.role, 0) < MIN_ROLE_RANK.get(conn.cfg.min_role, 1):
                 return ToolResult("Non hai il permesso di usare questo strumento", is_error=True)
+            if conn.cfg.per_user:   # MailCraft: la sessione e' quella dell'utente, con il suo token (vede solo le sue caselle)
+                try:
+                    conn = await self.user_connection(server, ctx.user.id)
+                except Exception as e:
+                    return ToolResult(f"{server}: sessione utente non disponibile: {type(e).__name__}: {str(e)[:200]}", is_error=True)
+                if not conn.connected or not conn.session:
+                    return ToolResult(f"{server}: sessione utente non connessa ({conn.error or 'errore sconosciuto'})", is_error=True)
             try:
                 res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=180)
             except Exception as e:

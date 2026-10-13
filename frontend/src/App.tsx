@@ -11,6 +11,7 @@ import Admin from './pages/Admin'
 import Settings from './pages/Settings'
 import Documents from './pages/Documents'
 import Editor from './pages/Editor'
+import Mail from './pages/Mail'
 
 export default function App() {
   const { me, loading } = useAuth()
@@ -48,6 +49,7 @@ export default function App() {
         {me.user.role !== 'child' && <Route path="/settings" element={<Settings />} />}
         {me.user.role !== 'child' && <Route path="/documents" element={<Documents />} />}
         {me.user.role !== 'child' && <Route path="/editor" element={<Editor />} />}
+        {me.user.role !== 'child' && <Route path="/mail" element={<Mail />} />}
         {me.user.role === 'admin' && <Route path="/admin/*" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

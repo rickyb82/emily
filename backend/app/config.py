@@ -101,6 +101,9 @@ class Settings(BaseSettings):
     deckcraft_web: bool = False       # editor DeckCraft nel browser servito su /deckcraft/ (container deckcraft-web)
     ideacraft_host: str = ""          # host:porta del container IdeaCraft (es. ideacraft:7986): mappe mentali via CLI/HTTP
     ideacraft_web: bool = False       # editor IdeaCraft nel browser servito su /ideacraft/ (container ideacraft-web)
+    mailcraft_url: str = ""           # URL del server MailCraft multi-utente (es. http://mailcraft:7878): posta per utente
+    mailcraft_mcp_host: str = ""      # host:porta del ponte MCP per utente di MailCraft (es. mailcraft:7889)
+    mailcraft_token: str = ""         # token di servizio del server MailCraft (conia i token utente); generato da familai.sh
 
     @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", "ideacraft_web", mode="before")
     @classmethod
