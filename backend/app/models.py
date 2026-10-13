@@ -19,12 +19,31 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from .db import Base
 
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class UTCDateTime(TypeDecorator):
+    """Data/ora sempre in UTC e sempre "aware": SQLite scarta il fuso, quindi un valore letto dal DB tornava senza fuso e
+    il browser lo prendeva per ora locale (due ore indietro in Italia). Qui si salva in UTC e si rilegge con tzinfo=UTC,
+    cosi' l'API emette "…Z" e il browser converte nell'ora locale dell'utente."""
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None) if dialect.name == "sqlite" else value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 def new_id() -> str:
@@ -48,7 +67,7 @@ class Family(Base):
     __tablename__ = "families"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     # impostazioni globali della famiglia (provider abilitati, modelli, ecc.)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
 
@@ -74,9 +93,9 @@ class User(Base):
     recovery_codes: Mapped[list] = mapped_column(JSON, default=list)  # hash dei codici
     totp_secret: Mapped[str | None] = mapped_column(String(300), nullable=True)          # app authenticator (cifrato)
     totp_pending: Mapped[str | None] = mapped_column(String(300), nullable=True)         # in attesa di conferma
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # scelta sul secondo fattore quando e' facoltativo: "" = non ancora chiesto, "skip" = l'utente ha scelto di non usarlo
     mfa_choice: Mapped[str] = mapped_column(String(10), default="")
 
@@ -103,8 +122,8 @@ class WebAuthnCredential(Base):
     sign_count: Mapped[int] = mapped_column(Integer, default=0)
     transports: Mapped[list] = mapped_column(JSON, default=list)
     name: Mapped[str] = mapped_column(String(120), default="Passkey")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="credentials")
 
@@ -114,8 +133,8 @@ class Session(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: secrets.token_urlsafe(48))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     mfa_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     user_agent: Mapped[str] = mapped_column(String(300), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
@@ -130,8 +149,8 @@ class TrustedDevice(Base):
     family_id: Mapped[str] = mapped_column(ForeignKey("families.id"))
     name: Mapped[str] = mapped_column(String(120))
     approved_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -144,8 +163,8 @@ class Project(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     instructions: Mapped[str] = mapped_column(Text, default="")  # istruzioni di sistema del progetto
     icon: Mapped[str] = mapped_column(String(16), default="📁")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now, onupdate=now)
 
 
 class Conversation(Base):
@@ -157,8 +176,8 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200), default="Nuova chat")
     provider: Mapped[str] = mapped_column(String(40), default="anthropic")
     model: Mapped[str] = mapped_column(String(80), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now, onupdate=now)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
     messages: Mapped[list[Message]] = relationship(
@@ -175,7 +194,7 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20))  # user | assistant | tool
     # contenuto "ricco": lista di blocchi {type: text|image|file|tool_use|tool_result, ...}
     content: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)   # segnalato dal filtro contenuti
     flag_reason: Mapped[str] = mapped_column(String(300), default="")
     usage: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -197,7 +216,7 @@ class FileAsset(Base):
     path: Mapped[str] = mapped_column(String(500))
     kind: Mapped[str] = mapped_column(String(20), default="upload")  # upload | generated
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     # RAG: none (non indicizzabile) | pending | indexed | failed
     index_status: Mapped[str] = mapped_column(String(12), default="none")
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -215,7 +234,7 @@ class Folder(Base):
     parent_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     color: Mapped[str] = mapped_column(String(20), default="")   # tinta dell'icona (opzionale)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
 
 
 class Chunk(Base):
@@ -242,7 +261,7 @@ class Share(Base):
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     target_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     permission: Mapped[str] = mapped_column(String(10), default="read")  # read | write
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
 
     __table_args__ = (UniqueConstraint("resource_type", "resource_id", "target_user_id"),)
 
@@ -252,7 +271,7 @@ class UsageLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     family_id: Mapped[str] = mapped_column(ForeignKey("families.id"))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     kind: Mapped[str] = mapped_column(String(30))  # message | image | video | web_search | tool
     provider: Mapped[str] = mapped_column(String(40), default="")
     model: Mapped[str] = mapped_column(String(80), default="")
@@ -269,7 +288,7 @@ class AuditLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     family_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     event: Mapped[str] = mapped_column(String(60))
     detail: Mapped[str] = mapped_column(String(500), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
@@ -291,9 +310,9 @@ class MemoryItem(Base):
     source_conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
     embedding_model: Mapped[str] = mapped_column(String(80), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     reviewed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     used_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
@@ -311,9 +330,9 @@ class ApprovalRequest(Base):
     status: Mapped[str] = mapped_column(String(10), default="pending", index=True)   # pending | approved | denied | expired
     decision: Mapped[str | None] = mapped_column(String(16), nullable=True)           # approve | approve_tutor | deny
     decided_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)   # permesso "per oggi"
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)   # permesso "per oggi"
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     consumed: Mapped[bool] = mapped_column(Boolean, default=False)                    # la risposta e' stata poi generata
 
 
@@ -324,7 +343,7 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
     secret: Mapped[bool] = mapped_column(Boolean, default=False)  # True = valore cifrato con SECRET_KEY
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now, onupdate=now)
     updated_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
@@ -342,8 +361,8 @@ class Artifact(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     version: Mapped[int] = mapped_column(Integer, default=1)
     history: Mapped[list] = mapped_column(JSON, default=list)  # versioni precedenti [{version, content, created_at}]
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now, onupdate=now)
 
 
 class McpServer(Base):
@@ -360,8 +379,8 @@ class McpServer(Base):
     min_role: Mapped[str] = mapped_column(String(10), default="adult")   # child | adult | admin
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     description: Mapped[str] = mapped_column(String(300), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now, onupdate=now)
 
 
 class EmailToken(Base):
@@ -371,7 +390,7 @@ class EmailToken(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     purpose: Mapped[str] = mapped_column(String(10))   # invite | reset | mfa
     code_hash: Mapped[str] = mapped_column(String(64))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     used: Mapped[bool] = mapped_column(Boolean, default=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
