@@ -40,6 +40,7 @@ export default function Documents() {
   const [params, setParams] = useSearchParams()
   const folderId = params.get('folder') || ''
   const projectId = params.get('project') || ''
+  const sharedView = params.get('shared') === '1'   // cartella automatica "Condivisi con me"
   const [files, setFiles] = useState<FileOut[]>([])
   const [projFiles, setProjFiles] = useState<FileOut[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
@@ -68,23 +69,26 @@ export default function Documents() {
   useEffect(() => { const close = () => setMenu(null); window.addEventListener('click', close); return () => window.removeEventListener('click', close) }, [])
 
   // ---- navigazione ----
-  const go = (p: { folder?: string; project?: string }) => { setSelected(''); setParams(p.folder ? { folder: p.folder } : p.project ? { project: p.project } : {}) }
+  const go = (p: { folder?: string; project?: string; shared?: boolean }) => { setSelected(''); setParams(p.folder ? { folder: p.folder } : p.project ? { project: p.project } : p.shared ? { shared: '1' } : {}) }
   const byId = useMemo(() => Object.fromEntries(folders.map((f) => [f.id, f])), [folders])
   const crumbs = useMemo(() => {
-    const out: { label: string; folder?: string; project?: string }[] = [{ label: 'Documenti' }]
+    const out: { label: string; folder?: string; project?: string; shared?: boolean }[] = [{ label: 'Documenti' }]
     if (projectId) out.push({ label: `📁 ${projects.find((p) => p.id === projectId)?.name ?? 'Progetto'}`, project: projectId })
+    if (sharedView) out.push({ label: '🤝 Condivisi con me', shared: true })
     const chain: Folder[] = []
     let cur = byId[folderId]
     while (cur) { chain.unshift(cur); cur = cur.parent_id ? byId[cur.parent_id] : undefined as any }
     chain.forEach((f) => out.push({ label: f.name, folder: f.id }))
     return out
-  }, [folderId, projectId, byId, projects])
+  }, [folderId, projectId, sharedView, byId, projects])
   const current = byId[folderId]
 
   // ---- contenuto della cartella corrente ----
   const q = filter.trim().toLowerCase()
-  const shownFolders = projectId ? [] : folders.filter((f) => (f.parent_id || '') === folderId).filter((f) => !q || f.name.toLowerCase().includes(q))
-  const shownFiles = (projectId ? projFiles : files.filter((f) => (f.folder_id || '') === folderId))
+  const mine = (f: FileOut) => f.owner_id === me?.user.id
+  const sharedWithMe = files.filter((f) => !mine(f))
+  const shownFolders = projectId || sharedView ? [] : folders.filter((f) => (f.parent_id || '') === folderId).filter((f) => !q || f.name.toLowerCase().includes(q))
+  const shownFiles = (projectId ? projFiles : sharedView ? sharedWithMe : files.filter((f) => mine(f) && (f.folder_id || '') === folderId))
     .filter((f) => !q || f.filename.toLowerCase().includes(q))
   const searching = !!q && !projectId
   const searchHits = searching ? files.filter((f) => f.filename.toLowerCase().includes(q)) : []
@@ -187,7 +191,7 @@ export default function Documents() {
         </nav>
         <div className="row" style={{ gap: 6 }}>
           <input placeholder="Cerca…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 200 }} />
-          {!projectId && <button className="ghost" onClick={(e) => { e.stopPropagation(); newFolder() }}>📁 Nuova cartella</button>}
+          {!projectId && !sharedView && <button className="ghost" onClick={(e) => { e.stopPropagation(); newFolder() }}>📁 Nuova cartella</button>}
           <button className="ghost" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>📎 Carica</button>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         </div>
@@ -203,9 +207,9 @@ export default function Documents() {
           </div>
         </>
       ) : (
-        <div className="finder-grid" {...(folderId || !projectId ? dropProps(current?.parent_id || '') : {})}>
+        <div className="finder-grid" {...(!projectId && !sharedView ? dropProps(current?.parent_id || '') : {})}>
           {/* cartella APP (solo alla radice) */}
-          {!folderId && !projectId && apps.length > 0 && (
+          {!folderId && !projectId && !sharedView && apps.length > 0 && (
             <button className="tile folder-tile app-folder" onClick={(e) => { e.stopPropagation(); setAppsOpen(true) }} title="Applicazioni">
               <span className="ios-folder">
                 {apps.slice(0, 9).map((a) => <span key={a.key} className={`mini-app ${a.cls}`}>{a.glyph}</span>)}
@@ -213,8 +217,16 @@ export default function Documents() {
               <span className="tile-name">APP</span>
             </button>
           )}
+          {/* condivisi con me (radice): i file che altri hanno condiviso, raggruppati in una cartella automatica */}
+          {!folderId && !projectId && !sharedView && sharedWithMe.length > 0 && (
+            <button className="tile folder-tile" onClick={(e) => { e.stopPropagation(); go({ shared: true }) }} title="File che altri hanno condiviso con te">
+              <span className="folder-icon shared"><span className="folder-tab" /></span>
+              <span className="tile-name">Condivisi con me</span>
+              <small className="muted">{sharedWithMe.length} file</small>
+            </button>
+          )}
           {/* progetti come cartelle automatiche (radice) */}
-          {!folderId && !projectId && projects.map((p) => (
+          {!folderId && !projectId && !sharedView && projects.map((p) => (
             <button key={p.id} className="tile folder-tile" onClick={(e) => { e.stopPropagation(); go({ project: p.id }) }} title={`Progetto ${p.name}`}>
               <span className="folder-icon project"><span className="folder-tab" /></span>
               <span className="tile-name">{p.name}</span>
@@ -233,7 +245,7 @@ export default function Documents() {
           ))}
           {/* file */}
           {shownFiles.map(renderFile)}
-          {shownFolders.length === 0 && shownFiles.length === 0 && (folderId || projectId) && <p className="muted small" style={{ gridColumn: '1 / -1' }}>Cartella vuota. Trascina qui dei file o usa 📎 Carica.</p>}
+          {shownFolders.length === 0 && shownFiles.length === 0 && (folderId || projectId || sharedView) && <p className="muted small" style={{ gridColumn: '1 / -1' }}>Cartella vuota. Trascina qui dei file o usa 📎 Carica.</p>}
         </div>
       )}
 

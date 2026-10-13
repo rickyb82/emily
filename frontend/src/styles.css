@@ -437,3 +437,4 @@ button.small { font-size: 13px; padding: 4px 10px; }
 
 .editable { cursor: text; border-bottom: 1px dashed var(--border); }
 .editable:hover { border-bottom-color: var(--text); }
+.folder-icon.shared { --folder: #f0b429; }
