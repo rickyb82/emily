@@ -62,6 +62,7 @@ function Members() {
     load()
     get('/admin/policy-defaults').then(setDefaults)
   }, [])
+  async function run2(fn: () => Promise<any>) { try { await fn(); await refresh() } catch (e: any) { setErr(e.message) } }
   async function setOrg(on: boolean) {
     if (on && members.some((m) => m.role === 'child') && !confirm('Ci sono utenti bambini: in modalità azienda non potranno più accedere con il PIN. Continuare?')) return
     try { await put('/admin/providers', { values: { org_mode: on ? '1' : '' } }); await refresh() } catch (e: any) { setErr(e.message) }
@@ -73,6 +74,10 @@ function Members() {
       <label className="row card" style={{ gap: 10, alignItems: 'flex-start' }}>
         <input type="checkbox" checked={org} onChange={(e) => setOrg(e.target.checked)} />
         <span><b>🏢 Modalità azienda</b><br /><small className="muted">Nessun bambino: niente accesso con PIN, supervisione, compiti e controllo genitori; gli utenti sono colleghi e si condivide cercandoli per nome o email. Vale per tutta l'installazione.</small></span>
+      </label>
+      <label className="row card" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={me?.features?.passkeys === false} onChange={(e) => run2(() => put('/admin/providers', { values: { passkeys: e.target.checked ? '0' : '' } }))} />
+        <span><b>📱 Solo app authenticator</b><br /><small className="muted">Disattiva le passkey: i nuovi utenti attivano il secondo fattore con l'app (codice a 6 cifre), utile su un server locale dove le passkey sono legate all'indirizzo. Chi ha già una passkey continua a poterla usare.</small></span>
       </label>
       <table className="table">
         <thead><tr><th>Membro</th><th>Ruolo</th><th>Fascia</th><th>2FA</th><th></th></tr></thead>

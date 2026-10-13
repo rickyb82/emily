@@ -68,7 +68,7 @@ export default function Settings() {
 
       <section className="card stack">
         <h3>🔐 Secondo fattore</h3>
-        <p className="muted small">Serve almeno uno tra passkey e app authenticator. Puoi tenerli entrambi: al login scegli quale usare.</p>
+        <p className="muted small">{me?.features?.passkeys !== false ? 'Serve almeno uno tra passkey e app authenticator. Puoi tenerli entrambi: al login scegli quale usare.' : 'Il secondo fattore è l\'app authenticator (codice a 6 cifre).'}</p>
         <h4>📱 App authenticator</h4>
         {me?.user.has_totp ? (
           <div className="row">
@@ -89,7 +89,7 @@ export default function Settings() {
           ))}
         </ul>
         <div className="row">
-          <button onClick={() => run(addPasskey, 'Passkey aggiunta')}>＋ Aggiungi passkey</button>
+          {me?.features?.passkeys !== false && <button onClick={() => run(addPasskey, 'Passkey aggiunta')}>＋ Aggiungi passkey</button>}
           <button className="ghost" onClick={() => run(async () => setCodes((await post('/auth/recovery-codes/regenerate')).recovery_codes), 'Nuovi codici generati')}>Rigenera codici di recupero</button>
         </div>
         {codes && <pre className="codes">{codes.join('\n')}</pre>}

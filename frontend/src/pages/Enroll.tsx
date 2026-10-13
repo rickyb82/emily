@@ -16,7 +16,8 @@ export default function Enroll() {
   const [emailMfa, setEmailMfa] = useState(false)
   const [code, setCode] = useState('')
   const [sent, setSent] = useState('')
-  const [mode, setMode] = useState<'choose' | 'totp' | 'recovery'>('choose')
+  const passkeys = me?.features?.passkeys !== false
+  const [mode, setMode] = useState<'choose' | 'totp' | 'recovery'>(passkeys ? 'choose' : 'totp')
   useEffect(() => {
     get('/auth/features').then((f) => setEmailMfa(f.email_mfa)).catch(() => {})
   }, [])
@@ -62,7 +63,7 @@ export default function Enroll() {
         <h1>🔐 Sicurezza account</h1>
         {codes ? (
           <>
-            <p><b>Salva questi codici di recupero</b> in un posto sicuro: servono se perdi la passkey o il telefono. Non verranno mostrati di nuovo.</p>
+            <p><b>Salva questi codici di recupero</b> in un posto sicuro: servono se perdi il telefono o la passkey. Non verranno mostrati di nuovo.</p>
             <pre className="codes">{codes.join('\n')}</pre>
             <button onClick={() => refresh()}>Ho salvato i codici, continua</button>
           </>
@@ -93,7 +94,7 @@ export default function Enroll() {
             )}
           </>
         ) : mode === 'totp' ? (
-          <TotpSetup onDone={(rc) => { if (rc.length) setCodes(rc); else refresh() }} onCancel={() => setMode('choose')} />
+          <TotpSetup onDone={(rc) => { if (rc.length) setCodes(rc); else refresh() }} onCancel={passkeys ? () => setMode('choose') : undefined} />
         ) : (
           <>
             <p>Per proteggere l'accesso da remoto, Emily richiede agli adulti un <b>secondo fattore</b>. Scegli quello che preferisci (potrai aggiungere anche l'altro dalle impostazioni):</p>

@@ -127,7 +127,8 @@ def _safe_name(name: str, ext: str) -> str:
 
 
 def _unique(path: Path) -> Path:
-    return path if not path.exists() else path.with_name(f"{path.stem}-{uuid.uuid4().hex[:6]}{path.suffix}")
+    from ..services.naming import unique_path
+    return unique_path(path)
 
 
 def sidecar_files(path: str) -> list[str]:
@@ -170,8 +171,10 @@ async def register_saved_file(ctx: ToolContext, path: str, only_new: bool = Fals
             await ctx.db.commit()
             return None
     else:
+        from ..services.naming import unique_filename
+        shown = await unique_filename(ctx.db, ctx.user.id, None, p.name)   # in Documenti il nome non si ripete
         asset = FileAsset(id=uuid.uuid4().hex, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
-                          conversation_id=ctx.conversation_id, filename=p.name, mime=mime, size=p.stat().st_size,
+                          conversation_id=ctx.conversation_id, filename=shown, mime=mime, size=p.stat().st_size,
                           path=str(p), kind="generated")
         ctx.db.add(asset)
     await ctx.db.commit()

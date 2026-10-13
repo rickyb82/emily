@@ -115,6 +115,46 @@ async def _resolve_file_ids(args, ctx: ToolContext):
         return args
 
 
+async def _protect_save_path(server: str, tool: str, args: dict, ctx: ToolContext, open_path: str | None = None) -> dict:
+    """Un save_* (o execute file.saveAs) verso un percorso gia' usato da un file di un'altra conversazione o di un altro
+    utente viene dirottato su "nome 2.ext": il modello crede di scegliere il nome, ma non puo' calpestare file altrui."""
+    from ..models import FileAsset
+    from ..services.naming import unique_path
+    from .artcraft import APPS
+    app = APPS[server]
+    cmd = str(args.get("command") or args.get("id") or "")
+    where = None
+    if tool in app["save_tools"] and args.get("path"):
+        where = ("path",)
+    elif tool in ("execute", "run_command", "run") and cmd.startswith("file.save"):
+        prm = args.get("params") or args.get("args")
+        if isinstance(prm, dict) and prm.get("path"):
+            where = ("params" if "params" in args else "args", "path")
+    if not where:
+        return args
+    target = args[where[0]] if len(where) == 1 else args[where[0]][where[1]]
+    pth = Path(str(target))
+    if not pth.exists():
+        return args
+    from sqlalchemy import select as _select
+    owner_row = (await ctx.db.execute(_select(FileAsset).where(FileAsset.path == str(pth)))).scalars().first()
+    if not owner_row:
+        return args
+    if owner_row.owner_id != ctx.user.id:
+        divert = True                                   # file di un altro utente: mai
+    elif open_path and str(pth) == str(open_path):
+        divert = False                                  # e' il documento aperto in questa chat: si sovrascrive (e' una modifica)
+    else:
+        divert = (owner_row.conversation_id or "") != (ctx.conversation_id or "")   # file di un'altra chat non aperto qui: copia
+    if divert:
+        new = str(unique_path(pth))
+        log.info("MCP %s: %s salverebbe su %s (file di un'altra chat): dirottato su %s", server, tool, pth, new)
+        if len(where) == 1:
+            return {**args, "path": new}
+        return {**args, where[0]: {**args[where[0]], "path": new}}
+    return args
+
+
 async def _mail_args(tool: str, args: dict, ctx: ToolContext):
     """MailCraft: gli allegati di send_mail possono essere indicati con l'id di un file della chat (o /files/<id>): li
     traduciamo nel percorso su disco, che il container MailCraft vede in /data. Il percorso di save_attachment deve stare
@@ -410,6 +450,8 @@ class MCPManager:
                 args = await _mail_args(tool, args, ctx)
                 if isinstance(args, ToolResult):
                     return args
+            if server in _ARTCRAFT_APPS:
+                args = await _protect_save_path(server, tool, args, ctx, self._open.get((server, ctx.conversation_id or "")))   # mai sovrascrivere file altrui
             try:
                 res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=180)
             except Exception as e:

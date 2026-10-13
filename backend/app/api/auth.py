@@ -92,7 +92,7 @@ async def login(body: LoginRequest, request: Request, response: Response, db: As
     await create_session(db, response, user, request, mfa_verified=not has_2fa)
     await audit(db, "login_password", request, user, "mfa_required" if has_2fa else "no_second_factor")
     return {"status": "mfa_required" if has_2fa else "ok", "must_enroll_passkey": (not has_2fa) and settings.require_mfa_for_adults,
-            "methods": {"passkey": has_pk, "totp": has_totp}}
+            "methods": {"passkey": has_pk, "totp": has_totp, "passkeys_enabled": __import__("app.config", fromlist=["passkeys_on"]).passkeys_on()}}
 
 
 @router.post("/webauthn/authenticate/options")
@@ -132,6 +132,9 @@ async def recovery_login(body: RecoveryLoginRequest, request: Request,
 # ---------------- registrazione passkey (dopo il login) ----------------
 @router.post("/webauthn/register/options")
 async def webauthn_reg_options(ctx: AuthContext = Depends(require_adult_for_enrollment), db: AsyncSession = Depends(get_db)):
+    from ..config import passkeys_on
+    if not passkeys_on():
+        raise HTTPException(400, "Le passkey sono disattivate su questo server: usa l'app authenticator")
     return await webauthn_svc.registration_options(db, ctx.user, ctx.session.id)
 
 
@@ -247,7 +250,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     mfa_required = ctx.user.role != Role.child and (
         not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
-    from ..config import org_mode_on
+    from ..config import org_mode_on, passkeys_on
     from ..tools.mcp_client import mcp_manager
     adult = ctx.user.role != Role.child
     features = {"wordcraft_web": bool(settings.wordcraft_web) and adult, "wordcraft_mcp": mcp_manager.is_connected("wordcraft"),
@@ -256,7 +259,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "deckcraft_web": bool(settings.deckcraft_web) and adult, "deckcraft_mcp": mcp_manager.is_connected("deckcraft"),
                 "ideacraft_mcp": mcp_manager.is_connected("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and adult,
                 "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft"),
-                "org_mode": org_mode_on()}
+                "org_mode": org_mode_on(), "passkeys": passkeys_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
 
@@ -313,10 +316,11 @@ async def features():
     """Funzioni disponibili alla schermata di login (nessuna autenticazione)."""
     from . import google_auth
 
-    from ..config import org_mode_on
+    from ..config import org_mode_on, passkeys_on
     return {"email": mailer.email_enabled(),
             "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes"),
-            "google": google_auth.enabled(), "org_mode": org_mode_on(), "app_name": settings.app_name}
+            "google": google_auth.enabled(), "org_mode": org_mode_on(), "app_name": settings.app_name,
+            "passkeys": passkeys_on()}
 
 
 @router.post("/forgot")

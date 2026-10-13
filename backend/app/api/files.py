@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import get_settings
 from ..db import get_db
 from ..models import Chunk, FileAsset, Role, Share
+from ..services.naming import unique_filename
 from ..policy.permissions import effective_policy
 from ..schemas import FileOut
 from ..security.sessions import AuthContext, require_auth
@@ -67,6 +68,7 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     path = settings.uploads_dir / f"{fid}{ext}"
     path.write_bytes(data)
     mime = file.content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+    name = await unique_filename(db, ctx.user.id, folder_id or None, name)
     asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
                       conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
                       folder_id=folder_id or None)
@@ -131,8 +133,9 @@ async def blank_pdf(body: BlankPdf, ctx: AuthContext = Depends(require_auth), db
         w.write(fh)
     stem = re.sub(r"[^\w.\- ]", "_", body.filename.strip()).strip(". ") or "documento"
     stem = re.sub(r"\.pdf$", "", stem, flags=re.I) or "documento"
+    fname = await unique_filename(db, ctx.user.id, body.folder_id or None, f"{stem}.pdf"[:200])
     asset = FileAsset(id=nid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=body.project_id,
-                      filename=f"{stem}.pdf"[:200], mime="application/pdf", size=path.stat().st_size, path=str(path),
+                      filename=fname, mime="application/pdf", size=path.stat().st_size, path=str(path),
                       kind="generated", folder_id=body.folder_id or None)
     db.add(asset)
     await db.commit()
@@ -185,6 +188,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
             nid = uuid.uuid4().hex
             path = settings.generated_dir / f"{nid}{ext}"
             path.write_bytes(data)
+            name = await unique_filename(db, ctx.user.id, asset.folder_id, name)
             new = FileAsset(id=nid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=asset.project_id,
                             conversation_id=asset.conversation_id, filename=name, mime=mime, size=len(data),
                             path=str(path), kind="generated", folder_id=asset.folder_id)
@@ -203,6 +207,7 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
             await require_access(db, "project", project_id, ctx.user, write=True)
         path = settings.generated_dir / f"{file_id}{ext}"
         path.write_bytes(data)
+        name = await unique_filename(db, ctx.user.id, folder_id or None, name)
         asset = FileAsset(id=file_id, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
                           conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
                           kind="generated", folder_id=folder_id or None)
@@ -235,6 +240,7 @@ async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(req
             if not fo or fo.owner_id != ctx.user.id:
                 raise HTTPException(404, "Cartella non trovata")
         asset.folder_id = body.folder_id or None
+        asset.filename = await unique_filename(db, ctx.user.id, asset.folder_id, asset.filename, exclude_id=asset.id)
     if body.filename is not None:
         low = asset.filename.lower()
         old_ext = ".ideacraft.json" if low.endswith(".ideacraft.json") else Path(asset.filename).suffix
@@ -242,7 +248,10 @@ async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(req
         stem = re.sub(r"(\.ideacraft)?\.[A-Za-z0-9]{1,8}$", "", clean).strip(". ") if "." in clean else clean.strip(". ")
         if not stem:
             raise HTTPException(400, "Nome non valido")
-        asset.filename = f"{stem}{old_ext}"[:200]
+        wanted = f"{stem}{old_ext}"[:200]
+        if (await unique_filename(db, ctx.user.id, asset.folder_id, wanted, exclude_id=asset.id)) != wanted:
+            raise HTTPException(409, f"Esiste gia' un file chiamato \"{wanted}\" in questa cartella")
+        asset.filename = wanted
     await db.commit()
     return _out(asset)
 
