@@ -17,7 +17,9 @@ export default function Enroll() {
   const [code, setCode] = useState('')
   const [sent, setSent] = useState('')
   const passkeys = me?.features?.passkeys !== false
-  const [mode, setMode] = useState<'choose' | 'totp' | 'recovery'>(passkeys ? 'choose' : 'totp')
+  const optional = !!me?.features?.mfa_optional
+  const [mode, setMode] = useState<'choose' | 'totp' | 'recovery'>(passkeys || optional ? 'choose' : 'totp')
+  const skip = () => run(async () => { await post('/auth/mfa/choice', { choice: 'skip' }); await refresh() })
   useEffect(() => {
     get('/auth/features').then((f) => setEmailMfa(f.email_mfa)).catch(() => {})
   }, [])
@@ -94,14 +96,17 @@ export default function Enroll() {
             )}
           </>
         ) : mode === 'totp' ? (
-          <TotpSetup onDone={(rc) => { if (rc.length) setCodes(rc); else refresh() }} onCancel={passkeys ? () => setMode('choose') : undefined} />
+          <TotpSetup onDone={(rc) => { if (rc.length) setCodes(rc); else refresh() }} onCancel={passkeys || optional ? () => setMode('choose') : undefined} />
         ) : (
           <>
-            <p>Per proteggere l'accesso da remoto, Emily richiede agli adulti un <b>secondo fattore</b>. Scegli quello che preferisci (potrai aggiungere anche l'altro dalle impostazioni):</p>
+            {optional
+              ? <p>Vuoi proteggere il tuo account con un <b>secondo fattore</b>? È facoltativo: puoi attivarlo ora o più avanti dalle impostazioni.</p>
+              : <p>Per proteggere l'accesso da remoto, Emily richiede agli adulti un <b>secondo fattore</b>. Scegli quello che preferisci (potrai aggiungere anche l'altro dalle impostazioni):</p>}
             {err && <div className="error">{err}</div>}
-            <button onClick={register} disabled={busy}>{busy ? 'In attesa…' : '🔑 Passkey (Face ID, Touch ID, Windows Hello, chiave di sicurezza)'}</button>
+            {passkeys && <button onClick={register} disabled={busy}>{busy ? 'In attesa…' : '🔑 Passkey (Face ID, Touch ID, Windows Hello, chiave di sicurezza)'}</button>}
             <button onClick={() => setMode('totp')} disabled={busy}>📱 App authenticator (codice a 6 cifre)</button>
-            <p className="muted small">La passkey è legata all'indirizzo del sito: se usi Emily da più indirizzi (es. localhost e il dominio di casa) l'app authenticator funziona ovunque.</p>
+            {optional && <button className="ghost" onClick={skip} disabled={busy}>Entra senza secondo fattore</button>}
+            {passkeys && <p className="muted small">La passkey è legata all'indirizzo del sito: se usi Emily da più indirizzi (es. localhost e il dominio di casa) l'app authenticator funziona ovunque.</p>}
           </>
         )}
         <button className="ghost" onClick={logout}>Esci</button>

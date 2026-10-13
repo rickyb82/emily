@@ -25,6 +25,7 @@ settings = get_settings()
 MANAGED_KEYS: dict[str, tuple[str, bool]] = {
     "org_mode": ("Modalita' azienda (1 = nessun bambino, etichette organizzazione)", False),
     "passkeys": ("Passkey abilitate (0 = solo app authenticator per il 2FA)", False),
+    "mfa_optional": ("2FA facoltativo: l'utente sceglie al primo accesso (0 = obbligatorio)", False),
     "anthropic_api_key": ("Chiave API Anthropic", True),
     "anthropic_default_model": ("Modello di default Claude", False),
     "openai_api_key": ("Chiave API OpenAI", True),

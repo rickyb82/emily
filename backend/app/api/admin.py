@@ -28,8 +28,26 @@ async def policy_defaults(ctx: AuthContext = Depends(require_admin)):
 
 @router.get("/members", response_model=list[UserOut])
 async def members(ctx: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Membri con l'attivita' di accesso: ultimo login, ultima uscita, sessioni aperte (per il controllo dell'amministratore)."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import func
+
+    from ..models import AuditLog, Session as _S
     rows = (await db.execute(select(User).where(User.family_id == ctx.user.family_id).order_by(User.created_at))).scalars().all()
-    return [await user_out(db, u) for u in rows]
+    logins = dict((await db.execute(select(AuditLog.user_id, func.max(AuditLog.created_at)).where(
+        AuditLog.family_id == ctx.user.family_id, AuditLog.event.like("login_%"), AuditLog.event != "login_failed").group_by(AuditLog.user_id))).all())
+    logouts = dict((await db.execute(select(AuditLog.user_id, func.max(AuditLog.created_at)).where(
+        AuditLog.family_id == ctx.user.family_id, AuditLog.event == "logout").group_by(AuditLog.user_id))).all())
+    now = datetime.now(timezone.utc)
+    sessions = dict((await db.execute(select(_S.user_id, func.count()).where(_S.expires_at > now).group_by(_S.user_id))).all())
+    out = []
+    for u in rows:
+        o = await user_out(db, u)
+        o.last_login, o.last_logout, o.active_sessions = logins.get(u.id), logouts.get(u.id), int(sessions.get(u.id, 0))
+        o.mfa_choice = u.mfa_choice or ""
+        out.append(o)
+    return out
 
 
 @router.post("/members", response_model=UserOut)
@@ -148,6 +166,11 @@ async def update_member(uid: str, body: UpdateMemberRequest, request: Request,
         raise HTTPException(400, "Non puoi disattivare te stesso")
     for k, v in data.items():
         setattr(u, k, v)
+    if data.get("is_active") is False:   # account disattivato: fuori subito da tutti i dispositivi
+        from sqlalchemy import delete as _delete
+
+        from ..models import Session as _S
+        await db.execute(_delete(_S).where(_S.user_id == u.id))
     await db.commit()
     await audit(db, "member_updated", request, ctx.user, f"{u.username}: {list(body.model_dump(exclude_none=True).keys())}")
     return await user_out(db, u)

@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     ideacraft_host: str = ""          # host:porta del container IdeaCraft (es. ideacraft:7986): mappe mentali via CLI/HTTP
     ideacraft_web: bool = False       # editor IdeaCraft nel browser servito su /ideacraft/ (container ideacraft-web)
     org_mode: str = ""                # "1" = modalita' azienda: niente bambini (login PIN, supervisione, compiti), etichette organizzazione
+    mfa_optional: str = "1"          # "1" = al primo accesso l'utente sceglie se attivare il 2FA; "0" = obbligatorio per gli adulti
     passkeys: str = "1"              # "0" = niente passkey: il secondo fattore e' solo l'app authenticator (TOTP), es. server locale
     app_name: str = "Emily"           # nome con cui l'assistente si presenta e firma le email (i nomi tecnici restano FamilAI)
     mailcraft_url: str = ""           # URL del server MailCraft multi-utente (es. http://mailcraft:7878): posta per utente
@@ -193,3 +194,8 @@ def org_mode_on() -> bool:
 def passkeys_on() -> bool:
     """Passkey disponibili per registrazione e login (spente: 2FA solo con app authenticator)."""
     return str(get_settings().passkeys).strip().lower() not in ("0", "false", "no", "off")
+
+
+def mfa_optional_on() -> bool:
+    """Il secondo fattore e' una scelta dell'utente (chiesta al primo accesso) invece di un obbligo."""
+    return str(get_settings().mfa_optional).strip().lower() in ("1", "true", "yes", "on")

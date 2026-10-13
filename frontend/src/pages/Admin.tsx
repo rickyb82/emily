@@ -79,16 +79,28 @@ function Members() {
         <input type="checkbox" checked={me?.features?.passkeys === false} onChange={(e) => run2(() => put('/admin/providers', { values: { passkeys: e.target.checked ? '0' : '' } }))} />
         <span><b>📱 Solo app authenticator</b><br /><small className="muted">Disattiva le passkey: i nuovi utenti attivano il secondo fattore con l'app (codice a 6 cifre), utile su un server locale dove le passkey sono legate all'indirizzo. Chi ha già una passkey continua a poterla usare.</small></span>
       </label>
+      <label className="row card" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={me?.features?.mfa_optional !== false} onChange={(e) => run2(() => put('/admin/providers', { values: { mfa_optional: e.target.checked ? '' : '0' } }))} />
+        <span><b>🔐 Secondo fattore a scelta dell'utente</b><br /><small className="muted">Al primo accesso ognuno decide se attivare il 2FA (app authenticator) o entrare senza; può attivarlo dopo dalle impostazioni. Spento = obbligatorio per tutti gli adulti.</small></span>
+      </label>
       <table className="table">
-        <thead><tr><th>Membro</th><th>Ruolo</th><th>Fascia</th><th>2FA</th><th></th></tr></thead>
+        <thead><tr><th>Membro</th><th>Ruolo</th><th>{org ? 'Stato' : 'Fascia'}</th><th>2FA</th><th>Accessi</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
               <td>{m.avatar} {m.display_name} <small className="muted">{m.email ?? m.username}</small></td>
               <td>{{ admin: 'Amministratore', adult: org ? 'Utente' : 'Adulto', child: 'Bambino/a' }[m.role]}</td>
-              <td>{m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
-              <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : '⚠️ no') : '—'}</td>
+              <td>{org ? (m.is_active ? '🟢 attivo' : '⛔ disattivato') : m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
+              <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : m.mfa_choice === 'skip' ? <span title="Ha scelto di entrare senza secondo fattore">— (scelta)</span> : '⚠️ no') : '—'}</td>
+              <td><small>
+                {m.last_login ? <>↪ {new Date(m.last_login).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}<br /></> : <span className="muted">mai entrato<br /></span>}
+                {m.last_logout && <span className="muted">↩ {new Date(m.last_logout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}<br /></span>}
+                {(m.active_sessions ?? 0) > 0 ? <span style={{ color: '#1e8e4b' }}>● {m.active_sessions} sessione{m.active_sessions === 1 ? '' : 'i'} aperta{m.active_sessions === 1 ? '' : 'e'}</span> : <span className="muted">○ nessuna sessione</span>}
+              </small></td>
               <td className="row wrap">
+                {m.id !== me?.user.id && (m.is_active
+                  ? <button className="ghost" title="Blocca l'accesso: le sessioni aperte vengono chiuse subito" onClick={() => { if (confirm(`Disattivare ${m.display_name}? Verrà scollegato da tutti i dispositivi.`)) patch(`/admin/members/${m.id}`, { is_active: false }).then(load).catch((e) => setErr(e.message)) }}>⛔ Disattiva</button>
+                  : <button className="ghost" onClick={() => patch(`/admin/members/${m.id}`, { is_active: true }).then(load).catch((e) => setErr(e.message))}>✅ Attiva</button>)}
                 <button className="ghost" onClick={() => setEdit(m)}>Modifica</button>
                 {m.role !== 'child' && m.email && <button className="ghost" title="Invia l'email con il link per impostare la password" onClick={() => post(`/admin/members/${m.id}/invite`).then(() => alert(`Invito inviato a ${m.email}`)).catch((e) => setErr(e.message))}>✉️ Invito</button>}
                 <button className="ghost danger" disabled={m.id === me?.user.id} title={m.id === me?.user.id ? "Non puoi eliminare l'account con cui sei collegato" : 'Elimina definitivamente il membro e tutte le sue chat, file e progetti'}

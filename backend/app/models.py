@@ -77,6 +77,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # scelta sul secondo fattore quando e' facoltativo: "" = non ancora chiesto, "skip" = l'utente ha scelto di non usarlo
+    mfa_choice: Mapped[str] = mapped_column(String(10), default="")
 
     family: Mapped[Family] = relationship(back_populates="members")
     credentials: Mapped[list[WebAuthnCredential]] = relationship(back_populates="user", cascade="all, delete-orphan")

@@ -179,6 +179,9 @@ def passkey_enrollment_needed(ctx: "AuthContext", has_second_factor: bool) -> bo
     (che ha la propria 2FA)."""
     if ctx.user.role == Role.child or not settings.require_mfa_for_adults:
         return False
+    from ..config import mfa_optional_on
+    if mfa_optional_on() and (ctx.user.mfa_choice or "") == "skip":
+        return False   # ha scelto di non usare il 2FA (puo' attivarlo dalle impostazioni)
     return not has_second_factor and ctx.session.auth_method != "google"
 
 

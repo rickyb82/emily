@@ -91,7 +91,9 @@ async def login(body: LoginRequest, request: Request, response: Response, db: As
     # Se ha un secondo fattore deve usarlo; se non ce l'ha entra ma dovra' attivarne uno (se REQUIRE_MFA_FOR_ADULTS).
     await create_session(db, response, user, request, mfa_verified=not has_2fa)
     await audit(db, "login_password", request, user, "mfa_required" if has_2fa else "no_second_factor")
-    return {"status": "mfa_required" if has_2fa else "ok", "must_enroll_passkey": (not has_2fa) and settings.require_mfa_for_adults,
+    from ..config import mfa_optional_on
+    must_enroll = (not has_2fa) and settings.require_mfa_for_adults and not (mfa_optional_on() and (user.mfa_choice or "") == "skip")
+    return {"status": "mfa_required" if has_2fa else "ok", "must_enroll_passkey": must_enroll,
             "methods": {"passkey": has_pk, "totp": has_totp, "passkeys_enabled": __import__("app.config", fromlist=["passkeys_on"]).passkeys_on()}}
 
 
@@ -250,7 +252,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     mfa_required = ctx.user.role != Role.child and (
         not ctx.session.mfa_verified or passkey_enrollment_needed(ctx, u.has_passkey or u.has_totp)
     )
-    from ..config import org_mode_on, passkeys_on
+    from ..config import mfa_optional_on, org_mode_on, passkeys_on
     from ..tools.mcp_client import mcp_manager
     adult = ctx.user.role != Role.child
     features = {"wordcraft_web": bool(settings.wordcraft_web) and adult, "wordcraft_mcp": mcp_manager.is_connected("wordcraft"),
@@ -259,9 +261,24 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "deckcraft_web": bool(settings.deckcraft_web) and adult, "deckcraft_mcp": mcp_manager.is_connected("deckcraft"),
                 "ideacraft_mcp": mcp_manager.is_connected("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and adult,
                 "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft"),
-                "org_mode": org_mode_on(), "passkeys": passkeys_on()}
+                "org_mode": org_mode_on(), "passkeys": passkeys_on(), "mfa_optional": mfa_optional_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
+
+
+@router.post("/mfa/choice")
+async def mfa_choice(body: dict, ctx: AuthContext = Depends(require_adult_for_enrollment), db: AsyncSession = Depends(get_db)):
+    """Primo accesso con 2FA facoltativo: "skip" = entra senza secondo fattore (attivabile dopo dalle impostazioni),
+    "" = torna a chiederlo al prossimo accesso."""
+    from ..config import mfa_optional_on
+    choice = str(body.get("choice") or "")
+    if choice not in ("", "skip"):
+        raise HTTPException(400, "Scelta non valida")
+    if choice == "skip" and not mfa_optional_on():
+        raise HTTPException(400, "Su questo server il secondo fattore e' obbligatorio")
+    ctx.user.mfa_choice = choice
+    await db.commit()
+    return {"ok": True, "mfa_choice": choice}
 
 
 @router.post("/logout")
@@ -270,6 +287,11 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
 
     sid = request.cookies.get(SESSION_COOKIE)
     if sid:
+        sess = await db.get(Session, sid)
+        if sess:
+            u = await db.get(User, sess.user_id)
+            if u:
+                await audit(db, "logout", request, u)
         await db.execute(delete(Session).where(Session.id == sid))
         await db.commit()
     clear_session_cookie(response)
@@ -316,11 +338,11 @@ async def features():
     """Funzioni disponibili alla schermata di login (nessuna autenticazione)."""
     from . import google_auth
 
-    from ..config import org_mode_on, passkeys_on
+    from ..config import mfa_optional_on, org_mode_on, passkeys_on
     return {"email": mailer.email_enabled(),
             "email_mfa": mailer.email_enabled() and str(settings.email_mfa_fallback).lower() in ("1", "true", "yes"),
             "google": google_auth.enabled(), "org_mode": org_mode_on(), "app_name": settings.app_name,
-            "passkeys": passkeys_on()}
+            "passkeys": passkeys_on(), "mfa_optional": mfa_optional_on()}
 
 
 @router.post("/forgot")

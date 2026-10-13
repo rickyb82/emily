@@ -43,6 +43,10 @@ class UserOut(BaseModel):
     is_active: bool
     has_passkey: bool = False
     has_totp: bool = False
+    mfa_choice: str = ""
+    last_login: datetime | None = None
+    last_logout: datetime | None = None
+    active_sessions: int = 0
     policy: dict = {}
     effective_policy: dict = {}
 
