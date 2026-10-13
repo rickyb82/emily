@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { get, patch, type FileOut } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { APP_ICON, APP_LABEL, UI_LANG, editorFor, type ArtApp } from '../lib/artcraft'
+import VersionHistory from '../components/VersionHistory'
 
 /**
  * Editor a tutta pagina: WordCraft (documenti), GridCraft (fogli), PdfCraft (PDF), DeckCraft (presentazioni) o IdeaCraft (mappe), app open source in WebAssembly in un iframe.
@@ -19,7 +20,9 @@ export default function Editor() {
   const [err, setErr] = useState('')
   const [canWrite, setCanWrite] = useState(true)
   const [loaded, setLoaded] = useState(false)
-  const [customName, setCustomName] = useState<string>('')   // nome scelto qui (documento nuovo non ancora salvato)
+  const [customName, setCustomName] = useState<string>('')
+  const [history, setHistory] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)   // nome scelto qui (documento nuovo non ancora salvato)
   const name = file?.filename || customName || params.get('name') || ''
 
   async function rename() {
@@ -124,7 +127,7 @@ export default function Editor() {
     }
     if (canWrite) q.set('save', `/api/files/wordcraft-save?${saveQ.toString()}`)
     return `/${app}/?${q.toString()}`
-  }, [fileId, isNew, name, canWrite, params, app, me?.user.display_name])
+  }, [fileId, isNew, name, canWrite, params, app, me?.user.display_name, reloadKey])
 
   if (!me?.features?.[`${app}_web`]) {
     return (
@@ -148,11 +151,13 @@ export default function Editor() {
           {saved && !dirty && <small className="muted"> · ✓ salvato {saved}</small>}
         </div>
         <div className="row">
+          {!isNew && file && <button className="ghost" onClick={() => setHistory(true)} title="Versioni precedenti del file">🕘 Cronologia</button>}
           {!isNew && <a className="ghost btn-link" href={`/files/${fileId}`} target="_blank" rel="noreferrer">⬇ Scarica</a>}
           <button className="ghost" onClick={() => nav('/documents')}>Chiudi</button>
         </div>
       </header>
       {err && <div className="error">{err}</div>}
+      {history && file && <VersionHistory file={file} canWrite={canWrite} onClose={() => setHistory(false)} onRestored={(f) => { setFile(f); setHistory(false); setReloadKey((k) => k + 1) }} />}
       {ready ? (
         <iframe ref={frame} className="editor-frame" src={src} title={APP_LABEL[app]} allow="clipboard-read; clipboard-write"
           onError={() => setErr(`L'editor non si è caricato: il container ${app}-web è attivo?`)} />

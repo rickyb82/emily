@@ -224,6 +224,21 @@ class FileAsset(Base):
     folder_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
 
+class FileVersion(Base):
+    """Cronologia delle modifiche di un file (come Google Drive): a ogni salvataggio che sovrascrive il contenuto, il
+    contenuto precedente viene messo da parte in data/versions/<file>/ con chi e quando. Le versioni ravvicinate dello
+    stesso autore (salvataggio automatico) vengono accorpate; si tengono le ultime 30."""
+    __tablename__ = "file_versions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    file_id: Mapped[str] = mapped_column(String(32), index=True)
+    author_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    author_name: Mapped[str] = mapped_column(String(120), default="")
+    note: Mapped[str] = mapped_column(String(200), default="")     # "editor", "assistente (write_document)", "ripristino"…
+    path: Mapped[str] = mapped_column(String(500))
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+
+
 class Folder(Base):
     """Cartella di Documenti, creata dall'utente (annidabile). I file dei progetti restano visibili anche come cartelle
     automatiche, questa e' l'organizzazione personale."""

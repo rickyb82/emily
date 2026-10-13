@@ -155,6 +155,37 @@ async def _protect_save_path(server: str, tool: str, args: dict, ctx: ToolContex
     return args
 
 
+async def _snapshot_path(path: str, ctx: ToolContext, note: str) -> None:
+    """Se il percorso e' un file registrato, ne salva la versione attuale nella cronologia prima che venga sovrascritto."""
+    try:
+        from sqlalchemy import select as _select
+
+        from ..models import FileAsset
+        from ..services import versions
+        if not path or not Path(path).is_file():
+            return
+        asset = (await ctx.db.execute(_select(FileAsset).where(FileAsset.path == str(path)))).scalars().first()
+        if asset:
+            await versions.snapshot(ctx.db, asset, ctx.user, note)
+            await ctx.db.commit()
+    except Exception as e:
+        log.debug("snapshot versione di %s saltato: %s", path, e)
+
+
+async def _snapshot_before_save(server: str, tool: str, args: dict, ctx: ToolContext) -> None:
+    from .artcraft import APPS
+    app = APPS[server]
+    cmd = str(args.get("command") or args.get("id") or "")
+    target = ""
+    if tool in app["save_tools"]:
+        target = str(args.get("path") or "")
+    elif tool in ("execute", "run_command", "run") and cmd.startswith("file.save"):
+        prm = args.get("params") or args.get("args")
+        target = str(prm.get("path") or "") if isinstance(prm, dict) else ""
+    if target:
+        await _snapshot_path(target, ctx, f"assistente ({tool})")
+
+
 async def _mail_args(tool: str, args: dict, ctx: ToolContext):
     """MailCraft: gli allegati di send_mail possono essere indicati con l'id di un file della chat (o /files/<id>): li
     traduciamo nel percorso su disco, che il container MailCraft vede in /data. Il percorso di save_attachment deve stare
@@ -452,6 +483,7 @@ class MCPManager:
                     return args
             if server in _ARTCRAFT_APPS:
                 args = await _protect_save_path(server, tool, args, ctx, self._open.get((server, ctx.conversation_id or "")))   # mai sovrascrivere file altrui
+                await _snapshot_before_save(server, tool, args, ctx)   # cronologia versioni: il contenuto precedente va in data/versions
             try:
                 res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=180)
             except Exception as e:
@@ -493,6 +525,7 @@ class MCPManager:
                 # trova il documento aggiornato (il modello spesso mostra l'anteprima e dimentica save_*).
                 if not paths and app["save_tools"] and self._open.get(key) and _mutating(tool):
                     try:
+                        await _snapshot_path(self._open[key], ctx, "assistente")
                         sv = await asyncio.wait_for(conn.session.call_tool(app["save_tools"][0], arguments={"path": self._open[key]}), timeout=60)
                         if not _attr(sv, "isError", "is_error", default=False):
                             art = await register_saved_file(ctx, self._open[key], only_new=True)

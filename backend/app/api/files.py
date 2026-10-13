@@ -197,6 +197,8 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
             return _out(new)
         if not asset.path:
             raise HTTPException(400, "Questo file non e' modificabile")
+        from ..services import versions as _versions
+        await _versions.snapshot(db, asset, ctx.user, "editor")
         Path(asset.path).write_bytes(data)
         asset.filename, asset.mime, asset.size = name, mime, len(data)
     else:
@@ -318,3 +320,41 @@ async def delete_file(fid: str, ctx: AuthContext = Depends(require_auth), db: As
     await db.delete(asset)
     await db.commit()
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------- cronologia delle versioni ----
+@router.get("/files/{fid}/versions")
+async def file_versions(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Le versioni precedenti del file (chi, quando, quanto), dalla piu' recente."""
+    from ..services import versions as _versions
+    asset, _ = await require_access(db, "file", fid, ctx.user)
+    rows = await _versions.list_versions(db, asset.id)
+    return [{"id": v.id, "created_at": v.created_at, "author": v.author_name, "note": v.note, "size": v.size,
+             "url": f"/files/{asset.id}/versions/{v.id}"} for v in rows]
+
+
+@router.get("/files/{fid}/versions/{vid}")
+async def file_version_download(fid: str, vid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    from ..models import FileVersion
+    asset, _ = await require_access(db, "file", fid, ctx.user)
+    v = await db.get(FileVersion, vid)
+    if not v or v.file_id != asset.id or not Path(v.path).is_file():
+        raise HTTPException(404, "Versione non trovata")
+    stem, ext = Path(asset.filename).stem, Path(asset.filename).suffix
+    return FileResponse(v.path, media_type=asset.mime, filename=f"{stem} ({v.created_at.strftime('%Y-%m-%d %H%M')}){ext}",
+                        headers={"Cache-Control": "no-store"})
+
+
+@router.post("/files/{fid}/versions/{vid}/restore", response_model=FileOut)
+async def file_version_restore(fid: str, vid: str, background: BackgroundTasks, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    from ..models import FileVersion
+    from ..services import versions as _versions
+    asset, _ = await require_access(db, "file", fid, ctx.user, write=True)
+    v = await db.get(FileVersion, vid)
+    if not v or v.file_id != asset.id or not Path(v.path).is_file():
+        raise HTTPException(404, "Versione non trovata")
+    await _versions.restore(db, asset, v, ctx.user)
+    asset.extracted_text = None
+    await db.commit()
+    _schedule_reindex(asset.id)
+    return _out(asset)

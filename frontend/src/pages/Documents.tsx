@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import ShareDialog from '../components/ShareDialog'
+import VersionHistory from '../components/VersionHistory'
 import { APP_LABEL, canEdit, editorFor, editorPath, newFilePath, type ArtApp } from '../lib/artcraft'
 
 /**
@@ -51,6 +52,7 @@ export default function Documents() {
   const [menu, setMenu] = useState<{ kind: 'file' | 'folder'; id: string; x: number; y: number } | null>(null)
   const [moveFor, setMoveFor] = useState<FileOut | null>(null)
   const [shareFor, setShareFor] = useState<FileOut | null>(null)
+  const [histFor, setHistFor] = useState<FileOut | null>(null)
   const [dragOver, setDragOver] = useState('')
   const [selected, setSelected] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
@@ -254,6 +256,7 @@ export default function Documents() {
         <ul className="ctx-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <li onClick={() => { setMenu(null); openFile(menuFile) }}>{canEdit(menuFile.filename, feats) ? '✏️ Apri nell\'editor' : '👁 Apri'}</li>
           <li onClick={() => { setMenu(null); window.open(menuFile.url, '_blank') }}>⬇ Scarica</li>
+          <li onClick={() => { setMenu(null); setHistFor(menuFile) }}>🕘 Cronologia…</li>
           {owner(menuFile) && <li onClick={() => { setMenu(null); renameFile(menuFile) }}>✎ Rinomina</li>}
           {owner(menuFile) && <li onClick={() => { setMenu(null); setMoveFor(menuFile) }}>📁 Sposta in…</li>}
           {owner(menuFile) && <li onClick={() => { setMenu(null); setShareFor(menuFile) }}>🔗 Condividi…</li>}
@@ -270,6 +273,7 @@ export default function Documents() {
       )}
 
       {shareFor && <ShareDialog type="file" id={shareFor.id} onClose={() => { setShareFor(null); load() }} />}
+      {histFor && <VersionHistory file={histFor} canWrite={owner(histFor) || histFor.access === 'write'} onClose={() => { setHistFor(null); load() }} />}
 
       {/* "Sposta in…" */}
       {moveFor && (

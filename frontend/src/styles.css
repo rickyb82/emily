@@ -438,3 +438,7 @@ button.small { font-size: 13px; padding: 4px 10px; }
 .editable { cursor: text; border-bottom: 1px dashed var(--border); }
 .editable:hover { border-bottom-color: var(--text); }
 .folder-icon.shared { --folder: #f0b429; }
+
+.version-list { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.version-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.version-list li.current { background: var(--bg); }
