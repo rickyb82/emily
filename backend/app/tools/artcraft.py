@@ -156,7 +156,7 @@ async def register_saved_file(ctx: ToolContext, path: str, only_new: bool = Fals
         if not p.is_file():
             return None
         parents = p.resolve().parents
-        if not any(app_dir(a).resolve() in parents for a in APPS):
+        if not any(app_dir(a).resolve() in parents for a in APPS) and (settings.data_dir / "mailcraft").resolve() not in parents:
             return None
     except OSError:
         return None

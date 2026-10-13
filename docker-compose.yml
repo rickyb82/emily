@@ -246,7 +246,9 @@ services:
       - MAILCRAFT_LANG=it
       - MCP_PORT=7889
     volumes:
-      - ./private/mailcraft:/data
+      - ./private/mailcraft:/mail            # account, password, cache per utente (fuori da ./data)
+      - ./data:/data:ro                      # i file di FamilAI: allegati da inviare (/data/<app>/…)
+      - ./data/mailcraft:/data/mailcraft     # allegati ricevuti salvati con save_attachment: compaiono in chat
     expose: ["7878", "7889"]
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 

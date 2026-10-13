@@ -177,7 +177,7 @@ case "${1:-}" in
     set_env() { if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi; }
     case "${2:-up}" in
       up|build|upgrade)
-        mkdir -p private/mailcraft
+        mkdir -p private/mailcraft data/mailcraft
         if grep -q '^COMPOSE_PROFILES=' .env; then
           grep -q "^COMPOSE_PROFILES=.*mailcraft" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,mailcraft/" .env && rm -f .env.bak; }
         else

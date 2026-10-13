@@ -1,6 +1,6 @@
 # MailCraft (https://github.com/rickyb82/mailcraft): posta elettronica IMAP/SMTP per ogni utente di FamilAI.
-# Un solo container: `mailcraft-cli serve` multi-utente (API + web app WebAssembly, una cartella per utente sotto /data/users)
-# e, su un'altra porta, il server MCP per utente (mailcraft-cli mcp --server … --token <token utente>) esposto via socat:
+# Un solo container: `mailcraft-cli serve` multi-utente (API + web app WebAssembly, una cartella per utente sotto /mail/users;
+# /data e' la cartella file di FamilAI, montata per gli allegati) e, su un'altra porta, il server MCP per utente (mailcraft-cli mcp --server … --token <token utente>) esposto via socat:
 # il backend manda il token dell'utente come prima riga, poi parla MCP (vedi mailcraft-mcp-user.sh).
 # Prima build: 20-40 minuti (compila Rust e WebAssembly); le successive sono rapide grazie alla cache.
 ARG REPO=https://github.com/rickyb82/mailcraft
@@ -31,8 +31,8 @@ COPY --from=build /usr/local/bin/mailcraft-cli /usr/local/bin/mailcraft-cli
 COPY --from=build /src/dist/web /app/web
 COPY mailcraft-start.sh /usr/local/bin/mailcraft-start
 COPY mailcraft-mcp-user.sh /usr/local/bin/mailcraft-mcp-user
-RUN chmod +x /usr/local/bin/mailcraft-start /usr/local/bin/mailcraft-mcp-user && mkdir -p /data/users
-VOLUME ["/data"]
+RUN chmod +x /usr/local/bin/mailcraft-start /usr/local/bin/mailcraft-mcp-user && mkdir -p /mail/users /data/mailcraft
+VOLUME ["/mail"]
 EXPOSE 7878 7889
 ENV MAILCRAFT_TOKEN="" MAILCRAFT_LANG=it MCP_PORT=7889
 CMD ["mailcraft-start"]

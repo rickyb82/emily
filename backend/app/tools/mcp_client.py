@@ -13,6 +13,7 @@ import asyncio
 from pathlib import Path
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -75,6 +76,42 @@ def _mutating(tool: str) -> bool:
     """I tool che cambiano il documento (execute, batch, insert_*, add_*, update_*, delete_*…) fanno scattare il salvataggio
     automatico; quelli di sola lettura o selezione no."""
     return not tool.startswith(_READ_ONLY_PREFIXES) and not tool.startswith(("open_", "new_", "save", "close"))
+
+
+_HEX_ID = re.compile(r"^(?:/files/)?([0-9a-f]{32})(?:\?.*)?$")
+
+
+async def _mail_args(tool: str, args: dict, ctx: ToolContext):
+    """MailCraft: gli allegati di send_mail possono essere indicati con l'id di un file della chat (o /files/<id>): li
+    traduciamo nel percorso su disco, che il container MailCraft vede in /data. Il percorso di save_attachment deve stare
+    in data/mailcraft (l'unica cartella scrivibile per la posta)."""
+    from ..models import FileAsset
+    if tool == "send_mail" and isinstance(args.get("attachments"), list):
+        out = []
+        for a in args["attachments"]:
+            ref = a.get("path") if isinstance(a, dict) else a
+            m = _HEX_ID.match(str(ref or "").strip())
+            if m:
+                asset = await ctx.db.get(FileAsset, m.group(1))
+                if not asset or asset.family_id != ctx.user.family_id or not asset.path:
+                    return ToolResult(f"Allegato {ref} non trovato tra i file della chat.", is_error=True)
+                out.append({"path": asset.path})
+            else:
+                out.append(a if isinstance(a, dict) else {"path": str(a)})
+        args = {**args, "attachments": out}
+    if tool == "save_attachment":
+        base = settings.data_dir / "mailcraft"
+        pth = str(args.get("path") or "")
+        if not pth or not pth.startswith(str(base)):
+            name = Path(pth).name if pth and not pth.endswith("/") else ""
+            args = {**args, "path": str(base / name) if name else str(base)}
+    return args
+
+
+def _harvest_saved(parts: list[str], fallback: str) -> str:
+    """Percorso scritto da save_attachment: dal risultato se c'e' (quando path era una cartella), altrimenti l'argomento."""
+    m = re.search(r"(/data/mailcraft/[^\s\"']+)", "\n".join(parts))
+    return m.group(1) if m else fallback
 
 
 def _describe(e: BaseException) -> str:
@@ -332,11 +369,21 @@ class MCPManager:
                     return ToolResult(f"{server}: sessione utente non disponibile: {type(e).__name__}: {str(e)[:200]}", is_error=True)
                 if not conn.connected or not conn.session:
                     return ToolResult(f"{server}: sessione utente non connessa ({conn.error or 'errore sconosciuto'})", is_error=True)
+            if server == "mailcraft":
+                args = await _mail_args(tool, args, ctx)
+                if isinstance(args, ToolResult):
+                    return args
             try:
                 res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=180)
             except Exception as e:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts, artifacts = await self._collect(res, ctx)
+            if server == "mailcraft" and tool == "save_attachment" and not _attr(res, "isError", "is_error", default=False):
+                from .artcraft import register_saved_file
+                art = await register_saved_file(ctx, _harvest_saved(parts, str(args.get("path") or "")))
+                if art:
+                    artifacts.append(art)
+                    parts.append(f"Allegato {art.get('filename', '')} salvato e mostrato all'utente in chat (id {art['file_id']}).")
             from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file, sidecar_files
             if server in _ARTCRAFT and not _attr(res, "isError", "is_error", default=False):
                 app = _ARTCRAFT[server]

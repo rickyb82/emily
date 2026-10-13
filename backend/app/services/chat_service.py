@@ -224,6 +224,10 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "- Per configurare una casella: suggest_settings con l'indirizzo (conosce Gmail, Outlook, Aruba, PEC, Libero, TIM, Fastweb…), "
             "poi add_account con test=true; se manca la password chiedila (non inventarla) e ricorda che Gmail/Outlook vogliono una "
             "password per le app. Piu' caselle per utente sono normali (default_account in set_preferences).\n"
+            "- Allegati in uscita: in send_mail passa attachments=[{\"path\": \"<id del file in chat>\"}] (l'id accanto all'allegato "
+            "o quello restituito da write_document/mind_map/save_*), oppure il percorso sotto " + str(settings.data_dir) + " di un file "
+            "creato dalle app. Allegati in arrivo: save_attachment con path " + str(settings.data_dir / "mailcraft") + "/<nome> li porta "
+            "in chat come file (poi puoi aprirli con read_document o convertirli con le app).\n"
             "- Riassumi, non copiare intere mail; non leggere o inviare posta di altri membri della famiglia (non puoi comunque)."
         )
     pol = effective_policy(user)
