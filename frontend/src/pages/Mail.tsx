@@ -14,7 +14,14 @@ export default function Mail() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    get<{ token: string; path: string; lang: string }>('/mail/session')
+    // prima il server MailCraft dietro il proxy (/mailcraft/api/health), poi il token: cosi' un container fermo o un proxy non
+    // ricaricato danno un messaggio chiaro invece di una pagina vuota (o di FamilAI annidato in se stesso)
+    fetch('/mailcraft/api/health', { cache: 'no-store' })
+      .then(async (r) => {
+        const ct = r.headers.get('content-type') || ''
+        if (!r.ok || !ct.includes('json')) throw new Error(`il server MailCraft non risponde su /mailcraft/ (HTTP ${r.status}${ct.includes('html') ? ', pagina HTML' : ''}): container attivo? \`./familai.sh mailcraft up\`, poi \`./familai.sh update\` per ricaricare il proxy`)
+        return get<{ token: string; path: string; lang: string }>('/mail/session')
+      })
       .then((r) => setToken(r.token))
       .catch((e) => setErr(e.message))
   }, [])
