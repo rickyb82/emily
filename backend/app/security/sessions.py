@@ -138,7 +138,8 @@ async def require_auth(request: Request, db: AsyncSession = Depends(get_db)) -> 
     if ctx.user.role != Role.child and not ctx.session.mfa_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})
     if ctx.user.role != Role.child and settings.require_mfa_for_adults and ctx.session.auth_method != "google":
-        if not await user_has_second_factor(db, ctx.user):
+        from ..config import mfa_optional_on
+        if not (mfa_optional_on() and (ctx.user.mfa_choice or "") == "skip") and not await user_has_second_factor(db, ctx.user):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Attiva un secondo fattore (passkey o app authenticator) prima di continuare",
                                 headers={"X-MFA": "enroll"})
     return ctx
