@@ -5,5 +5,8 @@ set -eu
 if [ "${MODE:-mcp}" = http ]; then
   exec python3 /usr/local/bin/cli-server.py
 fi
-echo ">> ${APP}-cli mcp ${MCP_ARGS} in ascolto su :${MCP_PORT}"
-exec socat -d "TCP-LISTEN:${MCP_PORT},fork,reuseaddr" "EXEC:${APP}-cli mcp ${MCP_ARGS}"
+# Niente spazio finale se MCP_ARGS e' vuoto: socat lo passerebbe come argomento "" e la CLI proverebbe ad aprire un file senza nome.
+cmd="${APP}-cli mcp"
+[ -n "${MCP_ARGS:-}" ] && cmd="$cmd ${MCP_ARGS}"
+echo ">> $cmd in ascolto su :${MCP_PORT}"
+exec socat -d "TCP-LISTEN:${MCP_PORT},fork,reuseaddr" "EXEC:$cmd"
