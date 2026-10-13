@@ -6,7 +6,7 @@ export const WORDCRAFT_EXT = ['.docx', '.docm', '.dotx', '.doc', '.odt', '.rtf',
 export const GRIDCRAFT_EXT = ['.xlsx', '.xlsm', '.xls', '.xlsb', '.ods', '.csv', '.tsv']
 export const PDFCRAFT_EXT = ['.pdf']
 export const DECKCRAFT_EXT = ['.pptx', '.potx', '.ppsx', '.deckcraft']
-export const IDEACRAFT_EXT = ['.ideacraft.json', '.mm', '.opml', '.xmind', '.mmd']
+export const IDEACRAFT_EXT = ['.ideacraft.json', '.mm', '.opml', '.xmind', '.mmd', '.drawio']
 
 export const APP_LABEL: Record<ArtApp, string> = { wordcraft: 'WordCraft', gridcraft: 'GridCraft', pdfcraft: 'PdfCraft', deckcraft: 'DeckCraft', ideacraft: 'IdeaCraft' }
 export const APP_ICON: Record<ArtApp, string> = { wordcraft: '📝', gridcraft: '📊', pdfcraft: '📕', deckcraft: '📽️', ideacraft: '🧠' }

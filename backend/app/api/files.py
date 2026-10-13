@@ -28,12 +28,12 @@ router = APIRouter(tags=["files"])
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".txt", ".md", ".csv", ".tsv", ".json", ".docx", ".xlsx",
                ".xlsm", ".xls", ".xlsb", ".ods", ".mp4", ".mp3", ".wav", ".m4a", ".py", ".js", ".ts", ".html", ".odt", ".rtf", ".doc", ".tex",
-               ".pptx", ".potx", ".ppsx", ".deckcraft", ".mm", ".opml", ".xmind", ".mmd"}
+               ".pptx", ".potx", ".ppsx", ".deckcraft", ".mm", ".opml", ".xmind", ".mmd", ".drawio"}
 # formati che gli editor nel browser (WordCraft / GridCraft) possono aprire e salvare
 WORDCRAFT_EXT = {".docx", ".docm", ".dotx", ".doc", ".odt", ".rtf", ".txt", ".md", ".html", ".htm", ".tex", ".json", ".pdf", ".png"}
 GRIDCRAFT_EXT = {".xlsx", ".xlsm", ".xls", ".xlsb", ".ods", ".csv", ".tsv", ".txt", ".json", ".html", ".pdf", ".png"}
 DECKCRAFT_EXT = {".pptx", ".potx", ".ppsx", ".deckcraft", ".pdf", ".png", ".jpg", ".jpeg", ".txt"}
-IDEACRAFT_EXT = {".json", ".mm", ".opml", ".md", ".txt", ".mmd", ".xmind"}
+IDEACRAFT_EXT = {".json", ".mm", ".opml", ".md", ".txt", ".mmd", ".xmind", ".drawio"}
 EDITOR_EXT = WORDCRAFT_EXT | GRIDCRAFT_EXT | DECKCRAFT_EXT | IDEACRAFT_EXT
 
 

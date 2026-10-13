@@ -31,7 +31,7 @@ APPS = {
     GRIDCRAFT: {"save_tools": ("save_workbook",), "native_tool": "write_spreadsheet", "formats": ("xlsx", "csv", "tsv", "json", "html")},
     PDFCRAFT: {"save_tools": (), "native_tool": "pdf_tool", "formats": ("pdf",)},
     DECKCRAFT: {"save_tools": ("save_presentation", "export"), "native_tool": "write_presentation", "formats": ("pptx", "pdf", "deckcraft")},
-    IDEACRAFT: {"save_tools": ("save_map",), "native_tool": "mind_map", "formats": ("svg", "json", "mm", "opml", "md")},
+    IDEACRAFT: {"save_tools": ("save_map",), "native_tool": "mind_map", "formats": ("svg", "json", "mm", "opml", "md", "drawio")},
 }
 # app senza MCP servite via HTTP (cli-server.py): nessuna al momento, il meccanismo resta per quelle future
 HTTP_APPS = {a for a, cfg in APPS.items() if cfg.get("kind") == "http"}
@@ -544,7 +544,7 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
     want = [str(f).lower().lstrip(".") for f in (args.get("formats") or ["svg", "json"])]
     want = [f for f in want if f in APPS[IDEACRAFT]["formats"]] or ["svg"]
     base = _safe_name(title, "x")[:-2]
-    exts = {"svg": ".svg", "json": ".ideacraft.json", "mm": ".mm", "opml": ".opml", "md": ".md"}
+    exts = {"svg": ".svg", "json": ".ideacraft.json", "mm": ".mm", "opml": ".opml", "md": ".md", "drawio": ".drawio"}
     try:
         if src_id:
             asset = await _source_asset(ctx, src_id)
@@ -575,7 +575,7 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
         return ToolResult("IdeaCraft non ha prodotto file.", is_error=True)
     names = ", ".join(a.get("filename", "immagine") for a in artifacts)
     return ToolResult(f"Mappa creata con IdeaCraft e mostrata all'utente: {names}. Il .ideacraft.json si apre nell'editor "
-                      f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner. Non inventare link.",
+                      f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner, il .drawio con draw.io/Visio. Non inventare link.",
                       artifacts=artifacts)
 
 
@@ -667,13 +667,15 @@ def register_tools(app: str) -> None:
             "oppure da un file allegato (.mm FreeMind, .xmind, .opml, .md, .mmd Mermaid). Produce l'immagine SVG della mappa "
             "(mostrata in chat) e il .ideacraft.json modificabile nell'editor; a richiesta .mm/.opml/.md. Ottima per "
             "brainstorming, schemi di studio, piani. Per ritocchi puntuali usa i tool mcp__ideacraft__* (open_map, add_idea, "
-            "update_idea, link_ideas, layout, save_map).",
+            "update_idea, link_ideas, layout, save_map). Per DIAGRAMMI (schemi di rete, flowchart, organigrammi, UML/BPMN) non usare "
+            "questo tool: usa mcp__ideacraft__build_map (mode 'diagram', nodi con kind es. net.router/net.switch/flow.decision e props "
+            "ip/vlan/gateway, link con stile) e poi mcp__ideacraft__save_map su .svg e .ideacraft.json (o .drawio).",
             {"type": "object", "properties": {
                 "title": {"type": "string", "description": "Titolo (idea centrale e nome file)"},
                 "outline": {"type": "string", "description": "Outline Markdown annidato"},
                 "layout": {"type": "string", "enum": ["tree", "radial"], "description": "Disposizione (default tree)"},
                 "formats": {"type": "array", "items": {"type": "string", "enum": list(APPS[IDEACRAFT]["formats"])},
-                            "description": "File da produrre (default svg e json = formato nativo, modificabile nell'editor; mm per FreeMind/XMind)"},
+                            "description": "File da produrre (default svg e json = formato nativo, modificabile nell'editor; mm per FreeMind/XMind; drawio per draw.io/Visio)"},
                 "source_file_id": {"type": "string", "description": "Id di un allegato da importare al posto di outline"}},
              "required": []},
         )(mind_map)

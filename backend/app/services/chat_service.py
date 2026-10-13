@@ -195,13 +195,20 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
                if settings.deckcraft_web else ""))
     if mcp_manager.is_connected("ideacraft"):
         parts.append(
-            "\n# Mappe mentali (IdeaCraft)\n"
+            "\n# Mappe mentali e diagrammi (IdeaCraft)\n"
             "- Per mappe mentali, mappe concettuali, brainstorming, schemi di studio o 'una mappa di…' usa mind_map con un outline "
             "Markdown annidato (titolo come idea centrale, rami e sotto-rami come elenco; 'A -> B: perche'' per collegamenti "
             "trasversali). L'immagine della mappa compare in chat; il .mm si apre in FreeMind/Freeplane/XMind. Con source_file_id "
             "converte una mappa allegata (.mm, .xmind, .opml, Mermaid). Per ritocchi (aggiungere/spostare idee, collegamenti) usa i tool "
-            "mcp__ideacraft__* e poi save_map in " + str(settings.data_dir / "ideacraft") + "/<nome>.ideacraft.json."
-            + ("\n- L'utente puo' aprire e modificare la mappa con l'editor IdeaCraft integrato (✏️ accanto al file .ideacraft.json)."
+            "mcp__ideacraft__* e poi save_map in " + str(settings.data_dir / "ideacraft") + "/<nome>.ideacraft.json.\n"
+            "- Per DIAGRAMMI (schema di rete, flowchart, organigramma, architettura, UML/BPMN) usa i tool mcp__ideacraft__*: "
+            "mcp__ideacraft__build_map con mode 'diagram' e un unico spec (nodes con label, kind dagli stencil es. net.router, net.switch, "
+            "net.firewall, net.server, net.pc, net.wifi, net.internet, basic.container, flow.decision, props come ip, vlan, gateway, status; links from/to per "
+            "label con label e style), poi mcp__ideacraft__layout se serve e mcp__ideacraft__save_map in " + str(settings.data_dir / "ideacraft")
+            + "/<nome>.svg (immagine in chat) e .ideacraft.json (modificabile); .drawio per draw.io/Visio. Per gli schemi di rete, dopo "
+            "build_map esegui mcp__ideacraft__validate_network (language 'it') e correggi gli errori (indirizzi, maschere, gateway, VLAN) "
+            "prima di salvare; riporta all'utente i rilievi rimasti. mcp__ideacraft__list_stencils elenca le forme disponibili."
+            + ("\n- L'utente puo' aprire e modificare mappe e diagrammi con l'editor IdeaCraft integrato (✏️ accanto al file .ideacraft.json, .mm, .opml, .drawio)."
                if settings.ideacraft_web else ""))
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
