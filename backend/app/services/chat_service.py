@@ -32,7 +32,7 @@ from ..tools.registry import ToolContext, all_tools, get_tool
 
 log = logging.getLogger(__name__)
 settings = get_settings()
-MAX_TOOL_ROUNDS = 8
+MAX_TOOL_ROUNDS = 40   # giri di tool per turno: documenti con app, mappe e mail ne usano anche 20-30; al limite il modello viene fermato con un avviso visibile
 LOCAL_TOOLS = {"create_artifact", "update_artifact", "list_artifacts", "delete_artifact", "search_documents", "read_document", "ask_model", "remember", "forget"}
 INLINE_DOC_CHARS = settings.rag_inline_max_chars
 
@@ -579,6 +579,14 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             yield sse({"type": "error", "error": err})
             yield sse({"type": "done", "message": _msg_out(amsg)})
             return
+
+        if tool_uses and _round == MAX_TOOL_ROUNDS:
+            # limite di giri raggiunto con altri tool in coda: non li eseguiamo e lo diciamo, invece di chiudere il turno in silenzio
+            note = (f"\n\n⚠️ Mi sono fermato dopo {MAX_TOOL_ROUNDS} passaggi con strumenti (stavo per usare "
+                    f"{', '.join(dict.fromkeys(t['name'] for t in tool_uses))}). Scrivi \"continua\" per farmi riprendere da qui.")
+            tool_uses = []
+            yield sse({"type": "text_delta", "text": note})
+            text_acc += note
 
         blocks: list[dict] = []
         if think_acc and not think_blocks:
