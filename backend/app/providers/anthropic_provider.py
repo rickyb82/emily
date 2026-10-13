@@ -47,7 +47,12 @@ class AnthropicProvider(BaseProvider):
     @staticmethod
     def _convert(messages: list[dict], keep_thinking: bool = False) -> list[dict]:
         out: list[dict] = []
-        for m in messages:
+        # I blocchi thinking firmati vanno rimandati solo per il turno in corso (dall'ultimo messaggio dell'utente in poi):
+        # quelli dei turni passati sono inutili e, dopo una compattazione della cronologia, la firma non combacia piu'
+        # ("Invalid signature in thinking block ... bound to a different conversation").
+        last_user = max((i for i, m in enumerate(messages) if m["role"] == "user"), default=-1)
+        for i, m in enumerate(messages):
+            keep_think = keep_thinking and i > last_user
             blocks = []
             for b in m["content"]:
                 t = b["type"]
@@ -56,9 +61,9 @@ class AnthropicProvider(BaseProvider):
                         blocks.append({"type": "text", "text": b["text"]})
                 elif t == "image":
                     blocks.append({"type": "image", "source": {"type": "base64", "media_type": b["mime"], "data": b["data"]}})
-                elif t == "thinking" and b.get("signature") and keep_thinking:
+                elif t == "thinking" and b.get("signature") and keep_think:
                     blocks.append({"type": "thinking", "thinking": b.get("thinking") or b.get("text", ""), "signature": b["signature"]})
-                elif t == "redacted_thinking" and b.get("data") and keep_thinking:
+                elif t == "redacted_thinking" and b.get("data") and keep_think:
                     blocks.append({"type": "redacted_thinking", "data": b["data"]})
                 elif t == "tool_use":
                     blocks.append({"type": "tool_use", "id": b["id"], "name": b["name"], "input": b["input"]})
@@ -122,9 +127,16 @@ class AnthropicProvider(BaseProvider):
                 stream_cm = client.messages.stream(**kwargs)
                 s = await stream_cm.__aenter__()
             elif self.thinking and "thinking" in msg.lower():
-                # modello senza supporto al ragionamento: riprova senza
+                # modello senza supporto al ragionamento, o firme dei blocchi thinking non piu' valide: riprova senza
+                # ragionamento e senza i blocchi thinking nella cronologia
                 kwargs.pop("thinking", None)
                 kwargs.pop("output_config", None)
+                if "signature" in msg.lower():
+                    kwargs["messages"] = self._convert(messages, keep_thinking=False)
+                    for m in reversed(kwargs["messages"]):
+                        if m["role"] == "user":
+                            m["content"][-1] = {**m["content"][-1], "cache_control": cache}
+                            break
                 stream_cm = client.messages.stream(**kwargs)
                 s = await stream_cm.__aenter__()
             else:
