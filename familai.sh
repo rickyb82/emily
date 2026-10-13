@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Gestione FamilAI: stesso script sul Mac (anteprima) e sulla macchina Ubuntu (produzione).
 #   ./familai.sh dev        avvia in locale su http://localhost:8080 (senza certificati)
-#   ./familai.sh prod       avvia in produzione (HTTPS con il dominio del .env)
+#   ./familai.sh prod       avvia in produzione (HTTPS: certificato pubblico, o CA interna con TLS_MODE=internal per la rete locale)
+#   ./familai.sh ca-cert    esporta la CA interna (data/emily-ca.crt) da installare sui PC quando TLS_MODE=internal
 #   ./familai.sh update     aggiorna: git pull + rebuild + riavvio (solo i servizi cambiati) + backup automatico
 #   ./familai.sh stop|logs|status|backup|restore <file>|shell
 #   ./familai.sh reset-passkey EMAIL     emergenza: rimuove le passkey di un utente (rientri con la password)
@@ -76,9 +77,25 @@ case "${1:-}" in
     echo ">> Emily in anteprima su http://localhost:8080${ip:+  (dagli altri PC della rete: http://$ip:8080)}  (log: ./familai.sh logs)";;
   prod)
     need_env; echo prod > "$MODE_FILE"
-    grep -q "PUBLIC_HOST=familai.example.com" .env && { echo "!! Imposta PUBLIC_HOST, ACME_EMAIL e WEBAUTHN_* nel .env prima della produzione"; exit 1; }
+    grep -q "PUBLIC_HOST=familai.example.com" .env && { echo "!! Imposta PUBLIC_HOST (nome DNS o IP del server), ACME_EMAIL e WEBAUTHN_* nel .env prima della produzione"; exit 1; }
     compose up -d --build
-    echo ">> FamilAI in produzione su https://$(grep ^PUBLIC_HOST= .env | cut -d= -f2)";;
+    host=$(grep ^PUBLIC_HOST= .env | cut -d= -f2)
+    echo ">> Emily in produzione su https://$host"
+    if grep -q '^TLS_MODE=internal' .env; then
+      echo ">> TLS con CA interna: sui PC va installata la CA (./familai.sh ca-cert → data/emily-ca.crt)"
+    else
+      echo ">> Certificato pubblico automatico: $host deve risolvere su questo server e le porte 80/443 devono essere raggiungibili da internet"
+    fi;;
+  ca-cert)
+    # Esporta la CA interna di Caddy (TLS_MODE=internal) da installare come autorita' attendibile su PC, Mac e telefoni
+    need_env
+    mkdir -p data
+    compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt > data/emily-ca.crt 2>/dev/null \
+      && echo ">> CA salvata in data/emily-ca.crt. Installala come 'autorita' di certificazione radice attendibile':" \
+      && echo "   macOS: doppio clic → Accesso Portachiavi → Sistema → fidati sempre;  Windows: certmgr → Autorita' radice attendibili;" \
+      && echo "   iPhone/iPad: invia il file, Impostazioni → Profilo scaricato → installa, poi Generali → Info → Impostazioni certificati → abilita;" \
+      && echo "   Android: Impostazioni → Sicurezza → Credenziali → installa certificato CA." \
+      || echo "!! Caddy non e' in esecuzione in modalita' prod con TLS_MODE=internal";;
   update)
     need_env
     if [ -d .git ] && git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then

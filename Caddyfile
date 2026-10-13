@@ -3,6 +3,8 @@
 }
 
 {$PUBLIC_HOST} {
+    # TLS_MODE=acme (default: certificati pubblici automatici) oppure internal (CA interna di Caddy, rete locale / IP)
+    import /etc/caddy/tls/{$TLS_MODE:acme}.caddy
 
     # Header di sicurezza
     header {
