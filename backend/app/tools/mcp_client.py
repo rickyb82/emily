@@ -52,6 +52,14 @@ class Connection:
     connected: bool = False
 
 
+def _describe(e: BaseException) -> str:
+    """Errore leggibile: un ExceptionGroup (anyio/mcp) viene aperto fino alle eccezioni vere."""
+    group = getattr(e, "exceptions", None)
+    if group:
+        return "; ".join(_describe(x) for x in group[:3])
+    return f"{type(e).__name__}: {str(e)[:300]}"
+
+
 class MCPManager:
     def __init__(self):
         self.conns: dict[str, Connection] = {}
@@ -187,8 +195,8 @@ class MCPManager:
                     log.info("MCP %s: connesso, %d tool", cfg.name, len(conn.tools))
                     await conn.stop.wait()
         except Exception as e:
-            conn.error = f"{type(e).__name__}: {str(e)[:300]}"
-            log.error("MCP %s: %s", cfg.name, conn.error)
+            conn.error = _describe(e)
+            log.error("MCP %s: %s", cfg.name, conn.error, exc_info=True)
         finally:
             conn.connected = False
             conn.session = None
