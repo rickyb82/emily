@@ -72,7 +72,8 @@ case "${1:-}" in
   dev)
     need_env; echo dev > "$MODE_FILE"
     compose up -d --build
-    echo ">> FamilAI in anteprima su http://localhost:8080  (log: ./familai.sh logs)";;
+    ip=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
+    echo ">> Emily in anteprima su http://localhost:8080${ip:+  (dagli altri PC della rete: http://$ip:8080)}  (log: ./familai.sh logs)";;
   prod)
     need_env; echo prod > "$MODE_FILE"
     grep -q "PUBLIC_HOST=familai.example.com" .env && { echo "!! Imposta PUBLIC_HOST, ACME_EMAIL e WEBAUTHN_* nel .env prima della produzione"; exit 1; }

@@ -1,10 +1,11 @@
-# Profilo sviluppo/anteprima locale: http://localhost:8080, nessun certificato.
-# http://localhost e' un "secure context" per il browser: le passkey funzionano lo stesso.
+# Profilo sviluppo/anteprima locale: http://localhost:8080, nessun certificato. Risponde su qualsiasi nome host (:8080),
+# cosi' si raggiunge anche dagli altri PC della rete con http://<ip-del-mac>:8080.
+# http://localhost e' un "secure context" per il browser: le passkey funzionano lo stesso (da altri PC in http no: usare l'app authenticator).
 {
     auto_https off
 }
 
-http://localhost:8080 {
+http://:8080 {
     # Niente compressione su /api: con lo streaming SSE la compressione fa arrivare la risposta a blocchi.
     handle /api/* {
         reverse_proxy backend:8000 {
