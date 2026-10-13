@@ -52,6 +52,16 @@ class Connection:
     connected: bool = False
 
 
+def _attr(obj, *names, default=None):
+    """Campo di un oggetto della libreria mcp: camelCase (mcp 1.x: inputSchema, isError, mimeType) o snake_case (versioni
+    successive: input_schema, is_error, mime_type). Cosi' un aggiornamento della libreria non spegne i server MCP."""
+    for n in names:
+        v = getattr(obj, n, None)
+        if v is not None:
+            return v
+    return default
+
+
 def _describe(e: BaseException) -> str:
     """Errore leggibile: un ExceptionGroup (anyio/mcp) viene aperto fino alle eccezioni vere."""
     group = getattr(e, "exceptions", None)
@@ -182,7 +192,7 @@ class MCPManager:
                         conn.tools.append({"name": t.name, "description": t.description or ""})
                         register_tool(Tool(
                             spec=ToolSpec(full, f"[MCP {cfg.name}] {t.description or t.name}",
-                                          t.inputSchema or {"type": "object", "properties": {}}),
+                                          _attr(t, "inputSchema", "input_schema") or {"type": "object", "properties": {}}),
                             fn=self._make_caller(cfg.name, t.name),
                         ))
                     conn.session = session
@@ -219,7 +229,7 @@ class MCPManager:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts, artifacts = await self._collect(res, ctx)
             from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file
-            if server in _ARTCRAFT and not res.isError:
+            if server in _ARTCRAFT and not _attr(res, "isError", "is_error", default=False):
                 paths: list[str] = []
                 if tool in _ARTCRAFT[server]["save_tools"]:
                     paths = [str(args.get("path") or "")]
@@ -230,7 +240,7 @@ class MCPManager:
                     if art:
                         artifacts.append(art)
                         parts.append(f"File {art.get('filename', '')} salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
-            return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(res.isError), artifacts=artifacts or None)
+            return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(_attr(res, "isError", "is_error", default=False)), artifacts=artifacts or None)
         return call
 
     async def _collect(self, res, ctx: ToolContext) -> tuple[list[str], list[dict]]:
@@ -247,7 +257,7 @@ class MCPManager:
                     import base64
 
                     from .media import _save_generated
-                    mime = getattr(c, "mimeType", "") or "image/png"
+                    mime = _attr(c, "mimeType", "mime_type", default="") or "image/png"
                     ext = "jpg" if "jpeg" in mime else mime.split("/")[-1] or "png"
                     asset = await _save_generated(ctx, base64.b64decode(c.data), ext, mime, "anteprima")
                     artifacts.append({"type": "image", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": mime})
@@ -265,7 +275,7 @@ class MCPManager:
             raise RuntimeError(f"server MCP {server} non connesso")
         res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=timeout)
         text = "\n".join(c.text for c in res.content if getattr(c, "type", "") == "text")
-        if res.isError:
+        if _attr(res, "isError", "is_error", default=False):
             raise RuntimeError(text[:500] or f"{tool} fallito")
         return text
 
@@ -275,7 +285,7 @@ class MCPManager:
         if not conn or not conn.connected or not conn.session:
             raise RuntimeError(f"server MCP {server} non connesso")
         res = await asyncio.wait_for(conn.session.call_tool(tool, arguments=args), timeout=timeout)
-        if res.isError:
+        if _attr(res, "isError", "is_error", default=False):
             raise RuntimeError("\n".join(c.text for c in res.content if getattr(c, "type", "") == "text")[:500] or f"{tool} fallito")
         return res
 
