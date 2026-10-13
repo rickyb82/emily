@@ -10,6 +10,7 @@ vengono importati i server di `mcp_servers.json`.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import json
 import logging
 from dataclasses import dataclass, field
@@ -62,6 +63,16 @@ def _attr(obj, *names, default=None):
     return default
 
 
+_READ_ONLY_PREFIXES = ("list_", "get_", "inspect", "render", "read_", "describe", "search", "find", "validate", "export",
+                       "select_", "help", "info", "preview", "snapshot")
+
+
+def _mutating(tool: str) -> bool:
+    """I tool che cambiano il documento (execute, batch, insert_*, add_*, update_*, delete_*…) fanno scattare il salvataggio
+    automatico; quelli di sola lettura o selezione no."""
+    return not tool.startswith(_READ_ONLY_PREFIXES) and not tool.startswith(("open_", "new_", "save", "close"))
+
+
 def _describe(e: BaseException) -> str:
     """Errore leggibile: un ExceptionGroup (anyio/mcp) viene aperto fino alle eccezioni vere."""
     group = getattr(e, "exceptions", None)
@@ -72,6 +83,7 @@ def _describe(e: BaseException) -> str:
 
 class MCPManager:
     def __init__(self):
+        self._open: dict[tuple[str, str], str] = {}   # (server, conversazione) -> file aperto con i tool MCP
         self.conns: dict[str, Connection] = {}
 
     # ---------------- ciclo di vita ----------------
@@ -228,18 +240,44 @@ class MCPManager:
             except Exception as e:
                 return ToolResult(f"Errore MCP: {type(e).__name__}: {e}", is_error=True)
             parts, artifacts = await self._collect(res, ctx)
-            from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file
+            from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file, sidecar_files
             if server in _ARTCRAFT and not _attr(res, "isError", "is_error", default=False):
+                app = _ARTCRAFT[server]
+                key = (server, ctx.conversation_id or "")
                 paths: list[str] = []
-                if tool in _ARTCRAFT[server]["save_tools"]:
-                    paths = [str(args.get("path") or "")]
-                elif not _ARTCRAFT[server]["save_tools"]:   # PdfCraft: i percorsi scritti stanno nel risultato
+                cmd = str(args.get("command") or args.get("id") or "")
+                if tool in app["save_tools"]:
+                    paths = [str(args.get("path") or self._open.get(key) or "")]
+                elif tool in ("execute", "run_command", "run") and cmd.startswith("file.save"):
+                    # Salva/Salva con nome passati come comando generico: il percorso sta nei parametri
+                    prm = args.get("params") or args.get("args") or {}
+                    paths = [str((prm.get("path") if isinstance(prm, dict) else "") or self._open.get(key) or "")]
+                elif not app["save_tools"]:   # PdfCraft: i percorsi scritti stanno nel risultato
                     paths = harvest_paths("\n".join(parts))
+                if tool.startswith("open_") and args.get("path"):
+                    self._open[key] = str(args["path"])
+                elif tool.startswith("new_"):
+                    self._open.pop(key, None)
                 for pth in paths:
-                    art = await register_saved_file(ctx, pth)
-                    if art:
-                        artifacts.append(art)
-                        parts.append(f"File {art.get('filename', '')} salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
+                    if pth:
+                        self._open[key] = pth
+                    for extra in [pth] + sidecar_files(pth):
+                        art = await register_saved_file(ctx, extra)
+                        if art:
+                            artifacts.append(art)
+                            parts.append(f"File {art.get('filename', '')} salvato e mostrato all'utente come allegato scaricabile (id {art['file_id']}).")
+                # Salvataggio automatico: ogni modifica fatta con i tool MCP finisce subito sul file aperto, cosi' l'utente
+                # trova il documento aggiornato (il modello spesso mostra l'anteprima e dimentica save_*).
+                if not paths and app["save_tools"] and self._open.get(key) and _mutating(tool):
+                    try:
+                        sv = await asyncio.wait_for(conn.session.call_tool(app["save_tools"][0], arguments={"path": self._open[key]}), timeout=60)
+                        if not _attr(sv, "isError", "is_error", default=False):
+                            art = await register_saved_file(ctx, self._open[key], only_new=True)
+                            if art:
+                                artifacts.append(art)
+                            parts.append(f"(file salvato automaticamente: {Path(self._open[key]).name})")
+                    except Exception as e:  # il salvataggio automatico non deve far fallire la modifica
+                        log.warning("MCP %s: salvataggio automatico di %s fallito: %s", server, self._open.get(key), e)
             return ToolResult("\n".join(parts) or "(vuoto)", is_error=bool(_attr(res, "isError", "is_error", default=False)), artifacts=artifacts or None)
         return call
 

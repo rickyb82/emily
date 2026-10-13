@@ -130,8 +130,25 @@ def _unique(path: Path) -> Path:
     return path if not path.exists() else path.with_name(f"{path.stem}-{uuid.uuid4().hex[:6]}{path.suffix}")
 
 
-async def register_saved_file(ctx: ToolContext, path: str) -> dict | None:
-    """Un file salvato da un'app nella sua cartella <DATA_DIR>/<app> diventa un FileAsset della chat (scaricabile)."""
+def sidecar_files(path: str) -> list[str]:
+    """File da registrare accanto a quello salvato: per un SVG di IdeaCraft anche un PNG (WordCraft/DeckCraft inseriscono
+    immagini raster; l'SVG resta per l'editor e il web)."""
+    if not path or not path.lower().endswith(".svg"):
+        return []
+    png = path[:-4] + ".png"
+    try:
+        import cairosvg
+
+        cairosvg.svg2png(url=path, write_to=png, output_width=1600, background_color="white")
+        return [png]
+    except Exception as e:   # cairosvg assente o SVG non convertibile: resta solo l'SVG
+        log.info("PNG da %s non generato: %s", path, e)
+        return []
+
+
+async def register_saved_file(ctx: ToolContext, path: str, only_new: bool = False) -> dict | None:
+    """Un file salvato da un'app nella sua cartella <DATA_DIR>/<app> diventa un FileAsset della chat (scaricabile).
+    Con only_new, un file gia' registrato viene aggiornato (dimensione) ma non restituito (niente allegati doppi in chat)."""
     if not path:
         return None
     p = Path(path)
@@ -149,6 +166,9 @@ async def register_saved_file(ctx: ToolContext, path: str) -> dict | None:
     if existing:   # stesso file risalvato: aggiorna la voce invece di duplicarla
         existing.size, existing.filename, existing.mime = p.stat().st_size, p.name, mime
         asset = existing
+        if only_new:
+            await ctx.db.commit()
+            return None
     else:
         asset = FileAsset(id=uuid.uuid4().hex, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
                           conversation_id=ctx.conversation_id, filename=p.name, mime=mime, size=p.stat().st_size,
@@ -565,9 +585,10 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
         for fmt in want:
             out = _unique(app_dir(IDEACRAFT) / f"{base}{exts[fmt]}")
             await mcp_manager.call(IDEACRAFT, "save_map", {"path": str(out)})
-            art = await register_saved_file(ctx, str(out))
-            if art:
-                artifacts.append(art)
+            for extra in [str(out)] + sidecar_files(str(out)):
+                art = await register_saved_file(ctx, extra)
+                if art:
+                    artifacts.append(art)
     except Exception as e:
         log.warning("mind_map fallito: %s", e)
         return ToolResult(f"IdeaCraft: {type(e).__name__}: {str(e)[:400]}", is_error=True)
@@ -575,7 +596,8 @@ async def mind_map(args: dict, ctx: ToolContext) -> ToolResult:
         return ToolResult("IdeaCraft non ha prodotto file.", is_error=True)
     names = ", ".join(a.get("filename", "immagine") for a in artifacts)
     return ToolResult(f"Mappa creata con IdeaCraft e mostrata all'utente: {names}. Il .ideacraft.json si apre nell'editor "
-                      f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner, il .drawio con draw.io/Visio. Non inventare link.",
+                      f"integrato (✏️ Modifica), il .mm con FreeMind/Freeplane/XMind, l'.opml con qualsiasi outliner, il .drawio con draw.io/Visio. "
+                      f"Per inserire la mappa in un documento Word o in una slide usa il file .png (stesso nome dell'SVG). Non inventare link.",
                       artifacts=artifacts)
 
 

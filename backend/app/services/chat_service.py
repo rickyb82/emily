@@ -156,7 +156,11 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "- Per convertire o modificare un allegato passa source_file_id (l'id e' indicato accanto all'allegato).\n"
             "- Per interventi precisi (stili, tabelle, intestazioni, revisioni, anteprima di una pagina) usa i tool mcp__wordcraft__*: "
             "open_document con il percorso del file, list_commands per trovare il comando, execute/batch, render_page per "
-            "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile)."
+            "vedere il risultato, save_document in " + str(settings.data_dir / "wordcraft") + "/<nome>.<ext> (l'unica cartella scrivibile). "
+            "Dopo open_document ogni modifica viene salvata automaticamente sullo stesso file: l'anteprima (render_page) NON e' il "
+            "file, e per dare all'utente un file con un altro nome usa save_document con il nuovo percorso. Le immagini si "
+            "inseriscono con insert.picture da un PNG/JPG presente in data/ (per una mappa IdeaCraft usa il .png, non l'.svg); non "
+            "chiedere mai all'utente di inserire a mano cio' che puoi fare tu."
             + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
                "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
     if mcp_manager.is_connected("gridcraft"):
@@ -597,6 +601,13 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
           for tu in tool_uses:
               yield sse({"type": "tool_start", "id": tu["id"], "name": tu["name"], "input": tu["input"]})
               tool = get_tool(tu["name"])
+              if not tool and "__" not in tu["name"]:
+                  # Il modello chiama un tool MCP con il nome nudo (save_document invece di mcp__wordcraft__save_document):
+                  # se corrisponde a un solo server connesso lo instradiamo noi.
+                  cands = [n for n in all_tools() if n.startswith("mcp__") and n.endswith("__" + tu["name"])]
+                  if len(cands) == 1:
+                      tu["name"] = cands[0]
+                      tool = get_tool(cands[0])
               if not tool or not tool_allowed(policy, tu["name"]):
                   res_content, is_err, artifacts = "Strumento non disponibile", True, None
               else:
