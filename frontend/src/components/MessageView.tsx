@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import { canEdit, editorPath } from '../lib/artcraft'
 import type { Message } from '../lib/api'
 import { useEffect, useState } from 'react'
+import ShareDialog from './ShareDialog'
 import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
 
 const TOOL_LABELS: Record<string, string> = {
@@ -122,6 +123,7 @@ function inputSummary(name: string, input: any): string {
 /** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
 function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
   const [open, setOpen] = useState(false)
+  const [shareFile, setShareFile] = useState<string | null>(null)
   const feats = useAuth().me?.features
   const running = b.status === 'running'
   const err = !!b.is_error
@@ -148,11 +150,13 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
           <span key={j} className="chip">
             <a href={a.url} target="_blank" rel="noreferrer">📄 {a.filename}</a>
             {a.file_id && canEdit(a.filename, feats) && <Link to={editorPath(a.file_id, a.filename)} title="Apri nell'editor" style={{ marginLeft: 6 }}>✏️ Modifica</Link>}
+            {a.file_id && <button className="icon" title="Condividi il file con altri utenti (lettura o modifica)" style={{ marginLeft: 4 }} onClick={() => setShareFile(a.file_id)}>🔗</button>}
           </span>
         ) : a.type === 'artifact_deleted' ? (
           <div key={j} className="muted small" style={{ padding: '0 10px 8px' }}>🗑 Eliminato: {a.title}</div>
         ) : null,
       )}
+      {shareFile && <ShareDialog type="file" id={shareFile} onClose={() => setShareFile(null)} />}
       {open && (
         <div className="step-body">
           {b.input && Object.keys(b.input).length > 0 && (

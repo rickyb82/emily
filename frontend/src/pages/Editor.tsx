@@ -48,7 +48,7 @@ export default function Editor() {
       const f = all.find((x) => x.id === fileId)
       if (f) {
         setFile(f)
-        setCanWrite(f.owner_id === me?.user.id)
+        setCanWrite(f.owner_id === me?.user.id || f.access === 'write')
       }
     }).catch(() => {}).finally(() => setLoaded(true))
     // anche un file non in elenco (es. di un progetto condiviso) si apre: il download controlla i permessi

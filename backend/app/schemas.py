@@ -207,6 +207,8 @@ class FileOut(BaseModel):
     index_status: str = "none"
     chunk_count: int = 0
     folder_id: str | None = None
+    access: str = "owner"          # owner | write | read | parent: cosa puo' farci chi ha chiesto l'elenco
+    owner_name: str = ""
     url: str = ""
 
     model_config = {"from_attributes": True}

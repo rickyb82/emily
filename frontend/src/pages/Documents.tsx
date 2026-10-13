@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import ShareDialog from '../components/ShareDialog'
 import { APP_LABEL, canEdit, editorFor, editorPath, newFilePath, type ArtApp } from '../lib/artcraft'
 
 /**
@@ -48,6 +49,7 @@ export default function Documents() {
   const [appsOpen, setAppsOpen] = useState(false)
   const [menu, setMenu] = useState<{ kind: 'file' | 'folder'; id: string; x: number; y: number } | null>(null)
   const [moveFor, setMoveFor] = useState<FileOut | null>(null)
+  const [shareFor, setShareFor] = useState<FileOut | null>(null)
   const [dragOver, setDragOver] = useState('')
   const [selected, setSelected] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
@@ -242,6 +244,7 @@ export default function Documents() {
           <li onClick={() => { setMenu(null); window.open(menuFile.url, '_blank') }}>⬇ Scarica</li>
           {owner(menuFile) && <li onClick={() => { setMenu(null); renameFile(menuFile) }}>✎ Rinomina</li>}
           {owner(menuFile) && <li onClick={() => { setMenu(null); setMoveFor(menuFile) }}>📁 Sposta in…</li>}
+          {owner(menuFile) && <li onClick={() => { setMenu(null); setShareFor(menuFile) }}>🔗 Condividi…</li>}
           {menuFile.conversation_id && <li onClick={() => { setMenu(null); nav(`/c/${menuFile.conversation_id}`) }}>💬 Vai alla chat</li>}
           {owner(menuFile) && <li className="danger" onClick={() => { setMenu(null); removeFile(menuFile) }}>🗑 Elimina</li>}
         </ul>
@@ -253,6 +256,8 @@ export default function Documents() {
           <li className="danger" onClick={() => { setMenu(null); deleteFolder(menuFolder) }}>🗑 Elimina cartella</li>
         </ul>
       )}
+
+      {shareFor && <ShareDialog type="file" id={shareFor.id} onClose={() => { setShareFor(null); load() }} />}
 
       {/* "Sposta in…" */}
       {moveFor && (
@@ -295,7 +300,7 @@ export default function Documents() {
         onContextMenu={(e) => { e.preventDefault(); setMenu({ kind: 'file', id: f.id, x: e.clientX, y: e.clientY }) }} title={`${f.filename} · ${(f.size / 1024).toFixed(0)} KB`}>
         <FileIcon name={f.filename} mime={f.mime} />
         <span className="tile-name">{f.filename}</span>
-        <small className="muted">{new Date(f.created_at).toLocaleDateString()}{f.project_id && !projectId && projName(f.project_id) ? ` · ${projName(f.project_id)}` : ''}{!owner(f) ? ' · condiviso' : ''}</small>
+        <small className="muted">{new Date(f.created_at).toLocaleDateString()}{f.project_id && !projectId && projName(f.project_id) ? ` · ${projName(f.project_id)}` : ''}{!owner(f) ? ` · da ${f.owner_name || 'altri'}${f.access === 'write' ? ' (modifica)' : ''}` : ''}</small>
         <span className="tile-menu" onClick={(e) => { e.stopPropagation(); setMenu({ kind: 'file', id: f.id, x: e.clientX, y: e.clientY }) }}>⋯</span>
       </button>
     )

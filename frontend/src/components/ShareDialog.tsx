@@ -65,14 +65,14 @@ export default function ShareDialog({ type, id, onClose }: { type: 'conversation
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal stack" onClick={(e) => e.stopPropagation()}>
-        <h3>Condividi</h3>
+        <h3>Condividi {type === 'file' ? 'il file' : type === 'project' ? 'il progetto' : 'la chat'}</h3>
         {err && <div className="error">{err}</div>}
         <div className="share-search">
           <div className="row" style={{ gap: 6 }}>
             <input autoFocus placeholder="Nome o email della persona…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} style={{ flex: 1 }} />
             <select value={perm} onChange={(e) => setPerm(e.target.value as any)}>
               <option value="read">può vedere</option>
-              {type !== 'file' && <option value="write">può modificare</option>}
+              <option value="write">può modificare</option>
             </select>
           </div>
           {hits.length > 0 && (
@@ -93,7 +93,7 @@ export default function ShareDialog({ type, id, onClose }: { type: 'conversation
             <select value={everyone?.permission ?? 'none'} onChange={(e) => (e.target.value === 'none' ? everyone && unshare(everyone) : share(null, e.target.value))}>
               <option value="none">—</option>
               <option value="read">può vedere</option>
-              {type !== 'file' && <option value="write">può modificare</option>}
+              <option value="write">può modificare</option>
             </select>
           </div>
           {shares.filter((s) => s.target_user_id).map((s) => (
@@ -102,7 +102,7 @@ export default function ShareDialog({ type, id, onClose }: { type: 'conversation
               <span className="row" style={{ gap: 4 }}>
                 <select value={s.permission} onChange={(e) => share(s.target_user_id, e.target.value)}>
                   <option value="read">può vedere</option>
-                  {type !== 'file' && <option value="write">può modificare</option>}
+                  <option value="write">può modificare</option>
                 </select>
                 <button className="icon" title="Togli l'accesso" onClick={() => unshare(s)}>✕</button>
               </span>

@@ -159,4 +159,6 @@ export interface FileOut {
   index_status: 'none' | 'pending' | 'indexed' | 'failed'
   chunk_count: number
   folder_id?: string | null
+  access?: 'owner' | 'write' | 'read' | 'parent'
+  owner_name?: string
 }

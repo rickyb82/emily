@@ -269,15 +269,30 @@ async def list_files(project_id: str | None = None, ctx: AuthContext = Depends(r
         await require_access(db, "project", project_id, ctx.user)
         rows = (await db.execute(select(FileAsset).where(FileAsset.project_id == project_id)
                                  .order_by(FileAsset.created_at.desc()))).scalars().all()
-        return [_out(f) for f in rows]
+        from ..services.access import access_level
+        out = []
+        for f in rows:
+            o = _out(f)
+            o.access = "owner" if f.owner_id == ctx.user.id else (await access_level(db, "file", f, ctx.user) or "read")
+            out.append(o)
+        return out
     shared_ids = (await db.execute(select(Share.resource_id).where(
         Share.resource_type == "file", Share.family_id == ctx.user.family_id,
         or_(Share.target_user_id == ctx.user.id, Share.target_user_id.is_(None))))).scalars().all()
     rows = (await db.execute(select(FileAsset).where(
         FileAsset.family_id == ctx.user.family_id,
         or_(FileAsset.owner_id == ctx.user.id, FileAsset.id.in_(shared_ids or ["-"]))
-    ).order_by(FileAsset.created_at.desc()).limit(200))).scalars().all()
-    return [_out(f) for f in rows]
+    ).order_by(FileAsset.created_at.desc()).limit(300))).scalars().all()
+    from ..models import User as _U
+    from ..services.access import access_level
+    names = dict((await db.execute(select(_U.id, _U.display_name).where(_U.family_id == ctx.user.family_id))).all())
+    out = []
+    for f in rows:
+        o = _out(f)
+        o.access = "owner" if f.owner_id == ctx.user.id else (await access_level(db, "file", f, ctx.user) or "read")
+        o.owner_name = names.get(f.owner_id, "")
+        out.append(o)
+    return out
 
 
 @router.get("/files/{fid}")
