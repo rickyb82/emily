@@ -288,7 +288,7 @@ services:
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
   remotecraft-mcp:
-    build: { context: extras/artcraft, dockerfile: Dockerfile.remotecraft-mcp }
+    build: { context: extras/artcraft, dockerfile: Dockerfile.remotecraft-mcp, args: { REF: "${REMOTECRAFT_REF:-main}" } }
     image: familai-remotecraft-mcp
     profiles: ["remotecraft"]
     restart: unless-stopped

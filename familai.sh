@@ -254,8 +254,7 @@ case "${1:-}" in
           set_env REMOTECRAFT_REF "$sha"
         fi
         echo ">> Build di RemoteCraft dal repository (compila Rust + WebAssembly: la prima volta anche 20-40 minuti)…"
-        DOCKER_BUILDKIT=1 compose --profile remotecraft build remotecraft
-        DOCKER_BUILDKIT=1 compose --profile remotecraft build remotecraft-mcp
+        DOCKER_BUILDKIT=1 compose --profile remotecraft build remotecraft remotecraft-mcp
         compose --profile remotecraft up -d remotecraft remotecraft-mcp
         compose up -d --build backend
         compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true

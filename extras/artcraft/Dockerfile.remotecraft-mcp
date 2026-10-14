@@ -1,13 +1,26 @@
-# Ponte MCP per utente di RemoteCraft: riusa l'immagine del server (familai-remotecraft, costruita dal repository con il suo
-# Dockerfile) e vi aggiunge socat: il backend manda il token del tecnico come prima riga, poi parla MCP con
-# `remotecraft-cli mcp --server http://remotecraft:7979 --token <token>`. Va costruita DOPO familai-remotecraft.
-FROM familai-remotecraft
-USER root
-RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf /var/lib/apt/lists/*
+# Ponte MCP per utente di RemoteCraft: compila solo la CLI (remotecraft-cli) dal repository, con la cache di cargo, e la espone
+# via socat: il backend manda il token del tecnico come prima riga, poi parla MCP con
+# `remotecraft-cli mcp --server http://remotecraft:7979 --token <token>`. Indipendente dall'immagine del server
+# (niente FROM da un'immagine locale: `compose build --pull` la cercherebbe su Docker Hub).
+ARG REPO=https://github.com/rickyb82/remotecraft
+ARG REF=main
+
+FROM rust:1-bookworm AS build
+ARG REPO
+ARG REF
+RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN git clone --depth 1 "$REPO" . && (git checkout -q "$REF" 2>/dev/null || (git fetch -q --depth 1 origin "$REF" && git checkout -q FETCH_HEAD) || true) && git rev-parse HEAD
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-remotecraft-cli \
+    RUSTUP_TOOLCHAIN="$(rustup default | cut -d' ' -f1)" cargo build --release -p remotecraft-cli \
+    && cp target/release/remotecraft-cli /usr/local/bin/remotecraft-cli
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends socat ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=build /usr/local/bin/remotecraft-cli /usr/local/bin/remotecraft-cli
 COPY remotecraft-mcp-user.sh /usr/local/bin/remotecraft-mcp-user
 RUN chmod +x /usr/local/bin/remotecraft-mcp-user
 ENV MCP_PORT=7989 REMOTECRAFT_SERVER=http://remotecraft:7979
 EXPOSE 7989
-USER 10001
-ENTRYPOINT []
 CMD ["sh", "-c", "echo \">> remotecraft-cli mcp per utente in ascolto su :${MCP_PORT}\"; exec socat -d \"TCP-LISTEN:${MCP_PORT},fork,reuseaddr\" EXEC:/usr/local/bin/remotecraft-mcp-user"]
