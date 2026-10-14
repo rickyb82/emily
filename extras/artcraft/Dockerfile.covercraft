@@ -31,7 +31,7 @@ COPY --from=build /usr/local/bin/covercraft-cli /usr/local/bin/covercraft-cli
 COPY --from=build /src/dist/web /app/web
 COPY covercraft-start.sh /usr/local/bin/covercraft-start
 COPY covercraft-mcp-user.sh /usr/local/bin/covercraft-mcp-user
-RUN chmod +x /usr/local/bin/covercraft-start /usr/local/bin/covercraft-mcp-user && mkdir -p /data && chown covercraft:covercraft /data
+RUN chmod 0755 /usr/local/bin/covercraft-start /usr/local/bin/covercraft-mcp-user /usr/local/bin/covercraft-cli && mkdir -p /data && chown covercraft:covercraft /data
 # parte da root solo per sistemare i permessi di /data (volume montato dall'host), poi passa all'utente covercraft (uid 10003)
 VOLUME ["/data"]
 EXPOSE 7979 7999
