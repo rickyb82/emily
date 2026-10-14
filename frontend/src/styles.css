@@ -469,3 +469,11 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .folder-icon.org { --folder: #0f766e; } .folder-icon.dept { --folder: #0f766e; } .folder-icon.chat { --folder: #2563eb; } .folder-icon.conv { --folder: #60a5fa; }
 .folder-tile.kind-dept .tile-name::after { content: ' 🔒'; font-size: 11px; opacity: .6; }
 .ctx-menu li.muted { cursor: default; opacity: .6; }
+/* 📊 Il mio utilizzo (Impostazioni) */
+.usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.usage-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--panel) 92%, var(--text) 8%); }
+.usage-tile b { font-size: 20px; } .usage-tile small { color: var(--muted); }
+.usage-bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.usage-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 3px; }
+.usage-bar span { display: block; width: 100%; background: var(--primary); border-radius: 2px 2px 0 0; opacity: .85; }
+.table.small td, .table.small th { padding: 4px 8px; font-size: 13px; }

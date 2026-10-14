@@ -506,3 +506,51 @@ async def delete_my_memory(mid: str, request: Request, ctx: AuthContext = Depend
     await db.commit()
     await audit(db, "memory_self_deleted", request, ctx.user, m.text[:120])
     return {"status": "ok"}
+
+
+# ---------------- il mio utilizzo (ogni utente vede i propri consumi) ----------------
+@router.get("/usage")
+async def my_usage(days: int = 30, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Token e costi stimati dell'utente che chiede: totali, per modello, per giorno. Stesse righe (usage_log) e stesso listino
+    del pannello Costi dell'amministratore, filtrate sul proprio id: nessuno vede i consumi degli altri."""
+    from sqlalchemy import func
+
+    from ..models import UsageLog
+    from ..services import costs as _costs
+
+    days = max(1, min(int(days or 30), 365))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    table = _costs.pricing_table()
+    rows = (await db.execute(
+        select(UsageLog.provider, UsageLog.model, UsageLog.kind, func.count(),
+               func.sum(UsageLog.input_tokens), func.sum(UsageLog.output_tokens),
+               func.sum(UsageLog.cache_read_tokens), func.sum(UsageLog.cache_write_tokens))
+        .where(UsageLog.user_id == ctx.user.id, UsageLog.created_at >= since)
+        .group_by(UsageLog.provider, UsageLog.model, UsageLog.kind))).all()
+    tot = {"messages": 0, "images": 0, "videos": 0, "searches": 0, "tools": 0, "input_tokens": 0, "output_tokens": 0,
+           "cache_read_tokens": 0, "cache_write_tokens": 0, "cost": 0.0}
+    by_model: dict[str, dict] = {}
+    for prov, model, kind, n, tin, tout, tcr, tcw in rows:
+        tin, tout, tcr, tcw, n = int(tin or 0), int(tout or 0), int(tcr or 0), int(tcw or 0), int(n or 0)
+        cost = _costs.estimate_cost(table, prov or "", model or "", kind, tin, tout, n, tcr, tcw)
+        tot["cost"] += cost
+        key = {"message": "messages", "image": "images", "video": "videos", "web_search": "searches"}.get(kind, "tools")
+        tot[key] += n
+        if kind == "message":
+            tot["input_tokens"] += tin; tot["output_tokens"] += tout
+            tot["cache_read_tokens"] += tcr; tot["cache_write_tokens"] += tcw
+            m = by_model.setdefault(f"{prov or '?'}/{model or '?'}", {"provider": prov or "?", "model": model or "?", "messages": 0,
+                                                                     "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cost": 0.0})
+            m["messages"] += n; m["input_tokens"] += tin + tcw; m["output_tokens"] += tout; m["cache_read_tokens"] += tcr; m["cost"] += cost
+    # serie giornaliera (solo messaggi: e' li' che stanno i token)
+    daily = (await db.execute(
+        select(func.date(UsageLog.created_at), func.count(),
+               func.sum(UsageLog.input_tokens + UsageLog.cache_read_tokens + UsageLog.cache_write_tokens), func.sum(UsageLog.output_tokens))
+        .where(UsageLog.user_id == ctx.user.id, UsageLog.created_at >= since, UsageLog.kind == "message")
+        .group_by(func.date(UsageLog.created_at)).order_by(func.date(UsageLog.created_at)))).all()
+    tot["cost"] = round(tot["cost"], 4)
+    tot["tokens"] = tot["input_tokens"] + tot["output_tokens"] + tot["cache_read_tokens"] + tot["cache_write_tokens"]
+    return {"days": days, "totals": tot,
+            "by_model": sorted(({**m, "cost": round(m["cost"], 4)} for m in by_model.values()), key=lambda m: -m["cost"]),
+            "daily": [{"day": str(d), "messages": int(n or 0), "input_tokens": int(i or 0), "output_tokens": int(o or 0)} for d, n, i, o in daily],
+            "pricing_note": "Costi stimati con il listino del server (pannello Costi): orientativi, non una fattura."}

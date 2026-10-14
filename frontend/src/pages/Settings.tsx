@@ -56,6 +56,7 @@ export default function Settings() {
         <p>Ciao {me!.user.display_name}! {me!.user.avatar}</p>
         <p className="muted">Puoi mandare fino a {pol.daily_message_limit || '∞'} messaggi e creare {pol.daily_image_limit || '∞'} immagini al giorno.</p>
         {pol.time_windows?.length > 0 && <p className="muted">Orari in cui puoi usare Emily: {pol.time_windows.map((w: any) => `${w.start}–${w.end}`).join(', ')}</p>}
+        <MyUsage simple />
       </div>
     )
   }
@@ -118,6 +119,8 @@ export default function Settings() {
         </div>
       </section>}
 
+      <MyUsage />
+
       <section className="card stack">
         <h3>🔑 Password</h3>
         <input type="password" placeholder="Password attuale" value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} />
@@ -135,5 +138,62 @@ export default function Settings() {
         <button className="ghost" onClick={() => run(() => post('/auth/sessions/revoke-others'), 'Altre sessioni chiuse')}>Disconnetti gli altri dispositivi</button>
       </section>
     </div>
+  )
+}
+
+
+/** 📊 Il mio utilizzo: token, messaggi e costo stimato dell'utente (solo i propri: /auth/usage filtra sul suo id). */
+function MyUsage({ simple = false }: { simple?: boolean }) {
+  const [days, setDays] = useState(30)
+  const [data, setData] = useState<any>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { get(`/auth/usage?days=${days}`).then(setData).catch((e) => setErr(e.message)) }, [days])
+  const t = data?.totals
+  const fmt = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)} M` : n >= 10_000 ? `${(n / 1000).toFixed(1)} k` : n.toLocaleString())
+  const eur = (c: number) => `${c.toFixed(c < 1 ? 3 : 2)} $`
+  const maxDay = Math.max(1, ...(data?.daily ?? []).map((d: any) => d.input_tokens + d.output_tokens))
+  if (simple) {
+    return t ? <p className="muted">Negli ultimi {days} giorni hai mandato {t.messages} messaggi e usato {fmt(t.tokens)} token.</p> : null
+  }
+  return (
+    <section className="card stack">
+      <div className="row between wrap">
+        <h3 style={{ margin: 0 }}>📊 Il mio utilizzo</h3>
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 'auto' }}>
+          <option value={7}>ultimi 7 giorni</option><option value={30}>ultimi 30 giorni</option><option value={90}>ultimi 90 giorni</option><option value={365}>ultimo anno</option>
+        </select>
+      </div>
+      {err && <div className="error">{err}</div>}
+      {t && (
+        <>
+          <div className="usage-tiles">
+            <div className="usage-tile"><b>{t.messages}</b><small>messaggi</small></div>
+            <div className="usage-tile"><b>{fmt(t.tokens)}</b><small>token totali</small></div>
+            <div className="usage-tile"><b>{fmt(t.input_tokens + t.cache_read_tokens + t.cache_write_tokens)}</b><small>in ingresso{t.cache_read_tokens ? ` (${Math.round(100 * t.cache_read_tokens / Math.max(1, t.input_tokens + t.cache_read_tokens + t.cache_write_tokens))}% dalla cache)` : ''}</small></div>
+            <div className="usage-tile"><b>{fmt(t.output_tokens)}</b><small>in uscita</small></div>
+            <div className="usage-tile"><b>{eur(t.cost)}</b><small>costo stimato</small></div>
+            {(t.images > 0 || t.videos > 0 || t.searches > 0) && <div className="usage-tile"><b>{t.images + t.videos + t.searches}</b><small>{[t.images && `${t.images} immagini`, t.videos && `${t.videos} video`, t.searches && `${t.searches} ricerche`].filter(Boolean).join(' · ')}</small></div>}
+          </div>
+          {data.daily.length > 0 && (
+            <div className="usage-bars" title="Token al giorno (ingresso + uscita)">
+              {data.daily.map((d: any) => (
+                <div key={d.day} className="usage-bar" title={`${new Date(d.day).toLocaleDateString()}: ${d.messages} messaggi, ${fmt(d.input_tokens + d.output_tokens)} token`}>
+                  <span style={{ height: `${Math.max(2, 100 * (d.input_tokens + d.output_tokens) / maxDay)}%` }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {data.by_model.length > 0 && (
+            <table className="table small">
+              <thead><tr><th>Modello</th><th>Messaggi</th><th>Token in</th><th>Token out</th><th>Costo</th></tr></thead>
+              <tbody>{data.by_model.map((m: any) => (
+                <tr key={m.provider + m.model}><td>{m.provider} · {m.model}</td><td>{m.messages}</td><td>{fmt(m.input_tokens + m.cache_read_tokens)}</td><td>{fmt(m.output_tokens)}</td><td>{eur(m.cost)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+          <small className="muted">{data.pricing_note} I modelli locali (Ollama, ComfyUI) contano zero.</small>
+        </>
+      )}
+    </section>
   )
 }
