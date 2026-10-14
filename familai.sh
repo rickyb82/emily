@@ -81,7 +81,7 @@ case "${1:-}" in
     grep -q "PUBLIC_HOST=familai.example.com" .env && { echo "!! Imposta PUBLIC_HOST (nome DNS o IP del server), ACME_EMAIL e WEBAUTHN_* nel .env prima della produzione"; exit 1; }
     compose up -d --build
     host=$(grep ^PUBLIC_HOST= .env | cut -d= -f2)
-    hp=$(grep ^HTTPS_PORT= .env | cut -d= -f2); [ -n "$hp" ] && [ "$hp" != 443 ] && host="$host:$hp"
+    hp=$(grep ^HTTPS_PORT= .env | cut -d= -f2 || true); [ -n "$hp" ] && [ "$hp" != 443 ] && host="$host:$hp"
     echo ">> Emily in produzione su https://$host"
     if grep -q '^TLS_MODE=internal' .env; then
       echo ">> TLS con CA interna: sui PC va installata la CA (./familai.sh ca-cert → data/emily-ca.crt)"
@@ -242,7 +242,7 @@ case "${1:-}" in
           echo "COMPOSE_PROFILES=remotecraft" >> .env
         fi
         # token di servizio (>= 32 caratteri, lo pretende RemoteCraft)
-        tok=$(grep '^REMOTECRAFT_TOKEN=' .env | cut -d= -f2-); [ ${#tok} -ge 32 ] || set_env REMOTECRAFT_TOKEN "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        tok=$(grep '^REMOTECRAFT_TOKEN=' .env | cut -d= -f2- || true); [ ${#tok} -ge 32 ] || set_env REMOTECRAFT_TOKEN "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
         set_env REMOTECRAFT_URL "http://remotecraft:7979"
         set_env REMOTECRAFT_MCP_HOST "remotecraft-mcp:7989"
         grep -q '^RUSTDESK_HOST=.\+' .env || echo "!! Imposta RUSTDESK_HOST=<nome pubblico del server RustDesk> nel .env (i client lo usano come relay)"
