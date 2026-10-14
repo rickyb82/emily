@@ -497,6 +497,10 @@ class MCPManager:
                 args = await _mail_args(tool, args, ctx)
                 if isinstance(args, ToolResult):
                     return args
+            if server == "covercraft" and ctx.user.role != Role.admin:
+                # configurazione del database e preferenze condivise: solo l'amministratore (come nella web app)
+                if tool in ("configure_database", "test_database") or (tool == "set_preferences" and any(k not in ("theme", "language") for k in args)):
+                    return ToolResult("Impostazioni di CoverCraft riservate all'amministratore di Emily: chiedi a lui/lei di cambiarle", is_error=True)
             if server in _ARTCRAFT_APPS:
                 args = await _protect_save_path(server, tool, args, ctx, self._open.get((server, ctx.conversation_id or "")))   # mai sovrascrivere file altrui
                 await _snapshot_before_save(server, tool, args, ctx)   # cronologia versioni: il contenuto precedente va in data/versions

@@ -256,7 +256,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "Passa sempre query o limit a search_comune / search_street / list_civici: senza limite restituiscono tutte le righe (migliaia). radio_bridges elenca i ponti radio; history/open_history lo storico.\n"
             "- Riporta ogni tecnologia con il semaforo E il valore grezzo della cella (es. 'FTTH: coperto (ATTIVO), 1000/300 Mbit'), distanze e velocita' "
             "come le da' il tool; segnala chiaramente 'non noto' quando il dato manca. Non inventare coperture ne' velocita'. "
-            "configure_database e set_preferences cambiano la configurazione per tutti: usali solo se la persona lo chiede esplicitamente.\n"
+            "configure_database, test_database e set_preferences (oltre a tema/lingua) sono riservati all'amministratore di Emily: agli altri utenti rispondono con un errore, non insistere e rimanda all'amministratore.\n"
             "- Il risultato di una verifica si puo' mettere in un documento (WordCraft) o in una mail (MailCraft) se richiesto."
         )
     pol = effective_policy(user)

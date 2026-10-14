@@ -28,6 +28,30 @@ settings = get_settings()
 
 HOP = {"host", "content-length", "connection", "transfer-encoding", "cookie", "authorization", "x-covercraft-user", "accept-encoding"}
 FRAME_TOKEN_S = 12 * 3600
+# comandi del motore riservati all'amministratore: configurazione del database e preferenze condivise (valgono per tutti),
+# cambio del nome con cui si firma il log. Gli altri utenti verificano e leggono lo storico.
+ADMIN_CMDS = {"db.configure", "db.test", "session.user"}
+USER_PREFS = {"theme", "language"}   # le uniche preferenze che un utente normale puo' toccare da prefs.set (aspetto, lingua)
+ADMIN_ONLY_MSG = "Impostazioni riservate all'amministratore di Emily"
+
+
+def is_admin(ctx: AuthContext) -> bool:
+    return ctx.user.role == Role.admin
+
+
+def guard_command(ctx: AuthContext, body: dict) -> str | None:
+    """Messaggio di errore se l'utente non puo' eseguire questo comando (None = ok). Puo' anche ridurre i parametri."""
+    if is_admin(ctx):
+        return None
+    cmd = str(body.get("command") or "")
+    if cmd in ADMIN_CMDS:
+        return ADMIN_ONLY_MSG
+    if cmd == "prefs.set":
+        params = body.get("params") if isinstance(body.get("params"), dict) else {}
+        extra = sorted(k for k in params if k not in USER_PREFS)
+        if extra:
+            return f"{ADMIN_ONLY_MSG} ({', '.join(extra)})"
+    return None
 
 
 def _sign(payload: str) -> str:
@@ -72,7 +96,7 @@ async def cover_session(ctx: AuthContext = Depends(require_auth)):
     if not await covercraft.health():
         raise HTTPException(502, "Il server CoverCraft non risponde (./familai.sh covercraft logs)")
     label = covercraft.svc.remember(ctx.user.id, ctx.user.display_name, ctx.user.username)
-    return {"path": "/covercraft/", "user": label, "lang": "it", "token": mint_frame_token(ctx.session.id)}
+    return {"path": "/covercraft/", "user": label, "lang": "it", "token": mint_frame_token(ctx.session.id), "admin": is_admin(ctx)}
 
 
 @router.post("/logout")
@@ -133,6 +157,16 @@ async def cover_proxy(path: str, request: Request, db: AsyncSession = Depends(ge
     headers["Authorization"] = f"Bearer {covercraft.svc.token}"
     headers["X-Covercraft-User"] = label
     body = await request.body()
+    if request.method == "POST" and path == "cmd":
+        try:
+            import json as _json
+            parsed = _json.loads(body or b"{}")
+        except Exception:
+            parsed = {}
+        denied = guard_command(ctx, parsed if isinstance(parsed, dict) else {})
+        if denied:
+            # stessa forma delle risposte di errore di CoverCraft, cosi' la web app lo mostra come messaggio
+            return Response(content=_json.dumps({"error": denied}), media_type="application/json", headers={"Cache-Control": "no-store"})
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as cli:
             r = await cli.request(request.method, url, headers=headers, content=body)
