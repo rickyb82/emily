@@ -47,6 +47,12 @@ if ! command -v docker >/dev/null 2>&1; then
   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   sudo systemctl enable --now docker
 fi
+if command -v snap >/dev/null 2>&1 && snap list 2>/dev/null | grep -q '^docker '; then
+  echo "!! Docker e' installato come snap: Compose e i volumi danno problemi. Rimuovilo (sudo snap remove docker) e rilancia lo script,"
+  echo "   che installera' Docker Engine dal repository ufficiale."; exit 1
+fi
+docker compose version >/dev/null 2>&1 || { say "Installo il plugin Compose"; sudo apt-get update -y; sudo apt-get install -y docker-compose-plugin 2>/dev/null || sudo apt-get install -y docker-compose-v2; }
+getent group docker >/dev/null || sudo groupadd docker
 if ! id -nG "$USER" | grep -qw docker; then
   say "Aggiungo $USER al gruppo docker"
   sudo usermod -aG docker "$USER"
