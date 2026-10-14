@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     org_mode: str = ""                # "1" = modalita' azienda: niente bambini (login PIN, supervisione, compiti), etichette organizzazione
     mfa_optional: str = "1"          # "1" = al primo accesso l'utente sceglie se attivare il 2FA; "0" = obbligatorio per gli adulti
     passkeys: str = "1"              # "0" = niente passkey: il secondo fattore e' solo l'app authenticator (TOTP), es. server locale
+    upload_scan_cmd: str = ""        # antivirus sugli upload, es. "clamdscan --no-summary" (riceve il percorso del file); vuoto = nessuno
+    upload_scan_fail_open: bool = True  # scanner non raggiungibile: True = accetta il file, False = rifiuta
     app_name: str = "Emily"           # nome con cui l'assistente si presenta e firma le email (i nomi tecnici restano FamilAI)
     mailcraft_url: str = ""           # URL del server MailCraft multi-utente (es. http://mailcraft:7878): posta per utente
     mailcraft_mcp_host: str = ""      # host:porta del ponte MCP per utente di MailCraft (es. mailcraft:7889)

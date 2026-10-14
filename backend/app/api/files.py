@@ -44,6 +44,26 @@ def _out(f: FileAsset) -> FileOut:
     return o
 
 
+async def _scan_upload(path: Path) -> str:
+    """Antivirus opzionale: UPLOAD_SCAN_CMD e' un comando che riceve il percorso del file (es. "clamdscan --no-summary" o
+    "clamscan --no-summary"); esce con 0 = pulito, altro = infetto/errore (testo = motivo). Vuoto = nessun controllo."""
+    cmd = (settings.upload_scan_cmd or "").strip()
+    if not cmd:
+        return ""
+    import asyncio
+    import shlex
+    try:
+        proc = await asyncio.create_subprocess_exec(*shlex.split(cmd), str(path), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+        if proc.returncode == 0:
+            return ""
+        text = (out or b"").decode(errors="replace").strip().splitlines()
+        return (text[-1] if text else f"codice {proc.returncode}")[:200]
+    except Exception as e:
+        log.warning("Controllo antivirus non eseguito su %s: %s", path, e)
+        return "" if settings.upload_scan_fail_open else f"scanner non disponibile ({type(e).__name__})"
+
+
 @router.post("/files", response_model=FileOut)
 async def upload(background: BackgroundTasks, file: UploadFile = File(...), project_id: str | None = Form(None),
                  conversation_id: str | None = Form(None), folder_id: str | None = Form(None),
@@ -51,7 +71,9 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     pol = effective_policy(ctx.user)
     name = re.sub(r"[^\w.\- ]", "_", file.filename or "file")[:200]
     ext = Path(name).suffix.lower()
-    if ext not in ALLOWED_EXT:
+    # Gli adulti caricano qualsiasi tipo di file (anche .exe, .zip, .iso…): sono i loro documenti di lavoro. L'elenco dei tipi
+    # vale solo per i bambini. Il controllo antivirus, se configurato (UPLOAD_SCAN_CMD, es. clamdscan), gira dopo la scrittura.
+    if ctx.user.role == Role.child and ext not in ALLOWED_EXT:
         raise HTTPException(400, f"Tipo di file non consentito ({ext})")
     if project_id:
         await require_access(db, "project", project_id, ctx.user, write=True)
@@ -65,8 +87,12 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     if len(data) > max_bytes:
         raise HTTPException(413, f"File troppo grande (max {pol.get('max_upload_mb')} MB)")
     fid = uuid.uuid4().hex
-    path = settings.uploads_dir / f"{fid}{ext}"
+    path = settings.uploads_dir / f"{fid}{ext or '.bin'}"
     path.write_bytes(data)
+    verdict = await _scan_upload(path)
+    if verdict:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, f"File rifiutato dal controllo antivirus: {verdict}")
     mime = file.content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
     name = await unique_filename(db, ctx.user.id, folder_id or None, name)
     asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
@@ -305,8 +331,22 @@ async def download(fid: str, ctx: AuthContext = Depends(require_auth), db: Async
         return PlainTextResponse(asset.extracted_text or "", headers={"Content-Disposition": f'inline; filename="{asset.id}.txt"'})
     # file generati in una conversazione: accessibili a chi vede la conversazione.
     # no-store: i documenti vengono riscritti dagli editor, il browser non deve riproporre una copia vecchia.
-    return FileResponse(asset.path, media_type=asset.mime, filename=asset.filename,
-                        content_disposition_type="inline", headers={"Cache-Control": "no-store, private"})
+    # inline solo i tipi che il browser mostra senza eseguire nulla (immagini raster, PDF, audio/video, testo semplice):
+    # tutto il resto (HTML, SVG, eseguibili, archivi…) viene scaricato come allegato e mai interpretato nell'origine di Emily
+    mime = asset.mime or "application/octet-stream"
+    low = asset.filename.lower()
+    inline = (mime.startswith(("image/", "video/", "audio/")) and not low.endswith((".svg", ".svgz")) and "svg" not in mime) \
+        or mime == "application/pdf" or low.endswith(".pdf") or mime in ("text/plain", "text/csv", "text/markdown")
+    headers = {"Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff"}
+    if low.endswith((".html", ".htm", ".xhtml", ".js", ".mjs")):
+        inline, mime = False, "application/octet-stream"
+    elif low.endswith((".svg", ".svgz")):
+        # le mappe IdeaCraft sono SVG mostrati con <img> (dove gli script non girano comunque): tipo corretto, ma aperto
+        # direttamente si scarica e una CSP sandbox spegne gli script
+        inline, mime = False, "image/svg+xml"
+        headers["Content-Security-Policy"] = "sandbox; script-src 'none'"
+    return FileResponse(asset.path, media_type=mime, filename=asset.filename,
+                        content_disposition_type="inline" if inline else "attachment", headers=headers)
 
 
 @router.delete("/files/{fid}")
