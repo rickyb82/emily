@@ -59,58 +59,71 @@ export default function ShareDialog({ type, id, onClose }: { type: 'conversation
     else if (e.key === 'Escape') { setQ(''); setHits([]) }
   }
   const everyone = shares.find((s) => s.target_user_id === null)
-  const label = (s: Share) => s.target_user_id === null ? (org ? '🏢 Tutta l\'organizzazione' : '👪 Tutta la famiglia')
-    : people[s.target_user_id] ? `${people[s.target_user_id].avatar} ${people[s.target_user_id].display_name}` : '…'
 
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal stack" onClick={(e) => e.stopPropagation()}>
-        <h3>Condividi {type === 'file' ? 'il file' : type === 'project' ? 'il progetto' : 'la chat'}</h3>
+      <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="share-head">
+          <h3>Condividi {type === 'file' ? 'il file' : type === 'project' ? 'il progetto' : 'la chat'}</h3>
+          <button className="icon" onClick={onClose} title="Chiudi">✕</button>
+        </div>
         {err && <div className="error">{err}</div>}
+        <label className="share-label">Aggiungi persone</label>
         <div className="share-search">
-          <div className="row" style={{ gap: 6 }}>
-            <input autoFocus placeholder="Nome o email della persona…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} style={{ flex: 1 }} />
-            <select value={perm} onChange={(e) => setPerm(e.target.value as any)}>
-              <option value="read">può vedere</option>
-              <option value="write">può modificare</option>
+          <div className="share-input">
+            <span className="share-icon">🔍</span>
+            <input autoFocus placeholder="Scrivi il nome o l'email…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+            <select className="perm" value={perm} onChange={(e) => setPerm(e.target.value as any)} title="Permesso che riceverà">
+              <option value="read">Può vedere</option>
+              <option value="write">Può modificare</option>
             </select>
           </div>
           {hits.length > 0 && (
-            <ul className="suggest">
+            <ul className="suggest static">
               {hits.map((m, i) => (
                 <li key={m.id} className={i === sel ? 'active' : ''} onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); share(m.id, perm) }}>
-                  <span className="kid-avatar small">{m.avatar}</span>
-                  <span><b>{m.display_name}</b><br /><small className="muted">{m.email || m.username}{m.role === 'child' ? ' · bambino/a' : ''}</small></span>
+                  <span className="share-avatar">{m.avatar}</span>
+                  <span className="share-who"><b>{m.display_name}</b><small className="muted">{m.email || m.username}{m.role === 'child' ? ' · bambino/a' : ''}</small></span>
+                  <span className="share-add">Aggiungi ↵</span>
                 </li>
               ))}
             </ul>
           )}
-          {q.trim() && hits.length === 0 && <small className="muted">Nessuno corrisponde a «{q}».</small>}
+          {q.trim() && hits.length === 0 && <p className="muted small" style={{ margin: '6px 2px 0' }}>Nessuno corrisponde a «{q}».</p>}
+          {!q.trim() && <p className="muted small" style={{ margin: '6px 2px 0' }}>I suggerimenti compaiono mentre scrivi: Invio aggiunge il primo, frecce per scegliere.</p>}
         </div>
-        <div className="share-list">
-          <div className="row between">
-            <span>{org ? '🏢 Tutta l\'organizzazione' : '👪 Tutta la famiglia'}</span>
-            <select value={everyone?.permission ?? 'none'} onChange={(e) => (e.target.value === 'none' ? everyone && unshare(everyone) : share(null, e.target.value))}>
-              <option value="none">—</option>
-              <option value="read">può vedere</option>
-              <option value="write">può modificare</option>
+        <label className="share-label">Chi ha accesso</label>
+        <ul className="share-people">
+          <li>
+            <span className="share-avatar org">{org ? '🏢' : '👪'}</span>
+            <span className="share-who"><b>{org ? 'Tutta l\'organizzazione' : 'Tutta la famiglia'}</b><small className="muted">{everyone ? (everyone.permission === 'write' ? 'tutti possono modificare' : 'tutti possono vedere') : 'solo le persone qui sotto'}</small></span>
+            <select className="perm" value={everyone?.permission ?? 'none'} onChange={(e) => (e.target.value === 'none' ? everyone && unshare(everyone) : share(null, e.target.value))}>
+              <option value="none">Nessuno</option>
+              <option value="read">Può vedere</option>
+              <option value="write">Può modificare</option>
             </select>
-          </div>
+          </li>
+          <li>
+            <span className="share-avatar me">{me?.user.avatar}</span>
+            <span className="share-who"><b>{me?.user.display_name} (tu)</b><small className="muted">proprietario</small></span>
+            <span className="perm-static">Proprietario</span>
+          </li>
           {shares.filter((s) => s.target_user_id).map((s) => (
-            <div key={s.id} className="row between">
-              <span>{label(s)}</span>
-              <span className="row" style={{ gap: 4 }}>
-                <select value={s.permission} onChange={(e) => share(s.target_user_id, e.target.value)}>
-                  <option value="read">può vedere</option>
-                  <option value="write">può modificare</option>
-                </select>
-                <button className="icon" title="Togli l'accesso" onClick={() => unshare(s)}>✕</button>
-              </span>
-            </div>
+            <li key={s.id}>
+              <span className="share-avatar">{s.target_user_id && people[s.target_user_id]?.avatar}</span>
+              <span className="share-who"><b>{s.target_user_id && people[s.target_user_id]?.display_name || '…'}</b><small className="muted">{s.target_user_id && (people[s.target_user_id]?.email || people[s.target_user_id]?.username)}</small></span>
+              <select className="perm" value={s.permission} onChange={(e) => share(s.target_user_id, e.target.value)}>
+                <option value="read">Può vedere</option>
+                <option value="write">Può modificare</option>
+              </select>
+              <button className="icon" title="Togli l'accesso" onClick={() => unshare(s)}>✕</button>
+            </li>
           ))}
-          {shares.length === 0 && <small className="muted">Per ora lo vedi solo tu.</small>}
+        </ul>
+        <div className="share-foot">
+          <small className="muted">{shares.length === 0 ? 'Per ora lo vedi solo tu.' : `${shares.filter((s) => s.target_user_id).length} person${shares.filter((s) => s.target_user_id).length === 1 ? 'a' : 'e'}${everyone ? ` + tutt${org ? 'a l\'organizzazione' : 'a la famiglia'}` : ''}`}</small>
+          <button className="primary" onClick={onClose}>Fatto</button>
         </div>
-        <button className="ghost" onClick={onClose}>Chiudi</button>
       </div>
     </div>
   )
