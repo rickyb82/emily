@@ -11,7 +11,7 @@
 #            --dev (anteprima http://IP:8080 senza dominio/certificati)  --portainer (pannello web Docker su :9443)
 set -euo pipefail
 
-REPO=""; DIR="$HOME/FamilAI"; HOST=""; EMAIL=""; ADMIN_EMAIL=""; ADMIN_PASS=""; OLLAMA=0; DEV=0; PORTAINER=0
+REPO=""; DIR="$HOME/FamilAI"; HOST=""; EMAIL=""; ADMIN_EMAIL=""; ADMIN_PASS=""; OLLAMA=0; DEV=0; PORTAINER=0; TLS="acme"; HTTP_PORT=""; HTTPS_PORT=""; ORG=0; APPS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2;;
@@ -23,6 +23,11 @@ while [ $# -gt 0 ]; do
     --ollama) OLLAMA=1; shift;;
     --dev) DEV=1; shift;;
     --portainer) PORTAINER=1; shift;;
+    --internal-tls) TLS="internal"; shift;;          # CA interna (rete locale / DNS interno): niente Let's Encrypt
+    --http-port) HTTP_PORT="$2"; shift 2;;           # es. 8080 (default 80)
+    --https-port) HTTPS_PORT="$2"; shift 2;;         # es. 8443 (default 443)
+    --org) ORG=1; shift;;                            # modalita' azienda (nessun bambino, etichette organizzazione)
+    --apps) APPS="$2"; shift 2;;                     # app da avviare subito, es. "wordcraft,gridcraft,pdfcraft,deckcraft,ideacraft,mailcraft"
     *) echo "opzione sconosciuta: $1"; exit 1;;
   esac
 done
@@ -75,6 +80,14 @@ if [ ! -f .env ]; then
     sed -i "s/^PUBLIC_HOST=.*/PUBLIC_HOST=$HOST/; s/^WEBAUTHN_RP_ID=.*/WEBAUTHN_RP_ID=$HOST/; s#^WEBAUTHN_ORIGIN=.*#WEBAUTHN_ORIGIN=https://$HOST#" .env
   fi
   [ -n "$EMAIL" ] && sed -i "s/^ACME_EMAIL=.*/ACME_EMAIL=$EMAIL/" .env
+  [ "$TLS" = internal ] && sed -i "s/^TLS_MODE=.*/TLS_MODE=internal/" .env
+  setenv() { if grep -q "^$1=" .env; then sed -i "s#^$1=.*#$1=$2#" .env; else echo "$1=$2" >> .env; fi; }
+  [ -n "$HTTP_PORT" ] && setenv HTTP_PORT "$HTTP_PORT"
+  [ -n "$HTTPS_PORT" ] && setenv HTTPS_PORT "$HTTPS_PORT"
+  if [ -n "$HTTPS_PORT" ] && [ "$HTTPS_PORT" != 443 ] && [ -n "$HOST" ]; then
+    sed -i "s#^WEBAUTHN_ORIGIN=.*#WEBAUTHN_ORIGIN=https://$HOST:$HTTPS_PORT#" .env   # le passkey sono legate all'origine completa
+  fi
+  [ "$ORG" = 1 ] && setenv ORG_MODE 1
   [ -n "$ADMIN_EMAIL" ] && sed -i "s/^ADMIN_EMAIL=.*/ADMIN_EMAIL=$ADMIN_EMAIL/" .env
   if [ -n "$ADMIN_PASS" ]; then
     sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$ADMIN_PASS/" .env
@@ -94,15 +107,15 @@ mkdir -p data backups
 
 # ---------- firewall (se ufw e' attivo) ----------
 if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
-  say "Apro le porte 80/443 (ufw)"
-  sudo ufw allow 80/tcp >/dev/null; sudo ufw allow 443/tcp >/dev/null
+  say "Apro le porte ${HTTP_PORT:-80}/${HTTPS_PORT:-443} (ufw)"
+  sudo ufw allow "${HTTP_PORT:-80}"/tcp >/dev/null; sudo ufw allow "${HTTPS_PORT:-443}"/tcp >/dev/null
   [ "$DEV" = 1 ] && sudo ufw allow 8080/tcp >/dev/null
   [ "$PORTAINER" = 1 ] && sudo ufw allow from 192.168.0.0/16 to any port 9443 proto tcp >/dev/null
 fi
 
 # ---------- porte occupate? (es. Pi-hole usa la 80 per la sua interfaccia) ----------
 if [ "$DEV" = 0 ]; then
-  for port in 80 443; do
+  for port in "${HTTP_PORT:-80}" "${HTTPS_PORT:-443}"; do
     if (command -v ss >/dev/null && ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"); then
       echo "!! La porta $port e' gia' occupata su questa macchina (controlla con: sudo ss -ltnp | grep ':$port')."
       echo "   Caddy (HTTPS di FamilAI) ne ha bisogno. Se e' Pi-hole: sposta la sua interfaccia web su un'altra porta"
@@ -144,3 +157,14 @@ echo "   Aggiornamenti: cd $DIR && ./familai.sh update"
 [ "$PORTAINER" = 1 ] && echo "   Pannello Docker: https://$(hostname -I | awk '{print $1}'):9443  (apri subito e crea l'utente admin: dopo 5 minuti va riavviato con ./familai.sh portainer down && ./familai.sh portainer up)"
 [ "$NEWGRP" = 1 ] && echo "   Nota: esci e rientra nella shell (o 'newgrp docker') per usare docker senza sudo."
 exit 0
+
+# ---------- app di produttivita' (facoltative: ognuna compila la sua immagine, le prime volte servono minuti) ----------
+if [ -n "$APPS" ]; then
+  for app in $(echo "$APPS" | tr ',' ' '); do
+    say "Avvio $app"
+    if [ "$NEWGRP" = 1 ]; then sg docker -c "./familai.sh $app up" || true; else ./familai.sh "$app" up || true; fi
+  done
+fi
+if [ "$TLS" = internal ]; then
+  say "TLS con CA interna: esporta la CA con ./familai.sh ca-cert e installala sui PC (data/emily-ca.crt)"
+fi

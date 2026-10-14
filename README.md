@@ -104,6 +104,16 @@ curl -fsSL https://raw.githubusercontent.com/<utente>/FamilAI/main/install-ubunt
 
 Servono DNS del dominio verso l'IP pubblico di casa e porte 80/443 del router inoltrate alla Ubuntu (Caddy ottiene i certificati da solo). Poi, dal pannello **Famiglia → Backup**, carica il backup fatto sul Mac e ritrovi tutto.
 
+**In azienda, su rete interna** (DNS interno, nessuna porta aperta su internet): CA interna invece di Let's Encrypt, porte a scelta, modalità organizzazione e le app già avviate:
+
+```
+curl -fsSL https://raw.githubusercontent.com/rickyb82/emily/main/install-ubuntu.sh | bash -s -- \
+  --repo https://github.com/rickyb82/emily.git --host emily.siriuslabs.it --internal-tls --http-port 8080 --https-port 8443 \
+  --org --admin-email tu@azienda.it --apps wordcraft,gridcraft,pdfcraft,deckcraft,ideacraft,mailcraft
+```
+
+Poi `./familai.sh ca-cert` ed installa `data/emily-ca.crt` sui PC (una volta sola), ripristina dal pannello **Organizzazione → Backup** il backup fatto sul Mac (utenti, chat, documenti, impostazioni, chiavi), e avvia a parte ciò che richiede configurazione: `./familai.sh remotecraft up` (porte 21115-21117 verso i client RustDesk), `./familai.sh covercraft up` + `covercraft db …` e, se serve, `covercraft geo up` (Nominatim: ~10 GB di RAM durante l'import).
+
 Aggiornare: sulla Ubuntu `./familai.sh update` (git pull + rebuild dei soli servizi cambiati + backup automatico). Dal Mac in un colpo solo: `./familai.sh deploy utente@ubuntu` (fa il `git push` e lancia `update` via SSH; la destinazione si può scrivere una volta nel file `.deploy`). Senza un remote git, `deploy` copia i file con rsync.
 
 ### Pannello Docker (Portainer)
