@@ -77,7 +77,10 @@ async def ensure_org_tree(db: AsyncSession, admin: User) -> Folder:
     """Crea (se manca) la radice dell'organizzazione e le tre cartelle di reparto. Solo per admin."""
     root = await org_root(db, admin.family_id)
     fam = await db.get(Family, admin.family_id)
-    name = (fam.name if fam else "") or "Organizzazione"
+    name = (fam.name if fam else "") or ""
+    if name.strip().lower() in ("", "famiglia"):   # nome di default mai cambiato: in azienda si chiama "Organizzazione"
+        from ..config import org_mode_on
+        name = "Organizzazione" if org_mode_on() else "Famiglia"
     if not root:
         root = Folder(family_id=admin.family_id, owner_id=admin.id, parent_id=None, name=name, kind="org", color="#0f766e")
         db.add(root)

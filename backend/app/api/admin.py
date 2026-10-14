@@ -63,6 +63,8 @@ async def rename_family(body: FamilyName, request: Request, ctx: AuthContext = D
     fam = await db.get(Family, ctx.user.family_id)
     fam.name = name
     await db.commit()
+    from ..services import workspace
+    await workspace.ensure_org_tree(db, ctx.user)   # la cartella dell'organizzazione in Documenti prende subito il nuovo nome
     await audit(db, "family_renamed", request, ctx.user, name)
     return {"name": name}
 
