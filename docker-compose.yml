@@ -27,6 +27,9 @@ services:
       - REMOTECRAFT_URL=${REMOTECRAFT_URL:-}
       - REMOTECRAFT_MCP_HOST=${REMOTECRAFT_MCP_HOST:-}
       - REMOTECRAFT_TOKEN=${REMOTECRAFT_TOKEN:-}
+      - COVERCRAFT_URL=${COVERCRAFT_URL:-}
+      - COVERCRAFT_MCP_HOST=${COVERCRAFT_MCP_HOST:-}
+      - COVERCRAFT_TOKEN=${COVERCRAFT_TOKEN:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -298,6 +301,25 @@ services:
       - MCP_PORT=7989
       - REMOTECRAFT_SERVER=http://remotecraft:7979
     expose: ["7989"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  # CoverCraft (https://github.com/rickyb82/covercraft): verifica di copertura della connettivita' a un indirizzo dal database
+  # dell'operatore (TIM/FiberCop, Open Fiber, Fastweb, rete propria, ponti radio, celle). Un container: web app + API su 7979 e ponte MCP per
+  # utente su 7999 (extras/artcraft/Dockerfile.covercraft). Il token di servizio non lascia la rete Docker: il backend fa da proxy autenticato
+  # (/covercraft/api/* -> backend -> covercraft) e indica l'utente con X-Covercraft-User. Configurazione (database MySQL, password) in ./private/covercraft.
+  covercraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.covercraft, args: { REF: "${COVERCRAFT_REF:-main}" } }
+    image: familai-covercraft
+    profiles: ["covercraft"]
+    restart: unless-stopped
+    environment:
+      - COVERCRAFT_TOKEN=${COVERCRAFT_TOKEN:-}
+      - COVERCRAFT_LANG=it
+      - MCP_PORT=7999
+      - TZ=${TZ:-Europe/Rome}
+    expose: ["7979", "7999"]
+    volumes:
+      - ./private/covercraft:/data              # config.json + secrets.json (password del database, leggibile solo dal container)
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
 networks:

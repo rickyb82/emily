@@ -262,6 +262,7 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "ideacraft_mcp": mcp_manager.is_connected("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and adult,
                 "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft"),
                 "remotecraft_web": bool(settings.remotecraft_url and settings.remotecraft_token) and adult, "remotecraft_mcp": mcp_manager.is_connected("remotecraft"),
+                "covercraft_web": bool(settings.covercraft_url and settings.covercraft_token) and adult, "covercraft_mcp": mcp_manager.is_connected("covercraft"),
                 "org_mode": org_mode_on(), "passkeys": passkeys_on(), "mfa_optional": mfa_optional_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)

@@ -61,6 +61,15 @@
         encode zstd gzip
         reverse_proxy remotecraft:7979
     }
+    # CoverCraft: le chiamate API passano dal backend (che aggiunge token di servizio e utente autenticato); i file statici della web app vanno al container
+    handle_path /covercraft/api/* {
+        rewrite * /api/covercraft/p{uri}
+        reverse_proxy backend:8000
+    }
+    handle_path /covercraft/* {
+        encode zstd gzip
+        reverse_proxy covercraft:7979
+    }
     handle_path /mailcraft/* {
         encode zstd gzip
         reverse_proxy mailcraft:7878 {

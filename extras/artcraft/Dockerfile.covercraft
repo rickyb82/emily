@@ -1,0 +1,39 @@
+# CoverCraft (https://github.com/rickyb82/covercraft): verifica di copertura della connettivita' a un indirizzo, dal database
+# di copertura dell'operatore (tabelle TIM/FiberCop, Open Fiber, Fastweb, rete propria, ponti radio, celle).
+# Un solo container: `covercraft-cli serve` (API + web app WebAssembly, una sessione per utente; configurazione del database in /data)
+# e, su un'altra porta, il server MCP per utente (covercraft-cli mcp --server … --token <token di servizio> --user <nome>) esposto via socat:
+# il backend manda il nome dell'utente come prima riga, poi parla MCP (vedi covercraft-mcp-user.sh). Il token di servizio non esce mai dal container.
+# Equivalente al Dockerfile del repository ma multi-architettura (trunk per x86_64 e arm64) e con la cache di cargo.
+# Prima build: 20-40 minuti (compila Rust e WebAssembly); le successive sono rapide grazie alla cache.
+ARG REPO=https://github.com/rickyb82/covercraft
+ARG REF=main
+
+FROM rust:1-bookworm AS build
+ARG REPO
+ARG REF
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; arch="$(uname -m)"; case "$arch" in x86_64) t=x86_64-unknown-linux-gnu;; aarch64|arm64) t=aarch64-unknown-linux-gnu;; *) echo "arch $arch non supportata"; exit 1;; esac; \
+    curl -fsSL "https://github.com/trunk-rs/trunk/releases/latest/download/trunk-${t}.tar.gz" | tar xz -C /usr/local/bin trunk; trunk --version
+WORKDIR /src
+RUN git clone --depth 1 "$REPO" . && (git checkout -q "$REF" 2>/dev/null || (git fetch -q --depth 1 origin "$REF" && git checkout -q FETCH_HEAD) || true) && git rev-parse HEAD
+# il rust-toolchain.toml del repository chiede la sua versione (e il target wasm): rustup la scarica alla prima invocazione di cargo
+RUN rustup show >/dev/null 2>&1 || true; rustup target add wasm32-unknown-unknown || true
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-covercraft \
+    cargo build --release -p covercraft-cli && cp target/release/covercraft-cli /usr/local/bin/covercraft-cli \
+    && cd apps/covercraft-web && trunk build --release && ls -la /src/dist/web
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends socat ca-certificates && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10003 covercraft && useradd --system --uid 10003 --gid 10003 --no-create-home --home-dir /data --shell /usr/sbin/nologin covercraft
+COPY --from=build /usr/local/bin/covercraft-cli /usr/local/bin/covercraft-cli
+COPY --from=build /src/dist/web /app/web
+COPY covercraft-start.sh /usr/local/bin/covercraft-start
+COPY covercraft-mcp-user.sh /usr/local/bin/covercraft-mcp-user
+RUN chmod +x /usr/local/bin/covercraft-start /usr/local/bin/covercraft-mcp-user && mkdir -p /data && chown covercraft:covercraft /data
+# parte da root solo per sistemare i permessi di /data (volume montato dall'host), poi passa all'utente covercraft (uid 10003)
+VOLUME ["/data"]
+EXPOSE 7979 7999
+ENV COVERCRAFT_HOME=/data COVERCRAFT_TOKEN="" COVERCRAFT_LANG=it MCP_PORT=7999
+CMD ["covercraft-start"]

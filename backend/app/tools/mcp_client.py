@@ -163,6 +163,9 @@ def _per_user_service(name: str):
     if name == "remotecraft":
         from ..services import remotecraft
         return remotecraft.svc
+    if name == "covercraft":
+        from ..services import covercraft
+        return covercraft.svc
     return None
 
 
@@ -285,7 +288,8 @@ class MCPManager:
                         min_role="adult", enabled=True)))
             # MailCraft: una sessione MCP per utente. La connessione principale (token di un utente di servizio) serve solo
             # a elencare i tool; ogni chiamata vera passa dalla sessione dell'utente (user_connection).
-            for name, mcp_host in (("mailcraft", settings.mailcraft_mcp_host), ("remotecraft", settings.remotecraft_mcp_host)):
+            for name, mcp_host in (("mailcraft", settings.mailcraft_mcp_host), ("remotecraft", settings.remotecraft_mcp_host),
+                                   ("covercraft", settings.covercraft_mcp_host)):
                 svc = _per_user_service(name)
                 if svc and svc.enabled() and mcp_host and not any(r.name == name for r in rows):
                     asyncio.create_task(self._connect_per_user(name, mcp_host))

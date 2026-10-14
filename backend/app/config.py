@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     remotecraft_url: str = ""         # URL del server RemoteCraft (es. http://remotecraft:7979): assistenza remota, gestionale per tecnico
     remotecraft_mcp_host: str = ""    # host:porta del ponte MCP per utente di RemoteCraft (es. remotecraft-mcp:7989)
     remotecraft_token: str = ""       # token di servizio RemoteCraft (>= 32 caratteri); generato da familai.sh
+    covercraft_url: str = ""          # URL del server CoverCraft (es. http://covercraft:7979): verifica copertura connettivita' dal database dell'operatore
+    covercraft_mcp_host: str = ""     # host:porta del ponte MCP per utente di CoverCraft (es. covercraft:7999)
+    covercraft_token: str = ""        # token di servizio CoverCraft: resta tra backend e container (il proxy /covercraft/api lo aggiunge lui)
 
     @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", "ideacraft_web", mode="before")
     @classmethod

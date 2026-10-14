@@ -244,6 +244,20 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "spiegato e il consenso registrato (consent_override solo se la persona lo dice, con motivo). Prima di gdpr_erase, "
             "delete_intervention o archive_customer mostra cosa succede e aspetta un si'. L'export GDPR contiene dati personali."
         )
+    if mcp_manager.is_connected("covercraft") and user.role != Role.child:
+        parts.append(
+            "\n# Verifica copertura (CoverCraft)\n"
+            "- L'operatore tiene in CoverCraft (menu Produttivita' > Copertura) il proprio database di copertura: TIM/FiberCop per comune "
+            "(FTTH, XGS-PON, FTTC, EVDSL, ADSL, SHDSL, ULL, circuiti in fibra), Open Fiber scala per scala, Fastweb, la rete propria, i ponti radio e le celle. "
+            "I tool mcp__covercraft__* rispondono dai dati reali, a nome dell'utente con cui stai parlando (le verifiche finiscono nel suo storico).\n"
+            "- Per 'che copertura c'e' in via X n al comune Y' usa verify_coverage con comune, via e civico; se risponde con piu' candidati, "
+            "mostrali e richiama con l'egon scelto. Se il comune o la via non si trovano, aiutati con search_comune / search_street / list_civici "
+            "(i nomi vanno come nelle tabelle) e chiedi conferma invece di indovinare. radio_bridges elenca i ponti radio; history/open_history lo storico.\n"
+            "- Riporta ogni tecnologia con il semaforo E il valore grezzo della cella (es. 'FTTH: coperto (ATTIVO), 1000/300 Mbit'), distanze e velocita' "
+            "come le da' il tool; segnala chiaramente 'non noto' quando il dato manca. Non inventare coperture ne' velocita'. "
+            "configure_database e set_preferences cambiano la configurazione per tutti: usali solo se la persona lo chiede esplicitamente.\n"
+            "- Il risultato di una verifica si puo' mettere in un documento (WordCraft) o in una mail (MailCraft) se richiesto."
+        )
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available
