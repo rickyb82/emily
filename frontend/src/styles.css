@@ -321,7 +321,7 @@ button.small { font-size: 13px; padding: 4px 10px; }
 .file-icon.doc { position: relative; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,.1); overflow: hidden; }
 .file-icon.doc b { font-size: 16px; color: #fff; padding: 2px 6px; border-radius: 5px; background: var(--app, #1f6feb); letter-spacing: .02em; }
 .file-icon-corner { position: absolute; top: 0; right: 0; width: 14px; height: 14px; background: linear-gradient(225deg, var(--bg) 50%, var(--border) 50%); }
-.app-word { --app: #2b5fd9; } .app-excel { --app: #1e8e4b; } .app-deck { --app: #d35b1f; } .app-map { --app: #7a3fd8; } .app-pdf { --app: #d9272e; } .app-mail { --app: #0e7fa6; }
+.app-word { --app: #2b5fd9; } .app-excel { --app: #1e8e4b; } .app-deck { --app: #d35b1f; } .app-map { --app: #7a3fd8; } .app-pdf { --app: #d9272e; } .app-mail { --app: #0e7fa6; } .app-remote { --app: #c2410c; }
 /* cartella APP e icone app stile iOS */
 .ios-folder { width: 68px; height: 68px; margin-top: 2px; padding: 7px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: color-mix(in srgb, var(--text) 10%, var(--panel)); border: 1px solid var(--border); border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
 .mini-app { display: flex; align-items: center; justify-content: center; border-radius: 5px; background: var(--app); color: #fff; font-size: 8px; font-weight: 700; }

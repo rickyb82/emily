@@ -231,6 +231,19 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "in chat come file (poi puoi aprirli con read_document o convertirli con le app).\n"
             "- Riassumi, non copiare intere mail; non leggere o inviare posta di altri membri della famiglia (non puoi comunque)."
         )
+    if mcp_manager.is_connected("remotecraft") and user.role != Role.child:
+        parts.append(
+            "\n# Assistenza remota (RemoteCraft)\n"
+            "- L'organizzazione fa assistenza remota con RustDesk e tiene clienti, PC, interventi e registro GDPR in RemoteCraft "
+            "(menu Produttivita' > Assistenza). I tool mcp__remotecraft__* agiscono a nome del tecnico con cui stai parlando: "
+            "find_customers/get_customer/add_customer, list_devices/find_device/connect_device (link rustdesk://), "
+            "start_intervention/stop_intervention/log_intervention (cronometro o ore inserite dopo, con note e fatturabilita'), "
+            "time_report (ore del mese per cliente/tecnico), privacy_status/record_consent, gdpr_review/gdpr_export.\n"
+            "- Telefonata del cliente: con l'ID RustDesk che legge trovi il PC (find_device) e avvii l'intervento; a fine lavoro "
+            "stop_intervention con le note. Non inventare consensi, firmatari o prove: chiedili; un avvio remoto senza consenso va "
+            "spiegato e il consenso registrato (consent_override solo se la persona lo dice, con motivo). Prima di gdpr_erase, "
+            "delete_intervention o archive_customer mostra cosa succede e aspetta un si'. L'export GDPR contiene dati personali."
+        )
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available

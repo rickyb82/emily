@@ -24,6 +24,9 @@ services:
       - MAILCRAFT_URL=${MAILCRAFT_URL:-}
       - MAILCRAFT_MCP_HOST=${MAILCRAFT_MCP_HOST:-}
       - MAILCRAFT_TOKEN=${MAILCRAFT_TOKEN:-}
+      - REMOTECRAFT_URL=${REMOTECRAFT_URL:-}
+      - REMOTECRAFT_MCP_HOST=${REMOTECRAFT_MCP_HOST:-}
+      - REMOTECRAFT_TOKEN=${REMOTECRAFT_TOKEN:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -257,6 +260,43 @@ services:
       - ./data:/data:ro                      # i file di FamilAI: allegati da inviare (/data/<app>/…)
       - ./data/mailcraft:/data/mailcraft     # allegati ricevuti salvati con save_attachment: compaiono in chat
     expose: ["7878", "7889"]
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  # RemoteCraft (https://github.com/rickyb82/remotecraft): server RustDesk (hbbs/hbbr, porte pubbliche 21115-21117) e
+  # gestionale dell'assistenza (clienti, PC, interventi, GDPR) nello stesso container, costruito dal repository con il suo
+  # Dockerfile. Dati in ./private/remotecraft (chiavi RustDesk: perderle = riconfigurare tutti i client; fare backup).
+  remotecraft:
+    build:
+      context: "https://github.com/rickyb82/remotecraft.git#${REMOTECRAFT_REF:-main}"
+      args: { RUSTDESK_TAG: "${RUSTDESK_TAG:-1.1.16}" }
+    image: familai-remotecraft
+    profiles: ["remotecraft"]
+    restart: unless-stopped
+    environment:
+      - REMOTECRAFT_TOKEN=${REMOTECRAFT_TOKEN:-}
+      - RUSTDESK_HOST=${RUSTDESK_HOST:-}
+      - TZ=${TZ:-Europe/Rome}
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21117:21117"
+    expose: ["7979"]
+    volumes:
+      - ./private/remotecraft/rustdesk:/data/rustdesk
+      - ./private/remotecraft/desk:/data/desk
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  remotecraft-mcp:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.remotecraft-mcp }
+    image: familai-remotecraft-mcp
+    profiles: ["remotecraft"]
+    restart: unless-stopped
+    depends_on: [remotecraft]
+    environment:
+      - MCP_PORT=7989
+      - REMOTECRAFT_SERVER=http://remotecraft:7979
+    expose: ["7989"]
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
 networks:

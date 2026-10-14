@@ -16,6 +16,7 @@
 #   ./familai.sh deckcraft up|down|logs|upgrade  DeckCraft: presentazioni PowerPoint dalla chat (MCP) + editor nel browser
 #   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali e diagrammi dalla chat (SVG + file nativo) + editor nel browser
 #   ./familai.sh mailcraft up|down|logs|upgrade  MailCraft: posta elettronica (IMAP/SMTP) per utente, web app + tool in chat
+#   ./familai.sh remotecraft up|down|logs|upgrade RemoteCraft: assistenza remota (server RustDesk + gestionale) per tecnico
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -228,6 +229,46 @@ case "${1:-}" in
       logs) compose --profile mailcraft logs -f --tail=100 mailcraft;;
       *) echo "uso: ./familai.sh mailcraft up|build|down|logs|upgrade"; exit 1;;
     esac;;
+  remotecraft)
+    # RemoteCraft: server RustDesk + gestionale assistenza (clienti, PC, interventi, GDPR); web app su /remotecraft/, tool MCP per tecnico.
+    need_env
+    set_env() { if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi; }
+    case "${2:-up}" in
+      up|build|upgrade)
+        mkdir -p private/remotecraft/rustdesk private/remotecraft/desk
+        if grep -q '^COMPOSE_PROFILES=' .env; then
+          grep -q "^COMPOSE_PROFILES=.*remotecraft" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,remotecraft/" .env && rm -f .env.bak; }
+        else
+          echo "COMPOSE_PROFILES=remotecraft" >> .env
+        fi
+        # token di servizio (>= 32 caratteri, lo pretende RemoteCraft)
+        tok=$(grep '^REMOTECRAFT_TOKEN=' .env | cut -d= -f2-); [ ${#tok} -ge 32 ] || set_env REMOTECRAFT_TOKEN "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        set_env REMOTECRAFT_URL "http://remotecraft:7979"
+        set_env REMOTECRAFT_MCP_HOST "remotecraft-mcp:7989"
+        grep -q '^RUSTDESK_HOST=.\+' .env || echo "!! Imposta RUSTDESK_HOST=<nome pubblico del server RustDesk> nel .env (i client lo usano come relay)"
+        if [ "$2" = upgrade ]; then
+          sha=$(git ls-remote https://github.com/rickyb82/remotecraft HEAD 2>/dev/null | cut -f1)
+          [ -n "$sha" ] || { echo "!! non riesco a leggere il repository remotecraft (rete?)"; exit 1; }
+          if grep -q "^REMOTECRAFT_REF=$sha" .env; then echo ">> remotecraft e' gia' all'ultimo commit (${sha:0:10})"; exit 0; fi
+          echo ">> remotecraft: aggiorno al commit ${sha:0:10} e ricompilo…"
+          set_env REMOTECRAFT_REF "$sha"
+        fi
+        echo ">> Build di RemoteCraft dal repository (compila Rust + WebAssembly: la prima volta anche 20-40 minuti)…"
+        DOCKER_BUILDKIT=1 compose --profile remotecraft build remotecraft
+        DOCKER_BUILDKIT=1 compose --profile remotecraft build remotecraft-mcp
+        compose --profile remotecraft up -d remotecraft remotecraft-mcp
+        compose up -d --build backend
+        compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
+        echo ">> RemoteCraft attivo: menu 🧰 Produttivita' > 🛟 Assistenza. Porte RustDesk pubbliche 21115-21117 (tcp, 21116 anche udp)."
+        echo "   Chiave e configurazione client: docker compose exec -u remotecraft remotecraft remotecraft-cli rustdesk";;
+      down)
+        compose --profile remotecraft stop remotecraft remotecraft-mcp
+        set_env REMOTECRAFT_URL ""
+        set_env REMOTECRAFT_MCP_HOST ""
+        compose up -d backend;;
+      logs) compose --profile remotecraft logs -f --tail=100 remotecraft remotecraft-mcp;;
+      *) echo "uso: ./familai.sh remotecraft up|build|down|logs|upgrade"; exit 1;;
+    esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
     # Destinazione: argomento (user@host[:dir]) oppure file .deploy con una riga  user@host[:dir]
@@ -242,5 +283,5 @@ case "${1:-}" in
     fi
     echo ">> update su $rhost:$rdir"
     ssh -t "$rhost" "cd '$rdir' && ./familai.sh update";;
-  *) sed -n '2,17p' "$0";;
+  *) sed -n '2,18p' "$0";;
 esac

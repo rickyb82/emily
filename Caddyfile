@@ -56,6 +56,11 @@
         reverse_proxy ideacraft-web:80
     }
     # MailCraft: web app + API (/mailcraft/api/...) del server multi-utente; il token utente viaggia nell'header Authorization
+    # RemoteCraft: web app + API del gestionale assistenza (il token del tecnico viaggia dopo #, non arriva qui)
+    handle_path /remotecraft/* {
+        encode zstd gzip
+        reverse_proxy remotecraft:7979
+    }
     handle_path /mailcraft/* {
         encode zstd gzip
         reverse_proxy mailcraft:7878 {

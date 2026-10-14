@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     mailcraft_url: str = ""           # URL del server MailCraft multi-utente (es. http://mailcraft:7878): posta per utente
     mailcraft_mcp_host: str = ""      # host:porta del ponte MCP per utente di MailCraft (es. mailcraft:7889)
     mailcraft_token: str = ""         # token di servizio del server MailCraft (conia i token utente); generato da familai.sh
+    remotecraft_url: str = ""         # URL del server RemoteCraft (es. http://remotecraft:7979): assistenza remota, gestionale per tecnico
+    remotecraft_mcp_host: str = ""    # host:porta del ponte MCP per utente di RemoteCraft (es. remotecraft-mcp:7989)
+    remotecraft_token: str = ""       # token di servizio RemoteCraft (>= 32 caratteri); generato da familai.sh
 
     @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", "ideacraft_web", mode="before")
     @classmethod

@@ -265,6 +265,7 @@ function ModApps({ feats }: { feats: Record<string, any> }) {
     { k: 'map', cls: 'app-map', g: '◎', name: 'Mappa', app: 'IdeaCraft', desc: 'Mappe mentali e diagrammi (schemi di rete, flowchart, organigrammi) con controllo automatico di IP e VLAN; esporta SVG, PNG, draw.io.', on: feats.ideacraft_web },
     { k: 'pdf', cls: 'app-pdf', g: 'PDF', name: 'PDF', app: 'PdfCraft', desc: 'Nuovo PDF vuoto o modifica di uno esistente: pagine, moduli, firme, commenti, unione e divisione.', on: feats.pdfcraft_web },
     { k: 'mail', cls: 'app-mail', g: '✉', name: 'Posta', app: 'MailCraft', desc: 'Le tue caselle IMAP/SMTP, stile Gmail, con l\'assistente che legge e risponde per te.', on: feats.mailcraft_web },
+    { k: 'remote', cls: 'app-remote', g: '🛟', name: 'Assistenza', app: 'RemoteCraft', desc: 'Assistenza remota: clienti, PC con ID RustDesk, interventi con cronometro e ore fatturabili, consensi GDPR e report; apre il client RustDesk sul PC del cliente.', on: feats.remotecraft_web },
   ]
   const [sel, setSel] = useState(apps[0])
   const [openF, setOpenF] = useState(false)

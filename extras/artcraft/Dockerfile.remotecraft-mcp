@@ -1,0 +1,13 @@
+# Ponte MCP per utente di RemoteCraft: riusa l'immagine del server (familai-remotecraft, costruita dal repository con il suo
+# Dockerfile) e vi aggiunge socat: il backend manda il token del tecnico come prima riga, poi parla MCP con
+# `remotecraft-cli mcp --server http://remotecraft:7979 --token <token>`. Va costruita DOPO familai-remotecraft.
+FROM familai-remotecraft
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf /var/lib/apt/lists/*
+COPY remotecraft-mcp-user.sh /usr/local/bin/remotecraft-mcp-user
+RUN chmod +x /usr/local/bin/remotecraft-mcp-user
+ENV MCP_PORT=7989 REMOTECRAFT_SERVER=http://remotecraft:7979
+EXPOSE 7989
+USER 10001
+ENTRYPOINT []
+CMD ["sh", "-c", "echo \">> remotecraft-cli mcp per utente in ascolto su :${MCP_PORT}\"; exec socat -d \"TCP-LISTEN:${MCP_PORT},fork,reuseaddr\" EXEC:/usr/local/bin/remotecraft-mcp-user"]

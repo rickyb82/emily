@@ -155,6 +155,17 @@ async def _protect_save_path(server: str, tool: str, args: dict, ctx: ToolContex
     return args
 
 
+def _per_user_service(name: str):
+    """Il servizio token-per-utente di un'app integrata (MailCraft, RemoteCraft), o None."""
+    if name == "mailcraft":
+        from ..services import mailcraft
+        return mailcraft.svc
+    if name == "remotecraft":
+        from ..services import remotecraft
+        return remotecraft.svc
+    return None
+
+
 async def _snapshot_path(path: str, ctx: ToolContext, note: str) -> None:
     """Se il percorso e' un file registrato, ne salva la versione attuale nella cronologia prima che venga sovrascritto."""
     try:
@@ -274,26 +285,27 @@ class MCPManager:
                         min_role="adult", enabled=True)))
             # MailCraft: una sessione MCP per utente. La connessione principale (token di un utente di servizio) serve solo
             # a elencare i tool; ogni chiamata vera passa dalla sessione dell'utente (user_connection).
-            from ..services import mailcraft
-            if mailcraft.enabled() and settings.mailcraft_mcp_host and not any(r.name == "mailcraft" for r in rows):
-                asyncio.create_task(self._connect_mailcraft())
+            for name, mcp_host in (("mailcraft", settings.mailcraft_mcp_host), ("remotecraft", settings.remotecraft_mcp_host)):
+                svc = _per_user_service(name)
+                if svc and svc.enabled() and mcp_host and not any(r.name == name for r in rows):
+                    asyncio.create_task(self._connect_per_user(name, mcp_host))
 
-    async def _connect_mailcraft(self) -> None:
-        from ..services import mailcraft
+    async def _connect_per_user(self, name: str, mcp_host: str) -> None:
+        svc = _per_user_service(name)
         # il token va NEL flusso TCP (prima riga), seguito dal dialogo MCP che arriva dal nostro stdin: printf da solo lo
         # avrebbe scritto sullo stdout verso il backend, non verso il container
-        cmd = '{ printf "%s\\n" "$MAILCRAFT_USER_TOKEN"; exec cat; } | exec socat - TCP:' + settings.mailcraft_mcp_host
-        cfg = ServerConfig(name="mailcraft", type="stdio", command="sh", args=["-c", cmd], min_role="adult", enabled=True, per_user=True)
+        cmd = '{ printf "%s\\n" "$USER_TOKEN"; exec cat; } | exec socat - TCP:' + mcp_host
+        cfg = ServerConfig(name=name, type="stdio", command="sh", args=["-c", cmd], min_role="adult", enabled=True, per_user=True)
         for attempt in range(6):   # il container puo' partire dopo il backend
             try:
-                cfg.env = {"MAILCRAFT_USER_TOKEN": await mailcraft.user_token("familai-system")}
+                cfg.env = {"USER_TOKEN": await svc.user_token("familai-system")}
                 break
             except Exception as e:
                 cfg.env = {}
-                log.info("MailCraft non ancora raggiungibile (%s), riprovo…", e)
+                log.info("%s non ancora raggiungibile (%s), riprovo…", svc.name, e)
                 await asyncio.sleep(10 * (attempt + 1))
         if not cfg.env:
-            self.conns["mailcraft"] = Connection(cfg=cfg, error="server MailCraft non raggiungibile (token di servizio?)")
+            self.conns[name] = Connection(cfg=cfg, error=f"server {svc.name} non raggiungibile (token di servizio?)")
             return
         await self.connect(cfg)
 
@@ -336,9 +348,9 @@ class MCPManager:
                 self.user_conns.pop(k, None)
         base = self.conns[server].cfg
         env = dict(base.env or {})
-        if server == "mailcraft":
-            from ..services import mailcraft
-            env["MAILCRAFT_USER_TOKEN"] = await mailcraft.user_token(user_id)
+        svc = _per_user_service(server)
+        if svc:
+            env["USER_TOKEN"] = await svc.user_token(user_id)
         cfg = ServerConfig(name=base.name, type=base.type, command=base.command, args=list(base.args), url=base.url,
                            headers=dict(base.headers), env=env, min_role=base.min_role, enabled=True, per_user=True)
         conn = Connection(cfg=cfg, user_id=user_id)

@@ -22,7 +22,7 @@ export default function Shell({ children }: { children: ReactNode }) {
     try { localStorage.setItem('familai:sidebar', next ? 'collapsed' : 'open') } catch {}
   }
   useEffect(() => {
-    const inEditor = loc.pathname.startsWith('/editor') || loc.pathname.startsWith('/mail')
+    const inEditor = loc.pathname.startsWith('/editor') || loc.pathname.startsWith('/mail') || loc.pathname.startsWith('/remote')
     if (inEditor && !collapsed) { setCollapsed(true); setAutoCollapsed(true) }
     else if (!inEditor && autoCollapsed) { setCollapsed(false); setAutoCollapsed(false) }
   }, [loc.pathname])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,6 +88,7 @@ export default function Shell({ children }: { children: ReactNode }) {
               <span className="navgroup-title">🧰 Produttività</span>
               <NavLink to="/documents" onClick={() => setOpen(false)}>📝 Documenti</NavLink>
               {me?.features?.mailcraft_web && <NavLink to="/mail" onClick={() => setOpen(false)}>✉️ Posta</NavLink>}
+              {me?.features?.remotecraft_web && <NavLink to="/remote" onClick={() => setOpen(false)}>🛟 Assistenza</NavLink>}
             </div>
           )}
         </nav>
