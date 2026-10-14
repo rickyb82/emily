@@ -4,12 +4,12 @@ import { useAuth } from '../lib/auth'
 
 /**
  * 📡 Copertura: la web app CoverCraft (verifica di copertura della connettività dal database dell'operatore) a tutta pagina.
- * Nessun token nel browser: l'app parla con /covercraft/api (?server=), che il backend inoltra al container con il token
- * di servizio e il nome dell'utente autenticato.
+ * Il token di servizio non arriva al browser: l'app riceve un token di frame firmato da Emily (la sua sessione) e parla con
+ * /covercraft/api (?server=), che il backend inoltra al container con il token di servizio e il nome dell'utente autenticato.
  */
 export default function Cover() {
   const { me } = useAuth()
-  const [sess, setSess] = useState<{ user: string; lang: string } | null>(null)
+  const [sess, setSess] = useState<{ user: string; lang: string; token: string } | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -18,7 +18,7 @@ export default function Cover() {
       .then(async (r) => {
         const ct = r.headers.get('content-type') || ''
         if (!r.ok || ct.includes('html')) throw new Error(`il server CoverCraft non risponde su /covercraft/ (HTTP ${r.status}): container attivo? \`./familai.sh covercraft up\`, poi \`./familai.sh update\` per ricaricare il proxy`)
-        return get<{ user: string; lang: string }>('/covercraft/session')
+        return get<{ user: string; lang: string; token: string }>('/covercraft/session')
       })
       .then((r) => setSess(r))
       .catch((e) => setErr(e.message))
@@ -26,13 +26,14 @@ export default function Cover() {
 
   const src = useMemo(() => {
     if (!sess) return ''
-    const q = new URLSearchParams({ server: `${window.location.origin}/covercraft`, user: sess.user, lang: sess.lang || 'it' })
+    // il token e' quello di frame coniato da Emily (identifica la sessione dell'utente, scade da solo), non quello di servizio
+    const q = new URLSearchParams({ server: `${window.location.origin}/covercraft`, user: sess.user, lang: sess.lang || 'it', token: sess.token })
     return `/covercraft/?${q.toString()}`
   }, [sess])
 
   async function reset() {
     setBusy(true)
-    try { await post('/covercraft/logout', {}); const r = await get<{ user: string; lang: string }>('/covercraft/session'); setSess(r) } catch (e: any) { setErr(e.message) } finally { setBusy(false) }
+    try { await post('/covercraft/logout', {}); const r = await get<{ user: string; lang: string; token: string }>('/covercraft/session'); setSess(r) } catch (e: any) { setErr(e.message) } finally { setBusy(false) }
   }
 
   if (!me?.features?.covercraft_web) {
