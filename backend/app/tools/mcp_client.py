@@ -140,7 +140,10 @@ async def _protect_save_path(server: str, tool: str, args: dict, ctx: ToolContex
     owner_row = (await ctx.db.execute(_select(FileAsset).where(FileAsset.path == str(pth)))).scalars().first()
     if not owner_row:
         return args
-    if owner_row.owner_id != ctx.user.id:
+    from ..services import workspace as _ws
+    if await _ws.protected_template(ctx.db, owner_row):
+        divert = True                                   # modello dell'organizzazione (carta intestata, listino…): mai sovrascritto dalla chat
+    elif owner_row.owner_id != ctx.user.id:
         divert = True                                   # file di un altro utente: mai
     elif open_path and str(pth) == str(open_path):
         divert = False                                  # e' il documento aperto in questa chat: si sovrascrive (e' una modifica)

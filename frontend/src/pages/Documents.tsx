@@ -9,10 +9,14 @@ import { APP_LABEL, canEdit, editorFor, editorPath, newFilePath, type ArtApp } f
 /**
  * 📁 Documenti, stile Finder: cartelle create dall'utente (annidabili, drag & drop), i progetti come cartelle automatiche,
  * e la cartella "APP" (stile iOS) con le applicazioni: nuovo documento Word, foglio Excel, presentazione, mappa, PDF, posta.
+ * Cartelle speciali (dal backend, kind): 🏢 <organizzazione> con le cartelle di reparto (sola lettura, carica l'amministratore,
+ * base di conoscenza del modello) e 💬 CHAT con una sottocartella automatica per ogni chat che ha file (contesto di quella chat).
  * Posizione corrente nell'URL: ?folder=<id> (cartella propria) oppure ?project=<id> (file di un progetto).
  */
 
-interface Folder { id: string; name: string; parent_id: string | null; color: string; files: number; subfolders: number }
+interface Folder { id: string; name: string; parent_id: string | null; color: string; files: number; subfolders: number; kind?: string; dept?: string; conversation_id?: string | null; can_write?: boolean; system?: boolean }
+const KIND_LABEL: Record<string, string> = { org: 'organizzazione', dept: 'reparto', chat: 'file delle chat', conv: 'chat' }
+const KIND_GLYPH: Record<string, string> = { org: '🏢', dept: '', chat: '💬', conv: '💬' }
 
 /** Le app: icona (tile colorata), etichetta, cosa fa il click. */
 const APPS: { key: string; app?: ArtApp; label: string; glyph: string; cls: string; name?: string; feature: string }[] = [
@@ -90,9 +94,11 @@ export default function Documents() {
   // ---- contenuto della cartella corrente ----
   const q = filter.trim().toLowerCase()
   const mine = (f: FileOut) => f.owner_id === me?.user.id
-  const sharedWithMe = files.filter((f) => !mine(f))
+  const isOrgFolder = (id: string | null | undefined) => { const k = id ? byId[id]?.kind : ''; return k === 'org' || k === 'dept' }
+  const inOrg = (f: FileOut) => isOrgFolder(f.folder_id)
+  const sharedWithMe = files.filter((f) => !mine(f) && !inOrg(f))
   const shownFolders = projectId || sharedView ? [] : folders.filter((f) => (f.parent_id || '') === folderId).filter((f) => !q || f.name.toLowerCase().includes(q))
-  const shownFiles = (projectId ? projFiles : sharedView ? sharedWithMe : files.filter((f) => mine(f) && (f.folder_id || '') === folderId))
+  const shownFiles = (projectId ? projFiles : sharedView ? sharedWithMe : files.filter((f) => (mine(f) || inOrg(f)) && (f.folder_id || '') === folderId))
     .filter((f) => !q || f.filename.toLowerCase().includes(q))
   const searching = !!q && !projectId
   const searchHits = searching ? files.filter((f) => f.filename.toLowerCase().includes(q)) : []
@@ -179,6 +185,8 @@ export default function Documents() {
   const apps = APPS.filter((a) => (feats as any)[a.feature])
   const projName = (id: string | null) => projects.find((p) => p.id === id)?.name
   const owner = (f: FileOut) => f.owner_id === me?.user.id
+  const editable = (f: FileOut) => owner(f) || f.access === 'write'   // nell'organizzazione l'amministratore gestisce anche i file degli altri admin
+  const canWriteHere = !current || current.can_write !== false
   const menuFile = menu?.kind === 'file' ? [...files, ...projFiles].find((f) => f.id === menu.id) : undefined
   const menuFolder = menu?.kind === 'folder' ? byId[menu.id] : undefined
 
@@ -197,8 +205,9 @@ export default function Documents() {
         </nav>
         <div className="row" style={{ gap: 6 }}>
           <input placeholder="Cerca…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 200 }} />
-          {!projectId && !sharedView && <button className="ghost" onClick={(e) => { e.stopPropagation(); newFolder() }}>📁 Nuova cartella</button>}
-          <button className="ghost" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>📎 Carica</button>
+          {!projectId && !sharedView && canWriteHere && <button className="ghost" onClick={(e) => { e.stopPropagation(); newFolder() }}>📁 Nuova cartella</button>}
+          {canWriteHere && <button className="ghost" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>📎 Carica</button>}
+          {!canWriteHere && <span className="muted small" title="Documenti ufficiali del reparto: li carica l'amministratore; il modello li usa come base nelle tue chat">🔒 sola lettura · carica l'amministratore</span>}
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         </div>
       </div>
@@ -213,7 +222,7 @@ export default function Documents() {
           </div>
         </>
       ) : (
-        <div className="finder-grid" {...(!projectId && !sharedView ? dropProps(current?.parent_id || '') : {})}>
+        <div className="finder-grid" {...(!projectId && !sharedView && canWriteHere ? dropProps(current?.parent_id || '') : {})}>
           {/* cartella APP (solo alla radice) */}
           {!folderId && !projectId && !sharedView && apps.length > 0 && (
             <button className="tile folder-tile app-folder" onClick={(e) => { e.stopPropagation(); setAppsOpen(true) }} title="Applicazioni">
@@ -241,17 +250,19 @@ export default function Documents() {
           ))}
           {/* cartelle dell'utente */}
           {shownFolders.map((f) => (
-            <button key={f.id} className={`tile folder-tile ${dragOver === f.id ? 'drop' : ''}`} draggable onDragStart={(e) => onDragStart(e, 'folder', f.id)} {...dropProps(f.id)}
-              onClick={(e) => { e.stopPropagation(); go({ folder: f.id }) }} onContextMenu={(e) => { e.preventDefault(); setMenu({ kind: 'folder', id: f.id, x: e.clientX, y: e.clientY }) }}>
-              <span className="folder-icon" style={f.color ? { ['--folder' as any]: f.color } : undefined}><span className="folder-tab" /></span>
+            <button key={f.id} className={`tile folder-tile ${dragOver === f.id ? 'drop' : ''} ${f.kind ? `kind-${f.kind}` : ''}`} draggable={!f.system && f.kind !== 'conv' && f.can_write !== false} onDragStart={(e) => onDragStart(e, 'folder', f.id)} {...(f.can_write !== false ? dropProps(f.id) : {})}
+              onClick={(e) => { e.stopPropagation(); go({ folder: f.id }) }} onContextMenu={(e) => { e.preventDefault(); setMenu({ kind: 'folder', id: f.id, x: e.clientX, y: e.clientY }) }}
+              title={f.kind === 'org' ? 'Documenti ufficiali dell\'organizzazione per reparto: li carica l\'amministratore, il modello li usa come base' : f.kind === 'chat' ? 'I file creati o caricati nelle chat, una sottocartella per chat: cio\' che metti li\' dentro e\' contesto di quella chat' : f.kind === 'dept' ? `Reparto: documenti condivisi (sola lettura${f.can_write ? ', tu puoi caricare' : ''})` : f.name}>
+              <span className={`folder-icon ${f.kind || ''}`} style={f.color ? { ['--folder' as any]: f.color } : undefined}><span className="folder-tab" />{KIND_GLYPH[f.kind || ''] && <span className="folder-glyph">{KIND_GLYPH[f.kind || '']}</span>}</span>
               <span className="tile-name">{f.name}</span>
-              <small className="muted">{f.files + f.subfolders === 0 ? 'vuota' : `${f.files} file${f.subfolders ? ` · ${f.subfolders} cartelle` : ''}`}</small>
+              <small className="muted">{f.kind && KIND_LABEL[f.kind] ? `${KIND_LABEL[f.kind]} · ` : ''}{f.files + f.subfolders === 0 ? 'vuota' : `${f.files} file${f.subfolders ? ` · ${f.subfolders} cartelle` : ''}`}</small>
               <span className="tile-menu" onClick={(e) => { e.stopPropagation(); setMenu({ kind: 'folder', id: f.id, x: e.clientX, y: e.clientY }) }}>⋯</span>
             </button>
           ))}
           {/* file */}
           {shownFiles.map(renderFile)}
-          {shownFolders.length === 0 && shownFiles.length === 0 && (folderId || projectId || sharedView) && <p className="muted small" style={{ gridColumn: '1 / -1' }}>Cartella vuota. Trascina qui dei file o usa 📎 Carica.</p>}
+          {shownFolders.length === 0 && shownFiles.length === 0 && (folderId || projectId || sharedView) && <p className="muted small" style={{ gridColumn: '1 / -1' }}>{canWriteHere ? 'Cartella vuota. Trascina qui dei file o usa 📎 Carica.' : 'Cartella vuota: i documenti di questo reparto li carica l\'amministratore.'}</p>}
+          {current?.kind === 'chat' && shownFolders.length === 0 && <p className="muted small" style={{ gridColumn: '1 / -1' }}>Qui compaiono, una cartella per chat, i file creati o caricati nelle conversazioni. Dentro la cartella di una chat puoi aggiungere documenti (anche in sottocartelle): il modello li usa come contesto di quella chat.</p>}
         </div>
       )}
 
@@ -261,18 +272,20 @@ export default function Documents() {
           <li onClick={() => { setMenu(null); openFile(menuFile) }}>{canEdit(menuFile.filename, feats) ? '✏️ Apri nell\'editor' : '👁 Apri'}</li>
           <li onClick={() => { setMenu(null); window.open(menuFile.url, '_blank') }}>⬇ Scarica</li>
           <li onClick={() => { setMenu(null); setHistFor(menuFile) }}>🕘 Cronologia…</li>
-          {owner(menuFile) && <li onClick={() => { setMenu(null); renameFile(menuFile) }}>✎ Rinomina</li>}
-          {owner(menuFile) && <li onClick={() => { setMenu(null); setMoveFor(menuFile) }}>📁 Sposta in…</li>}
-          {owner(menuFile) && <li onClick={() => { setMenu(null); setShareFor(menuFile) }}>🔗 Condividi…</li>}
+          {editable(menuFile) && <li onClick={() => { setMenu(null); renameFile(menuFile) }}>✎ Rinomina</li>}
+          {editable(menuFile) && <li onClick={() => { setMenu(null); setMoveFor(menuFile) }}>📁 Sposta in…</li>}
+          {owner(menuFile) && !inOrg(menuFile) && <li onClick={() => { setMenu(null); setShareFor(menuFile) }}>🔗 Condividi…</li>}
           {menuFile.conversation_id && <li onClick={() => { setMenu(null); nav(`/c/${menuFile.conversation_id}`) }}>💬 Vai alla chat</li>}
-          {owner(menuFile) && <li className="danger" onClick={() => { setMenu(null); removeFile(menuFile) }}>🗑 Elimina</li>}
+          {editable(menuFile) && <li className="danger" onClick={() => { setMenu(null); removeFile(menuFile) }}>🗑 Elimina</li>}
         </ul>
       )}
       {menu && menuFolder && (
         <ul className="ctx-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <li onClick={() => { setMenu(null); go({ folder: menuFolder.id }) }}>📂 Apri</li>
-          <li onClick={() => { setMenu(null); renameFolder(menuFolder) }}>✎ Rinomina</li>
-          <li className="danger" onClick={() => { setMenu(null); deleteFolder(menuFolder) }}>🗑 Elimina cartella</li>
+          {menuFolder.conversation_id && <li onClick={() => { setMenu(null); nav(`/c/${menuFolder.conversation_id}`) }}>💬 Vai alla chat</li>}
+          {!menuFolder.system && menuFolder.can_write !== false && <li onClick={() => { setMenu(null); renameFolder(menuFolder) }}>✎ Rinomina{menuFolder.kind === 'conv' ? ' (anche la chat)' : ''}</li>}
+          {!menuFolder.system && menuFolder.can_write !== false && <li className="danger" onClick={() => { setMenu(null); deleteFolder(menuFolder) }}>🗑 Elimina cartella</li>}
+          {menuFolder.system && <li className="muted">cartella di sistema</li>}
         </ul>
       )}
 
@@ -286,7 +299,7 @@ export default function Documents() {
             <h3>Sposta «{moveFor.filename}»</h3>
             <ul className="move-list">
               <li onClick={() => { moveFile(moveFor, ''); setMoveFor(null) }}>📁 Documenti (radice)</li>
-              {folders.map((f) => <li key={f.id} onClick={() => { moveFile(moveFor, f.id); setMoveFor(null) }} style={{ paddingLeft: 12 + 14 * depth(f, byId) }}>📁 {f.name}</li>)}
+              {folders.filter((f) => f.can_write !== false).map((f) => <li key={f.id} onClick={() => { moveFile(moveFor, f.id); setMoveFor(null) }} style={{ paddingLeft: 12 + 14 * depth(f, byId) }}>{KIND_GLYPH[f.kind || ''] || '📁'} {f.name}{f.kind === 'dept' || f.kind === 'org' ? <small className="muted"> · organizzazione</small> : ''}</li>)}
             </ul>
             <button className="ghost" onClick={() => setMoveFor(null)}>Annulla</button>
           </div>
@@ -315,7 +328,7 @@ export default function Documents() {
 
   function renderFile(f: FileOut) {
     return (
-      <button key={f.id} className={`tile file-tile ${selected === f.id ? 'selected' : ''}`} draggable={owner(f)} onDragStart={(e) => onDragStart(e, 'file', f.id)}
+      <button key={f.id} className={`tile file-tile ${selected === f.id ? 'selected' : ''}`} draggable={editable(f)} onDragStart={(e) => onDragStart(e, 'file', f.id)}
         onClick={(e) => { e.stopPropagation(); if (selected === f.id) openFile(f); else setSelected(f.id) }} onDoubleClick={() => openFile(f)}
         onContextMenu={(e) => { e.preventDefault(); setMenu({ kind: 'file', id: f.id, x: e.clientX, y: e.clientY }) }} title={`${f.filename} · ${(f.size / 1024).toFixed(0)} KB`}>
         <FileIcon name={f.filename} mime={f.mime} />

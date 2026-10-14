@@ -19,7 +19,7 @@ from ..services.naming import unique_filename
 from ..policy.permissions import effective_policy
 from ..schemas import FileOut
 from ..security.sessions import AuthContext, require_auth
-from ..services import rag
+from ..services import rag, workspace
 from ..services.access import require_access
 from ..tools.documents import extract_text
 
@@ -94,10 +94,13 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
         path.unlink(missing_ok=True)
         raise HTTPException(422, f"File rifiutato dal controllo antivirus: {verdict}")
     mime = file.content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
-    name = await unique_filename(db, ctx.user.id, folder_id or None, name)
-    asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
+    dest = await workspace.folder_for_write(db, folder_id, ctx.user)
+    owner_id = dest.owner_id if dest is not None and workspace.is_org(dest) else ctx.user.id   # file dell'organizzazione: dell'archivio, non di chi li carica
+    name = await unique_filename(db, owner_id, folder_id or None, name)
+    asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=owner_id, project_id=project_id,
                       conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
                       folder_id=folder_id or None)
+    await workspace.place_in_conversation(db, asset)   # allegato di chat senza cartella: CHAT/<titolo della chat>
     if not mime.startswith(("image/", "video/", "audio/")):
         asset.extracted_text = extract_text(path, mime) or ""
     asset.index_status = "pending" if rag.is_indexable(asset) else "none"
@@ -152,6 +155,7 @@ async def blank_pdf(body: BlankPdf, ctx: AuthContext = Depends(require_auth), db
     w = PdfWriter()
     for _ in range(max(1, min(int(body.pages or 1), 20))):
         w.add_blank_page(width=595.28, height=841.89)
+    await workspace.folder_for_write(db, body.folder_id, ctx.user)
     nid = uuid.uuid4().hex
     path = settings.generated_dir / f"{nid}.pdf"
     settings.generated_dir.mkdir(parents=True, exist_ok=True)
@@ -233,12 +237,14 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
             project_id = project_id or conv.project_id
         if project_id:
             await require_access(db, "project", project_id, ctx.user, write=True)
+        await workspace.folder_for_write(db, folder_id, ctx.user)
         path = settings.generated_dir / f"{file_id}{ext}"
         path.write_bytes(data)
         name = await unique_filename(db, ctx.user.id, folder_id or None, name)
         asset = FileAsset(id=file_id, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=project_id,
                           conversation_id=conversation_id, filename=name, mime=mime, size=len(data), path=str(path),
                           kind="generated", folder_id=folder_id or None)
+        await workspace.place_in_conversation(db, asset)
         db.add(asset)
     if not mime.startswith(("image/", "video/", "audio/")):
         asset.extracted_text = extract_text(Path(asset.path), mime) or ""
@@ -258,17 +264,22 @@ class FileRename(BaseModel):
 @router.patch("/files/{fid}", response_model=FileOut)
 async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Rinomina un file (proprietario o permesso di scrittura). L'estensione resta quella originale."""
-    asset, _ = await require_access(db, "file", fid, ctx.user, write=True)
+    asset, level = await require_access(db, "file", fid, ctx.user, write=True)
     if body.folder_id is not None:
-        if asset.owner_id != ctx.user.id:
+        from ..models import Folder
+        cur = await db.get(Folder, asset.folder_id) if asset.folder_id else None
+        if asset.owner_id != ctx.user.id and not (workspace.is_org(cur) and ctx.user.role == Role.admin):
             raise HTTPException(403, "Solo il proprietario puo' spostare il file nelle sue cartelle")
-        if body.folder_id:
-            from ..models import Folder
-            fo = await db.get(Folder, body.folder_id)
-            if not fo or fo.owner_id != ctx.user.id:
-                raise HTTPException(404, "Cartella non trovata")
+        if workspace.is_org(cur) and ctx.user.role != Role.admin:
+            raise HTTPException(403, "I file dell'organizzazione li sposta solo l'amministratore")
+        dest = await workspace.folder_for_write(db, body.folder_id, ctx.user)
+        if dest is not None and workspace.is_org(dest):
+            asset.owner_id = dest.owner_id        # entra nell'archivio: diventa dell'organizzazione
+        elif workspace.is_org(cur):
+            asset.owner_id = ctx.user.id          # esce dall'archivio: lo prende chi lo sposta (admin)
         asset.folder_id = body.folder_id or None
-        asset.filename = await unique_filename(db, ctx.user.id, asset.folder_id, asset.filename, exclude_id=asset.id)
+        asset.filename = await unique_filename(db, asset.owner_id, asset.folder_id, asset.filename, exclude_id=asset.id)
+        await workspace.move_chunks(db, asset.id, asset.folder_id)
     if body.filename is not None:
         low = asset.filename.lower()
         old_ext = ".ideacraft.json" if low.endswith(".ideacraft.json") else Path(asset.filename).suffix
@@ -277,7 +288,7 @@ async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(req
         if not stem:
             raise HTTPException(400, "Nome non valido")
         wanted = f"{stem}{old_ext}"[:200]
-        if (await unique_filename(db, ctx.user.id, asset.folder_id, wanted, exclude_id=asset.id)) != wanted:
+        if (await unique_filename(db, asset.owner_id, asset.folder_id, wanted, exclude_id=asset.id)) != wanted:
             raise HTTPException(409, f"Esiste gia' un file chiamato \"{wanted}\" in questa cartella")
         asset.filename = wanted
     await db.commit()
@@ -307,10 +318,11 @@ async def list_files(project_id: str | None = None, ctx: AuthContext = Depends(r
     shared_ids = (await db.execute(select(Share.resource_id).where(
         Share.resource_type == "file", Share.family_id == ctx.user.family_id,
         or_(Share.target_user_id == ctx.user.id, Share.target_user_id.is_(None))))).scalars().all()
+    org_ids = [f.id for f in await workspace.visible_org_folders(db, ctx.user)]
     rows = (await db.execute(select(FileAsset).where(
         FileAsset.family_id == ctx.user.family_id,
-        or_(FileAsset.owner_id == ctx.user.id, FileAsset.id.in_(shared_ids or ["-"]))
-    ).order_by(FileAsset.created_at.desc()).limit(300))).scalars().all()
+        or_(FileAsset.owner_id == ctx.user.id, FileAsset.id.in_(shared_ids or ["-"]), FileAsset.folder_id.in_(org_ids or ["-"]))
+    ).order_by(FileAsset.created_at.desc()).limit(600))).scalars().all()
     from ..models import User as _U
     from ..services.access import access_level
     names = dict((await db.execute(select(_U.id, _U.display_name).where(_U.family_id == ctx.user.family_id))).all())
@@ -352,7 +364,7 @@ async def download(fid: str, ctx: AuthContext = Depends(require_auth), db: Async
 @router.delete("/files/{fid}")
 async def delete_file(fid: str, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     asset, level = await require_access(db, "file", fid, ctx.user)
-    if level not in ("owner", "parent"):
+    if level not in ("owner", "parent", "write") or (level == "write" and not await workspace.protected_template(db, asset)):
         raise HTTPException(403)
     if asset.path:
         Path(asset.path).unlink(missing_ok=True)

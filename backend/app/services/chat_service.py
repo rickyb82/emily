@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..models import Conversation, FileAsset, Message, Project, Role, User
+from ..models import Conversation, FileAsset, Folder, Message, Project, Role, User
 from ..policy.permissions import (
     TOOL_ALIASES,
     check_daily_quota,
@@ -118,6 +118,40 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             if files:
                 parts.append("File del progetto (cerca con search_documents, oppure leggi per intero con read_document):\n" +
                              "\n".join(f"- {f.filename} (id: {f.id}, {f.chunk_count} parti indicizzate)" for f in files))
+    # Documenti dell'organizzazione (cartelle di reparto che l'utente vede) e della cartella CHAT di questa conversazione
+    if user.role != Role.child:
+        from . import workspace as _ws
+        org = [f for f in await _ws.visible_org_folders(db, user) if f.kind == "dept"]
+        if org:
+            from ..models import Family as _Fam
+            fam = await db.get(_Fam, user.family_id)
+            ids = await _ws.descendants(db, {f.id for f in org}, user.family_id)
+            files = (await db.execute(select(FileAsset).where(FileAsset.folder_id.in_(list(ids))).order_by(FileAsset.filename))).scalars().all()
+            by_folder: dict[str, list[FileAsset]] = {}
+            for f in files:
+                by_folder.setdefault(f.folder_id or "", []).append(f)
+            names = {f.id: f for f in (await db.execute(select(Folder).where(Folder.id.in_(list(ids))))).scalars().all()}
+            lines = []
+            for fid_, fl in by_folder.items():
+                fo = names.get(fid_)
+                label = fo.name if fo else "?"
+                if fo and fo.dept:
+                    label = f"{_ws.DEPARTMENTS.get(fo.dept, fo.dept)}" + (f" / {fo.name}" if fo.name != _ws.DEPARTMENTS.get(fo.dept) else "")
+                for f in fl[:40]:
+                    lines.append(f"- [{label}] {f.filename} (id: {f.id}" + (f", {f.chunk_count} parti indicizzate" if f.chunk_count else "") + ")")
+            depts = ", ".join(_ws.DEPARTMENTS[d] for d in _ws.user_departments(user)) or ("tutti" if user.role == Role.admin else "nessuno")
+            parts.append(
+                f"\n# Documenti di {(fam.name if fam else 'organizzazione')} (reparti dell'utente: {depts})\n"
+                "Sono i documenti ufficiali condivisi dall'amministratore: carta intestata, modelli di preventivo e relazione, listini, "
+                "procedure, dati amministrativi. Usali come base e come fonte di verita' per preventivi, relazioni tecniche e risposte "
+                "amministrative: i passaggi pertinenti arrivano automaticamente come estratti, oppure cerca con search_documents o leggi "
+                "per intero con read_document (id). Per produrre un documento su carta intestata o da un modello aprilo con l'app giusta "
+                "(WordCraft/GridCraft/DeckCraft) usando il suo id e salva il risultato come NUOVO file: i modelli non si modificano mai "
+                "(un salvataggio su di essi viene comunque dirottato su una copia). Se un dato manca nei documenti, dillo e chiedilo: "
+                "non inventare prezzi, condizioni o riferimenti.\n" + ("\n".join(lines) if lines else "(cartelle di reparto ancora vuote)"))
+        parts.append("\n# Cartella CHAT\nI file creati o caricati in questa chat finiscono in Documenti > CHAT > <titolo della chat>; "
+                     "tutto cio' che l'utente mette in quella cartella (anche sottocartelle) e' contesto di questa conversazione e ti arriva "
+                     "come estratti o lo trovi con search_documents.")
     parts.append("\nQuando generi un'immagine o un video, l'utente lo vede automaticamente: non inventare link. "
                  "Se l'utente chiede un generatore preciso ('falla con OpenAI', 'usa Flux', 'con Gemini') passa provider=... al tool: "
                  "openai/gpt-image e' il migliore per testo e scritte nelle immagini, comfyui e' quello di casa (gratis).")
@@ -429,6 +463,8 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
             db.add(umsg)
             if conv.title == "Nuova chat" and text.strip():
                 conv.title = text.strip()[:60]
+                from . import workspace as _ws
+                await _ws.sync_conv_title(db, conv)
             await db.commit()
             yield sse({"type": "user_message", "message": _msg_out(umsg)})
 
@@ -529,9 +565,11 @@ async def run_turn(db: AsyncSession, user: User, conv: Conversation, text: str |
     # RAG: recupero automatico dei passaggi pertinenti dai documenti del progetto / della chat
     if text.strip():
         try:
+            from . import workspace as _ws
             hits = await rag.search(db, text, user.family_id,
                                     project_ids=[conv.project_id] if conv.project_id else None,
-                                    conversation_ids=[conv.id])
+                                    conversation_ids=[conv.id],
+                                    folder_ids=await _ws.context_folder_ids(db, user, conv) or None)
             if hits:
                 system_dynamic += ("\n\n# Estratti dai documenti dell'utente pertinenti alla richiesta corrente\n"
                            "Usali se rispondono alla domanda e cita il nome del file; se non bastano usa search_documents.\n\n"

@@ -242,6 +242,13 @@ function ModDocs() {
         </div>
         <div className="g-callout">{msg}</div>
       </Card>
+      <Card title="Le cartelle speciali" icon="🏢">
+        <Steps items={[
+          '🏢 La cartella con il nome dell\'azienda contiene le cartelle di reparto (Tecnico, Commerciale, Amministrativo): documenti ufficiali in sola lettura che carica l\'amministratore. Carta intestata, modelli di preventivo, listini, procedure, dati amministrativi.',
+          'Vedi i reparti a cui appartieni (lo decide l\'amministratore). Quando chiedi in chat un preventivo, una relazione o un\'informazione amministrativa, il modello usa quei documenti come base: parte dalla carta intestata e dai modelli, e non inventa prezzi o condizioni che non ci sono.',
+          '💬 CHAT raccoglie i file creati o caricati nelle conversazioni, in una sottocartella per chat (con il titolo della chat, che segue i rinomini). Dentro la cartella di una chat puoi aggiungere documenti, anche in sottocartelle: diventano contesto di quella sola chat.',
+        ]} />
+      </Card>
       <Card title="Da ricordare" icon="📌">
         <Steps items={['I progetti compaiono come cartelle verdi automatiche: dentro ci sono i file di quel progetto.', 'La ricerca in alto cerca in tutte le cartelle.', 'Spostare o rinominare non rompe nulla: chat, progetti e indice usano l\'identità del file, non il nome.', 'I nomi doppi vengono numerati da soli (Finder-style): «documento 2.docx».']} />
       </Card>

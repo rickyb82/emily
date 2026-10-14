@@ -463,3 +463,9 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .version-list { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
 .version-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .version-list li.current { background: var(--bg); }
+/* cartelle speciali di Documenti: organizzazione (reparti) e CHAT */
+.folder-icon { position: relative; }
+.folder-icon .folder-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; padding-top: 6px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.folder-icon.org { --folder: #0f766e; } .folder-icon.dept { --folder: #0f766e; } .folder-icon.chat { --folder: #2563eb; } .folder-icon.conv { --folder: #60a5fa; }
+.folder-tile.kind-dept .tile-name::after { content: ' 🔒'; font-size: 11px; opacity: .6; }
+.ctx-menu li.muted { cursor: default; opacity: .6; }

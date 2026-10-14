@@ -179,6 +179,9 @@ async def update_member(uid: str, body: UpdateMemberRequest, request: Request,
         u.role = Role(data.pop("role"))
     if "age_group" in data:
         u.age_group = AgeGroup(data.pop("age_group"))
+    if "departments" in data:
+        from ..services.workspace import DEPARTMENTS
+        u.departments = [d for d in data.pop("departments") if d in DEPARTMENTS]
     if "is_active" in data and u.id == ctx.user.id and not data["is_active"]:
         raise HTTPException(400, "Non puoi disattivare te stesso")
     for k, v in data.items():

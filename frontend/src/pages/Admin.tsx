@@ -14,6 +14,9 @@ const TOOL_IT: Record<string, string> = { web_search: 'Ricerca web', generate_im
 const PROVIDERS = ['anthropic', 'openai', 'gemini', 'ollama', 'custom', 'auto']
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
+
+const DEPT_LABEL: Record<string, string> = { tecnico: 'Tecnico', commerciale: 'Commerciale', amministrativo: 'Amministrativo' }
+
 export default function Admin() {
   const [params] = useSearchParams()
   const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'members')
@@ -89,7 +92,7 @@ function Members() {
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
               <td>{m.avatar} {m.display_name} <small className="muted">{m.email ?? m.username}</small></td>
-              <td>{{ admin: 'Amministratore', adult: org ? 'Utente' : 'Adulto', child: 'Bambino/a' }[m.role]}</td>
+              <td>{{ admin: 'Amministratore', adult: org ? 'Utente' : 'Adulto', child: 'Bambino/a' }[m.role]}{org && m.role !== 'child' && <><br /><small className="muted">{m.role === 'admin' ? 'tutti i reparti' : (m.departments?.length ? m.departments.map((d) => DEPT_LABEL[d] || d).join(', ') : 'nessun reparto')}</small></>}</td>
               <td>{org ? (m.is_active ? '🟢 attivo' : '⛔ disattivato') : m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
               <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : m.mfa_choice === 'skip' ? <span title="Ha scelto di entrare senza secondo fattore">— (scelta)</span> : '⚠️ no') : '—'}</td>
               <td><small>
@@ -123,7 +126,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
   const [f, setF] = useState<any>({
     username: user?.username ?? '', display_name: user?.display_name ?? '', avatar: user?.avatar ?? '🙂',
     role: user?.role ?? (org ? 'adult' : 'child'), age_group: user?.age_group ?? 'kid', birth_year: user?.birth_year ?? '',
-    email: user?.email ?? '', password: '', pin: '', is_active: user?.is_active ?? true,
+    email: user?.email ?? '', password: '', pin: '', is_active: user?.is_active ?? true, departments: user?.departments ?? [],
   })
   const [policy, setPolicy] = useState<any>(user ? { ...user.effective_policy } : { ...(defaults[org ? 'adult' : 'kid'] ?? {}) })
   const [advanced, setAdvanced] = useState(!!user)
@@ -151,7 +154,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
       delete cleanPolicy.label
       delete cleanPolicy.age_group
       if (user) {
-        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy }
+        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy, departments: f.departments }
         if (isChild) body.age_group = f.age_group
         if (f.birth_year) body.birth_year = Number(f.birth_year)
         if (f.password) body.password = f.password
@@ -162,8 +165,9 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
         if (!body.email) delete body.email
         if (!body.password) delete body.password
         if (!body.pin) delete body.pin
+        delete body.departments
         const u = await post<User>('/admin/members', body)
-        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy })
+        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy, departments: f.departments })
       }
       onClose()
     } catch (e: any) {
@@ -202,6 +206,17 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
           )}
           {user && <label className="row"><input type="checkbox" checked={f.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Attivo</label>}
         </div>
+        {org && !isChild && (
+          <fieldset className="stack" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+            <legend>Reparti</legend>
+            <small className="muted">Decidono quali cartelle di <b>{me?.family_name || 'organizzazione'}</b> (Documenti) l'utente vede e quali documenti il modello usa come base nelle sue chat: carta intestata e modelli di preventivo (Commerciale), relazioni e procedure (Tecnico), dati amministrativi. {f.role === 'admin' ? "L'amministratore vede tutto e carica i documenti." : ''}</small>
+            <div className="row wrap" style={{ gap: 14 }}>
+              {Object.entries(DEPT_LABEL).map(([k, label]) => (
+                <label key={k} className="row"><input type="checkbox" checked={(f.departments as string[]).includes(k)} onChange={(e) => set('departments', e.target.checked ? [...f.departments, k] : (f.departments as string[]).filter((x) => x !== k))} /> {label}</label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         <details open={advanced} onToggle={(e) => setAdvanced((e.target as any).open)}>
           <summary>Permessi e limiti {isChild ? '(controllo genitori)' : ''}</summary>

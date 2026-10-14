@@ -50,3 +50,20 @@ def unique_path(path: Path) -> Path:
     while (path.parent / f"{stem} {n}{ext}").exists():
         n += 1
     return path.parent / f"{stem} {n}{ext}"
+
+
+async def unique_folder_name(db: AsyncSession, owner_id: str, parent_id: str | None, name: str, exclude_id: str | None = None) -> str:
+    """Nome di cartella non ancora usato dall'utente nello stesso livello (stessa serie: nome, nome 2, nome 3…)."""
+    from ..models import Folder
+    q = select(Folder.name).where(Folder.owner_id == owner_id)
+    q = q.where(Folder.parent_id == parent_id) if parent_id else q.where(Folder.parent_id.is_(None))
+    if exclude_id:
+        q = q.where(Folder.id != exclude_id)
+    taken = {n.lower() for (n,) in (await db.execute(q)).all()}
+    if name.lower() not in taken:
+        return name
+    stem = re.sub(r" \d+$", "", name) or "cartella"
+    n = 2
+    while f"{stem} {n}".lower() in taken:
+        n += 1
+    return f"{stem} {n}"

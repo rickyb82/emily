@@ -95,6 +95,7 @@ export interface User {
   last_login?: string | null
   last_logout?: string | null
   active_sessions?: number
+  departments?: string[]
   policy: Record<string, any>
   effective_policy: Record<string, any>
 }

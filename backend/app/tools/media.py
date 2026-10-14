@@ -25,6 +25,8 @@ async def _save_generated(ctx: ToolContext, data: bytes, ext: str, mime: str, la
     asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
                       conversation_id=ctx.conversation_id, filename=f"{label}.{ext}", mime=mime, size=len(data),
                       path=str(path), kind="generated")
+    from ..services import workspace as _ws
+    await _ws.place_in_conversation(ctx.db, asset)
     ctx.db.add(asset)
     await ctx.db.commit()
     return asset

@@ -61,6 +61,8 @@ async def run_code(args: dict, ctx: ToolContext) -> ToolResult:
         asset = FileAsset(id=fid, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
                           conversation_id=ctx.conversation_id, filename=Path(f["name"]).name, mime=f["mime"],
                           size=len(data), path=str(path), kind="generated")
+        from ..services import workspace as _ws
+        await _ws.place_in_conversation(ctx.db, asset)
         ctx.db.add(asset)
         saved.append(f"{asset.filename} (id {fid}, {len(data)} byte)")
         kind = "image" if f["mime"].startswith("image/") else "video" if f["mime"].startswith("video/") else "file"

@@ -96,6 +96,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # reparti aziendali (modalita' azienda): ["tecnico", "commerciale", "amministrativo"]; decidono quali cartelle di
+    # reparto (documenti condivisi dell'organizzazione) l'utente vede e il modello usa come base nelle sue chat
+    departments: Mapped[list] = mapped_column(JSON, default=list)
     # scelta sul secondo fattore quando e' facoltativo: "" = non ancora chiesto, "skip" = l'utente ha scelto di non usarlo
     mfa_choice: Mapped[str] = mapped_column(String(10), default="")
 
@@ -250,6 +253,12 @@ class Folder(Base):
     name: Mapped[str] = mapped_column(String(120))
     color: Mapped[str] = mapped_column(String(20), default="")   # tinta dell'icona (opzionale)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+    # "" = cartella personale; "org" = radice dei documenti dell'organizzazione (una per famiglia/azienda, solo admin ci scrive);
+    # "dept" = cartella dentro l'albero org (dept = reparto che la vede, "" = tutti); "chat" = radice CHAT dell'utente;
+    # "conv" = sottocartella automatica di una conversazione (conversation_id), il cui contenuto e' contesto di quella chat
+    kind: Mapped[str] = mapped_column(String(12), default="")
+    dept: Mapped[str] = mapped_column(String(40), default="")
+    conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
 
 class Chunk(Base):
@@ -260,6 +269,7 @@ class Chunk(Base):
     file_id: Mapped[str] = mapped_column(ForeignKey("files.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    folder_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)   # cartella del file (RAG per cartella)
     idx: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)

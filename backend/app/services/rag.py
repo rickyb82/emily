@@ -202,7 +202,7 @@ async def index_file(file_id: str, db: AsyncSession | None = None) -> int:
             await db.execute(delete(Chunk).where(Chunk.file_id == asset.id))
             for i, c in enumerate(chunks):
                 db.add(Chunk(family_id=asset.family_id, file_id=asset.id, project_id=asset.project_id,
-                             conversation_id=asset.conversation_id, idx=i, text=c,
+                             conversation_id=asset.conversation_id, folder_id=asset.folder_id, idx=i, text=c,
                              embedding=vecs[i] if vecs else None, embedding_model=model))
             asset.chunk_count = len(chunks)
             asset.index_status = "indexed"
@@ -236,7 +236,7 @@ class Hit:
 
 async def search(db: AsyncSession, query: str, family_id: str, project_ids: list[str] | None = None,
                  conversation_ids: list[str] | None = None, file_ids: list[str] | None = None,
-                 top_k: int | None = None) -> list[Hit]:
+                 top_k: int | None = None, folder_ids: list[str] | set[str] | None = None) -> list[Hit]:
     top_k = top_k or settings.rag_top_k
     conds = []
     if project_ids:
@@ -245,6 +245,8 @@ async def search(db: AsyncSession, query: str, family_id: str, project_ids: list
         conds.append(Chunk.conversation_id.in_(conversation_ids))
     if file_ids:
         conds.append(Chunk.file_id.in_(file_ids))
+    if folder_ids:
+        conds.append(Chunk.folder_id.in_(list(folder_ids)))   # cartelle di reparto + cartella della chat (e sottocartelle)
     if not conds:
         return []
     rows = (await db.execute(select(Chunk, FileAsset.filename).join(FileAsset, FileAsset.id == Chunk.file_id)

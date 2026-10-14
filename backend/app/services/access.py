@@ -40,6 +40,13 @@ async def access_level(db: AsyncSession, rtype: str, resource, user: User) -> st
         pshare = await get_share(db, "project", resource.project_id, user)
         if pshare:
             return pshare.permission
+    if rtype == "file" and getattr(resource, "folder_id", None):
+        # file nell'archivio dell'organizzazione: lettura per chi e' del reparto, scrittura per l'amministratore
+        from ..models import Folder
+        from . import workspace
+        fo = await db.get(Folder, resource.folder_id)
+        if workspace.is_org(fo) and workspace.can_see_folder(fo, user):
+            return "write" if user.role == Role.admin else "read"
     if rtype == "file" and getattr(resource, "conversation_id", None):
         conv = await db.get(Conversation, resource.conversation_id)
         if conv and conv.owner_id == user.id:

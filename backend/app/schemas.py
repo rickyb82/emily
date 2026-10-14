@@ -47,6 +47,7 @@ class UserOut(BaseModel):
     last_login: datetime | None = None
     last_logout: datetime | None = None
     active_sessions: int = 0
+    departments: list[str] = []
     policy: dict = {}
     effective_policy: dict = {}
 
@@ -86,6 +87,7 @@ class UpdateMemberRequest(BaseModel):
     password: str | None = Field(default=None, min_length=10, max_length=200)
     pin: str | None = Field(default=None, min_length=4, max_length=12)
     policy: dict | None = None
+    departments: list[str] | None = None
 
 
 class TrustDeviceRequest(BaseModel):

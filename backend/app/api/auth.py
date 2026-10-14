@@ -66,6 +66,8 @@ async def _register_failure(db: AsyncSession, user: User) -> None:
 
 
 async def user_out(db: AsyncSession, user: User) -> UserOut:
+    if user.departments is None:   # colonna aggiunta dopo: le righe vecchie sono NULL
+        user.departments = []
     out = UserOut.model_validate(user)
     out.has_passkey = await user_has_passkey(db, user)
     out.has_totp = user_has_totp(user)

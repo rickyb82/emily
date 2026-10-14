@@ -176,6 +176,8 @@ async def register_saved_file(ctx: ToolContext, path: str, only_new: bool = Fals
         asset = FileAsset(id=uuid.uuid4().hex, family_id=ctx.user.family_id, owner_id=ctx.user.id, project_id=ctx.project_id,
                           conversation_id=ctx.conversation_id, filename=shown, mime=mime, size=p.stat().st_size,
                           path=str(p), kind="generated")
+        from ..services import workspace as _ws
+        await _ws.place_in_conversation(ctx.db, asset)   # CHAT/<titolo della chat>
         ctx.db.add(asset)
     await ctx.db.commit()
     if p.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):

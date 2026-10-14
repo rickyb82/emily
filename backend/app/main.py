@@ -43,6 +43,14 @@ async def lifespan(app: FastAPI):
     await bootstrap_admin()
     async with SessionLocal() as db:
         await settings_store.apply(db)   # chiavi/modelli salvati dal pannello admin
+    try:
+        from .services import workspace as _ws
+        async with SessionLocal() as db:
+            n = await _ws.backfill_chat_folders(db)   # file di chat gia' esistenti -> Documenti > CHAT > <titolo>
+            if n:
+                log.info("Cartella CHAT: sistemati %d file di conversazioni esistenti", n)
+    except Exception:
+        log.exception("Sistemazione della cartella CHAT fallita (continuo)")
     await mcp_manager.start()
     yield
     await mcp_manager.stop()

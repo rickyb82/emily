@@ -126,6 +126,9 @@ async def update_conversation(cid: str, body: ConversationUpdate, ctx: AuthConte
             ctx.user, effective_policy(ctx.user), data.get("provider"), data.get("model"), conv)
     for k, v in data.items():
         setattr(conv, k, v)
+    if "title" in data:
+        from ..services import workspace
+        await workspace.sync_conv_title(db, conv)   # Documenti > CHAT > <titolo> segue la chat
     await db.commit()
     return ConversationOut.model_validate(conv)
 
@@ -135,6 +138,11 @@ async def delete_conversation(cid: str, ctx: AuthContext = Depends(require_auth)
     conv, level = await require_access(db, "conversation", cid, ctx.user)
     if level not in ("owner", "parent"):
         raise HTTPException(403, "Solo il proprietario può eliminare")
+    # la cartella CHAT/<titolo> resta con i suoi file (sono documenti dell'utente), ma non e' piu' legata a una chat
+    from sqlalchemy import update as _update
+
+    from ..models import Folder as _Folder
+    await db.execute(_update(_Folder).where(_Folder.conversation_id == conv.id).values(conversation_id=None, kind=""))
     await db.delete(conv)
     await db.commit()
     return {"status": "ok"}
