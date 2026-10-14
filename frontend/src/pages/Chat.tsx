@@ -245,7 +245,8 @@ export default function Chat() {
                 const [p, m] = e.target.value.split('|')
                 changeModel(p, m)
               }}
-              disabled={busy}
+              disabled={busy || !!me.model_lock}
+              title={me.model_lock ? 'Modello bloccato da te (Amministrazione › Provider AI › Il mio modello)' : me.user.role !== 'admin' ? 'Modelli messi a disposizione dall\'amministratore' : ''}
             >
               {me.providers.map((p) => (
                 <optgroup key={p.id} label={p.label}>

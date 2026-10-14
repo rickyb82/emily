@@ -363,6 +363,10 @@ def resolve_provider_model(user: User, policy: dict, provider_id: str | None, mo
         chosen = policy.get("model") or provider.default_model
         known = {m["id"] for m in provider.models()}
         return provider.id, (chosen if not known or chosen in known else provider.default_model)
+    # utenti: dentro l'elenco deciso dall'amministratore; admin con blocco personale: sempre il suo modello
+    from . import model_catalog
+    provider_id, model = model_catalog.coerce(user, policy, provider_id or (conv.provider if conv else None),
+                                              model or (conv.model if conv and conv.provider == (provider_id or conv.provider) else None))
     pid = provider_id or (conv.provider if conv else None)
     if pid is None and router_enabled(policy):
         pid = AUTO_ID   # nuova chat senza scelta esplicita: parte il router (locale quando basta, cloud quando serve)

@@ -145,7 +145,8 @@ function ModStart({ org }: { org: boolean }) {
         <div className="g-callout">{spot ? spots[spot] : 'Scegli un punto arancione…'}</div>
       </Card>
       <Card title={`Cos'è ${APP_NAME}`} icon="✨">
-        <p>{APP_NAME} è l'assistente {org ? 'dell\'organizzazione' : 'di casa'}: parla in italiano, legge i tuoi documenti, scrive file Word, Excel, PowerPoint e PDF, disegna mappe e schemi, gestisce la posta — tutto su un server {org ? 'aziendale' : 'di casa'}, non in cloud, con le app open source integrate.</p>
+        <p>{APP_NAME} è la piattaforma AI {org ? 'dell\'organizzazione' : 'di casa'}: un assistente che parla in italiano, usa i modelli scelti dall'amministratore (Claude, OpenAI, Gemini o modelli locali), legge i tuoi documenti e quelli {org ? 'del tuo reparto' : 'della famiglia'}, scrive file Word, Excel, PowerPoint e PDF, disegna mappe e schemi, gestisce la posta{org ? ', l\'assistenza remota e le verifiche di copertura' : ''} — tutto su un server {org ? 'aziendale' : 'di casa'}, non in cloud, con le app open source integrate.</p>
+        {org && <p>Pensata per lavorare in azienda: cartelle di reparto con carta intestata, modelli e listini che l'assistente usa come base per preventivi e relazioni, una cartella per ogni chat, condivisione e cronologia dei documenti, accessi e consumi sotto controllo dell'amministratore.</p>}
         <Tip>Puoi chiederle le cose come le chiederesti a un collega: «riassumi questo PDF», «fammi un foglio con i costi del mese», «rispondi a Luca che va bene giovedì».</Tip>
       </Card>
     </>

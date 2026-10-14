@@ -62,6 +62,7 @@ class MeOut(BaseModel):
     providers: list[dict]
     tools: list[str]
     features: dict = {}
+    model_lock: str = ""          # admin: "provider/modello" che si e' bloccato da solo ("" = libero)
 
 
 # ---- admin ----

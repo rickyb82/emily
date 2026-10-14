@@ -102,6 +102,7 @@ export interface User {
 export interface Me {
   user: User
   family_name: string
+  model_lock?: string
   mfa_verified: boolean
   mfa_required: boolean
   providers: Provider[]

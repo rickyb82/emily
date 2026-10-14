@@ -248,7 +248,8 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     fam = await db.get(Family, ctx.user.family_id)
     u = await user_out(db, ctx.user)
     pol = u.effective_policy
-    provs = [p for p in available_providers() if p["id"] in pol["allowed_providers"] or p["id"] == "mock"]
+    from ..services import model_catalog
+    provs = model_catalog.catalog(ctx.user, pol)   # utenti: solo i modelli abilitati dall'admin; admin: tutti (o il suo blocco)
     if ctx.user.role == Role.child and pol.get("provider"):
         provs = [p for p in provs if p["id"] == pol["provider"]] or provs
     mfa_required = ctx.user.role != Role.child and (
@@ -267,7 +268,8 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
                 "covercraft_web": bool(settings.covercraft_url and settings.covercraft_token) and adult, "covercraft_mcp": mcp_manager.is_connected("covercraft"),
                 "org_mode": org_mode_on(), "passkeys": passkeys_on(), "mfa_optional": mfa_optional_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
-                 mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features)
+                 mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features,
+                 model_lock=model_catalog.admin_lock(ctx.user))
 
 
 @router.post("/mfa/choice")
@@ -554,3 +556,31 @@ async def my_usage(days: int = 30, ctx: AuthContext = Depends(require_auth), db:
             "by_model": sorted(({**m, "cost": round(m["cost"], 4)} for m in by_model.values()), key=lambda m: -m["cost"]),
             "daily": [{"day": str(d), "messages": int(n or 0), "input_tokens": int(i or 0), "output_tokens": int(o or 0)} for d, n, i, o in daily],
             "pricing_note": "Costi stimati con il listino del server (pannello Costi): orientativi, non una fattura."}
+
+
+# ---------------- blocco personale del modello (solo amministratori) ----------------
+class ModelLock(_BM):
+    model: str = ""   # "provider/modello" oppure "" per sbloccare
+
+
+@router.post("/model-lock")
+async def set_model_lock(body: ModelLock, ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """L'amministratore si fissa un modello: il menu della chat mostra solo quello e ogni sua chat lo usa, finche' non lo sblocca.
+    Gli altri utenti non hanno questa scelta: usano l'elenco deciso nel pannello."""
+    if ctx.user.role != Role.admin:
+        raise HTTPException(403, "Solo gli amministratori possono bloccare un modello per se stessi")
+    from ..services import model_catalog
+    want = body.model.strip()
+    if want:
+        p, m = model_catalog.split(want)
+        ok = any(pr["id"] == p and any(mm["id"] == m for mm in pr["models"]) for pr in available_providers())
+        if not ok:
+            raise HTTPException(400, "Modello non disponibile")
+    pol = dict(ctx.user.policy or {})
+    if want:
+        pol["locked_model"] = want
+    else:
+        pol.pop("locked_model", None)
+    ctx.user.policy = pol
+    await db.commit()
+    return {"model_lock": want}

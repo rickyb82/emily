@@ -478,3 +478,10 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .usage-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 3px; }
 .usage-bar span { display: block; width: 100%; background: var(--primary); border-radius: 2px 2px 0 0; opacity: .85; }
 .table.small td, .table.small th { padding: 4px 8px; font-size: 13px; }
+/* pannello Provider AI: modelli per gli utenti e gruppi di impostazioni */
+.models-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.models-col { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; max-height: 260px; overflow: auto; }
+.models-col label { font-size: 13px; cursor: pointer; }
+.settings-group { border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; }
+.settings-group > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.settings-group > div { margin-top: 8px; }

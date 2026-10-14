@@ -24,7 +24,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.get("/providers")
 async def providers(ctx: AuthContext = Depends(require_auth)):
     pol = effective_policy(ctx.user)
-    return {"providers": [p for p in available_providers() if p["id"] in pol["allowed_providers"] or p["id"] == "mock"],
+    from ..services import model_catalog
+    return {"providers": model_catalog.catalog(ctx.user, pol),
             "tools": [{"name": n, "description": t.spec.description, "kind": t.usage_kind,
                        "group": "mcp" if n.startswith("mcp__") else TOOL_ALIASES.get(n, n)}
                       for n, t in all_tools().items() if tool_allowed(pol, n)],

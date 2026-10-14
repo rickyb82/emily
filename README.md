@@ -1,6 +1,14 @@
-# FamilAI — assistente AI di famiglia
+# Emily (FamilAI) — piattaforma AI self-hosted per la famiglia e per l'azienda
 
-Framework self-hosted stile "chatbot Claude" pensato per una famiglia: adulti e bambini con livelli di permesso diversi, più provider LLM (Claude, OpenAI, Gemini), tool (ricerca web, immagini, video, documenti), server MCP, progetti e condivisione fra membri, con accesso remoto sicuro (HTTPS + passkey).
+Framework completo, stile "chatbot Claude", che gira sui tuoi server: nato per la famiglia (adulti e bambini con permessi, supervisione, guardia compiti) e cresciuto in una **piattaforma per le aziende** (modalità organizzazione). In un'unica installazione Docker:
+
+- **Assistente multi-provider** — Claude, OpenAI, Gemini, modelli locali (Ollama / server compatibile OpenAI) e un router Auto locale+cloud; ragionamento visibile, tool calling unificato, prompt caching, compattazione delle chat lunghe, budget e costi stimati per provider e per utente.
+- **Suite di produttività in casa** — documenti Word, fogli Excel, presentazioni, PDF, mappe mentali e diagrammi (app ArtCraft open source, editor nel browser e tool per il modello), posta elettronica per utente (MailCraft, anche Gmail OAuth), assistenza remota con server RustDesk e gestionale GDPR (RemoteCraft), verifica di copertura della connettività dal database dell'operatore (CoverCraft).
+- **Documenti stile Finder** — cartelle annidate, drag & drop, nomi unici, condivisione in lettura o modifica con "Condivisi con me", cronologia delle versioni, **archivio dell'organizzazione per reparto** (Tecnico / Commerciale / Amministrativo: carta intestata, modelli, listini e procedure che il modello usa come base e fonte di verità) e cartella **CHAT** con una sottocartella automatica per conversazione (contesto per chat).
+- **Conoscenza e memoria** — RAG ibrido (embedding + BM25) su progetti, chat, cartelle di reparto e cartella della chat; memoria di famiglia/organizzazione con approvazione; server MCP esterni collegabili a caldo.
+- **Governance aziendale** — modalità organizzazione, reparti sugli utenti, modelli consentiti decisi dall'amministratore (con blocco personale per gli admin), impostazioni delle app riservate all'admin, utilizzo e token visibili a ogni utente per sé, log degli accessi, attivazione/disattivazione account, audit.
+- **Sicurezza** — HTTPS (Let's Encrypt o CA interna), password + secondo fattore (passkey o app authenticator, facoltativo o obbligatorio), accesso con Google, PIN su dispositivi approvati per i bambini, sandbox per il codice, antivirus opzionale sugli upload, download sicuri.
+- **Guida interattiva** stile Trailhead sempre a portata di mano (pulsante ?), backup/ripristino dal pannello, aggiornamenti con un comando.
 
 ## Architettura
 
@@ -146,6 +154,10 @@ In **Famiglia → Provider AI → Email** puoi **collegare un account Google** (
 
 ### Accesso con Google
 In **Famiglia → Provider AI → Accesso con Google** inserisci Client ID e secret di un client OAuth "Applicazione web" creato su console.cloud.google.com (API e servizi → Credenziali), con URI di reindirizzamento `https://<PUBLIC_HOST>/api/auth/google/callback` (in dev `http://localhost:8080/api/auth/google/callback`). Sulla schermata di login compare "Accedi con Google": entra chi ha un account Google con la **stessa email** di un membro adulto creato dall'amministratore (nessuna auto-registrazione). L'accesso Google vale come secondo fattore, quindi non richiede la passkey. È del tutto separato dall'account Gmail usato per l'SMTP.
+
+
+### Modelli consentiti agli utenti
+Nel pannello **Provider AI › 🎛 Modelli per gli utenti** l'amministratore spunta, provider per provider, i modelli che i non amministratori trovano nel menu della chat e sceglie quello proposto nelle nuove chat (`user_models_json`, `user_default_model`). Senza spunte ogni provider offre solo il suo modello di default. Il backend applica l'elenco anche a chi forza la richiesta: una scelta fuori elenco viene riportata al modello consentito (`services/model_catalog.py`). Gli amministratori vedono tutti i modelli, ma possono **bloccarne uno per sé** ("Il mio modello", `POST /auth/model-lock`): il menu mostra solo quello finché non lo sbloccano.
 
 ### Costi e budget
 **Famiglia → Costi** mostra per il mese corrente la spesa **stimata** per provider e per membro (log di utilizzo × listino prezzi modificabile), un **budget mensile** per provider con rimanente e barra, e, inserendo le chiavi *Admin* di Anthropic/OpenAI, la **spesa reale** letta dai rispettivi report di costo dell'organizzazione. Nessun provider espone il credito residuo a una chiave API normale; Gemini non offre report via API.

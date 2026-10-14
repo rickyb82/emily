@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, put } from '../lib/api'
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 
 interface KeyState { label: string; secret: boolean; configured: boolean; source: 'admin' | 'env' | 'none'; value: string }
 interface Card {
@@ -24,6 +25,7 @@ const SMTP_PRESETS: Record<string, { label: string; host: string; port: string; 
 const SOURCE_IT = { admin: 'impostata dal pannello', env: 'dal file .env', none: 'non configurata' }
 
 export default function AdminProviders() {
+  const { me, refresh } = useAuth()
   const [st, setSt] = useState<Status | null>(null)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [tests, setTests] = useState<Record<string, any>>({})
@@ -101,6 +103,9 @@ export default function AdminProviders() {
       {err && <div className="error">{err}</div>}
       <div><button className="ghost" disabled={busy !== ''} onClick={async () => { setBusy('save'); try { setSt(await put<Status>('/admin/providers', { values: {} })); setMsg('Elenco modelli aggiornato dai provider') } catch (e: any) { setErr(e.message) } finally { setBusy('') } }}>🔄 Aggiorna elenco modelli</button> <small className="muted">I modelli nei menu vengono letti direttamente dalle API dei provider.</small></div>
 
+      <UserModels st={st} draft={draft} setDraft={setDraft} save={save} busy={busy} meLock={me?.model_lock || ''} onLock={async (m) => { await post('/auth/model-lock', { model: m }); await refresh() }} />
+
+      <h3 style={{ margin: '8px 0 0' }}>🔌 Provider e chiavi</h3>
       {st.providers.map((c) => {
         const t = tests[c.id]
         return (
@@ -226,7 +231,8 @@ export default function AdminProviders() {
 
       <section className="card stack">
         <h3 style={{ margin: 0 }}>Altre impostazioni</h3>
-        <div className="grid3">
+        <p className="muted small">Raggruppate per tema; apri il gruppo che ti serve. Il pulsante Salva in fondo salva tutto.</p>
+        <details className="settings-group" open><summary>🌐 Ricerca web</summary><div className="grid3">
           <label>Motore ricerca web <small className="muted">({s.web_search_provider.value})</small>
             <select value={draft.web_search_provider ?? s.web_search_provider.value} onChange={(e) => setDraft({ ...draft, web_search_provider: e.target.value })}>
               <option value="auto">auto (SearXNG in casa se attivo; Claude nativo con Claude; poi OpenAI/Gemini/Tavily/Brave)</option>
@@ -244,16 +250,13 @@ export default function AdminProviders() {
               <option value="auto">leggi le prime pagine e riassumile con il modello locale (se c'è)</option><option value="none">solo titoli e snippet</option>
             </select>
           </label>
-          <label>Ragionamento OpenAI <small className="muted">({s.openai_reasoning_effort.value})</small>
-            <select value={draft.openai_reasoning_effort ?? s.openai_reasoning_effort.value} onChange={(e) => setDraft({ ...draft, openai_reasoning_effort: e.target.value })}>
-              <option value="auto">auto (si adatta al modello)</option><option value="none">nessuno (più veloce ed economico)</option><option value="low">basso</option><option value="medium">medio</option><option value="high">alto (più lento)</option>
-            </select>
-          </label>
           <label>Ricerca nativa di Claude <small className="muted">({s.anthropic_native_search.value})</small>
             <select value={draft.anthropic_native_search ?? s.anthropic_native_search.value} onChange={(e) => setDraft({ ...draft, anthropic_native_search: e.target.value })}>
               <option value="true">attiva quando il modello è Claude</option><option value="false">disattiva (usa sempre il motore sopra)</option>
             </select>
           </label>
+        </div></details>
+        <details className="settings-group"><summary>🖼️ Immagini e video</summary><div className="grid3">
           <label>Provider immagini <small className="muted">({s.image_provider.value})</small>
             <select value={draft.image_provider ?? s.image_provider.value} onChange={(e) => setDraft({ ...draft, image_provider: e.target.value })}>
               <option value="auto">auto (ComfyUI in casa se c'è, poi OpenAI, poi Gemini)</option><option value="comfyui">ComfyUI (locale: Flux / SDXL)</option><option value="openai">OpenAI</option><option value="gemini">Gemini / Imagen</option>
@@ -273,6 +276,8 @@ export default function AdminProviders() {
           <label>Video ComfyUI: risoluzione <small className="muted">(Mac 832x480 · L40S 1280x704)</small><input placeholder={s.comfyui_video_size.value} value={draft.comfyui_video_size ?? ''} onChange={(e) => setDraft({ ...draft, comfyui_video_size: e.target.value.trim() })} /></label>
           <label>Video ComfyUI: frame <small className="muted">(49 = 2 s, 81 = 3 s, 121 = 5 s a 24 fps)</small><input type="number" min={9} step={4} placeholder={s.comfyui_video_frames.value} value={draft.comfyui_video_frames ?? ''} onChange={(e) => setDraft({ ...draft, comfyui_video_frames: e.target.value })} /></label>
           <label>Modello video Veo<input placeholder={s.video_model.value} value={draft.video_model ?? ''} onChange={(e) => setDraft({ ...draft, video_model: e.target.value })} /></label>
+        </div></details>
+        <details className="settings-group"><summary>🧭 Router Auto e server LLM di casa</summary><div className="grid3">
           <label>Router Auto (locale + cloud) <small className="muted">({s.router_mode.value})</small>
             <select value={draft.router_mode ?? s.router_mode.value} onChange={(e) => setDraft({ ...draft, router_mode: e.target.value })}>
               <option value="locale">prima il locale (risponde sempre il modello di casa; cloud solo se lo chiedi o per immagini/video/codice)</option>
@@ -299,6 +304,8 @@ export default function AdminProviders() {
               <option value="auto">auto (Claude, poi OpenAI, poi Gemini)</option><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option>
             </select>
           </label>
+        </div></details>
+        <details className="settings-group"><summary>🔊 Voce (TTS)</summary><div className="grid3">
           <label>Voce naturale (TTS) <small className="muted">({s.tts_provider.value})</small>
             <select value={draft.tts_provider ?? s.tts_provider.value} onChange={(e) => setDraft({ ...draft, tts_provider: e.target.value })}>
               <option value="auto">auto (OpenAI se presente, altrimenti Gemini)</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="none">disattivata</option>
@@ -319,6 +326,13 @@ export default function AdminProviders() {
           <label className="wide">Stile della voce <small className="muted">(istruzioni in linguaggio naturale; vuoto = voce calda e chiara, adatta ai bambini)</small>
             <input placeholder="es. Parla lentamente e con allegria, come una maestra" value={draft.tts_style ?? s.tts_style.value} onChange={(e) => setDraft({ ...draft, tts_style: e.target.value })} />
           </label>
+        </div></details>
+        <details className="settings-group"><summary>💬 Comportamento in chat</summary><div className="grid3">
+          <label>Ragionamento OpenAI <small className="muted">({s.openai_reasoning_effort.value})</small>
+            <select value={draft.openai_reasoning_effort ?? s.openai_reasoning_effort.value} onChange={(e) => setDraft({ ...draft, openai_reasoning_effort: e.target.value })}>
+              <option value="auto">auto (si adatta al modello)</option><option value="none">nessuno (più veloce ed economico)</option><option value="low">basso</option><option value="medium">medio</option><option value="high">alto (più lento)</option>
+            </select>
+          </label>
           <label>Ragionamento visibile <small className="muted">({s.thinking_mode.value})</small>
             <select value={draft.thinking_mode ?? s.thinking_mode.value} onChange={(e) => setDraft({ ...draft, thinking_mode: e.target.value })}>
               <option value="cloud">Claude e Gemini mostrano il ragionamento (consigliato)</option><option value="all">anche i modelli locali (Qwen3 pensa prima di rispondere: più lento)</option><option value="off">spento</option>
@@ -334,6 +348,8 @@ export default function AdminProviders() {
               <option value="true">attiva: oltre ~24k token i messaggi vecchi vengono riassunti e archiviati nel RAG della chat</option><option value="false">disattivata (si invia sempre tutta la cronologia)</option>
             </select>
           </label>
+        </div></details>
+        <details className="settings-group"><summary>🧠 Memoria e RAG</summary><div className="grid3">
           <label>Memoria di famiglia <small className="muted">({s.memory_enabled.value})</small>
             <select value={draft.memory_enabled ?? s.memory_enabled.value} onChange={(e) => setDraft({ ...draft, memory_enabled: e.target.value })}>
               <option value="true">attiva (estrazione dalle chat + approvazione)</option><option value="false">disattivata</option>
@@ -353,9 +369,72 @@ export default function AdminProviders() {
             </select>
           </label>
           <label>Modello embedding <small className="muted">(Ollama: bge-m3 consigliato per l'italiano; cambiandolo va rifatta l'indicizzazione)</small><input placeholder={s.embedding_model.value || 'bge-m3 / text-embedding-3-small / gemini-embedding-001'} value={draft.embedding_model ?? ''} onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })} /></label>
-        </div>
+        </div></details>
         <div><button disabled={busy !== ''} onClick={() => save(['openai_reasoning_effort', 'web_search_provider', 'searxng_url', 'web_search_summarize', 'anthropic_native_search', 'image_provider', 'image_model', 'gemini_image_model', 'video_model', 'video_provider', 'comfyui_video_size', 'comfyui_video_frames', 'router_mode', 'router_model', 'router_cloud_provider', 'router_local_provider', 'custom_llm_label', 'custom_llm_key', 'memory_enabled', 'memory_auto_approve', 'memory_model', 'compaction_enabled', 'auto_continue', 'thinking_mode', 'tts_provider', 'tts_model_openai', 'tts_voice_openai', 'tts_model_gemini', 'tts_voice_gemini', 'tts_style', 'embedding_provider', 'embedding_model'])}>Salva</button></div>
       </section>
     </div>
+  )
+}
+
+
+/** 🎛 Modelli per gli utenti: l'elenco (e il default) che i non amministratori trovano nel menu della chat; blocco personale dell'admin. */
+function UserModels({ st, draft, setDraft, save, busy, meLock, onLock }: { st: Status; draft: Record<string, string>; setDraft: (d: Record<string, string>) => void; save: (k: string[]) => Promise<void>; busy: string; meLock: string; onLock: (m: string) => Promise<void> }) {
+  const parse = (v: string): string[] => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [] } catch { return [] } }
+  const saved = parse(st.settings.user_models_json?.value || '')
+  const list = draft.user_models_json !== undefined ? parse(draft.user_models_json) : saved
+  const def = draft.user_default_model ?? (st.settings.user_default_model?.value || '')
+  const active = st.providers.filter((p) => p.active && p.model_key && p.id !== 'comfyui')
+  const routerOn = (st.settings.router_mode?.value || 'locale') !== 'off' && active.some((p) => p.id === 'ollama' || p.id === 'custom') && active.length > 1
+  const groups = [...(routerOn ? [{ id: 'auto', label: 'Auto (locale + cloud)', models: [{ id: 'auto', label: 'decide il router' }] }] : []), ...active.map((p) => ({ id: p.id, label: p.label, models: p.models }))]
+  const setList = (next: string[]) => {
+    const d: Record<string, string> = { ...draft, user_models_json: JSON.stringify(next) }
+    if (def && !next.includes(def)) d.user_default_model = next[0] || ''
+    setDraft(d)
+  }
+  const toggle = (k: string) => setList(list.includes(k) ? list.filter((x) => x !== k) : [...list, k])
+  const [lockDraft, setLockDraft] = useState(meLock)
+  useEffect(() => setLockDraft(meLock), [meLock])
+  const dirty = draft.user_models_json !== undefined || draft.user_default_model !== undefined
+  return (
+    <section className="card stack">
+      <h3 style={{ margin: 0 }}>🎛 Modelli per gli utenti</h3>
+      <p className="muted small">Gli utenti (non amministratori) trovano nel menu della chat <b>solo</b> i modelli spuntati qui; il pallino segna quello proposto nelle nuove chat. Se non spunti nulla, ogni provider offre solo il suo modello di default. Gli amministratori vedono sempre tutti i modelli.</p>
+      {groups.length === 0 && <p className="muted">Nessun provider attivo: configura una chiave qui sotto.</p>}
+      <div className="models-grid">
+        {groups.map((g) => (
+          <div key={g.id} className="models-col">
+            <b>{g.label}</b>
+            {g.models.length === 0 && <small className="muted">elenco modelli non ancora letto (🔄 Modelli)</small>}
+            {g.models.map((m) => {
+              const k = `${g.id}/${m.id}`
+              const on = list.includes(k)
+              return (
+                <label key={k} className="row" style={{ gap: 6 }} title={k}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(k)} />
+                  <input type="radio" name="user-default" disabled={!on} checked={def === k} onChange={() => setDraft({ ...draft, user_default_model: k })} title="Proposto nelle nuove chat" />
+                  <span style={{ opacity: on ? 1 : .7 }}>{m.label || m.id}</span>
+                </label>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="row wrap">
+        <button disabled={busy !== '' || !dirty} onClick={() => save(['user_models_json', 'user_default_model'])}>Salva elenco utenti</button>
+        <small className="muted">{list.length} modelli abilitati{def ? ` · default: ${def}` : ' · nessun default scelto (il primo dell\'elenco)'}</small>
+      </div>
+      <div className="card stack" style={{ background: 'var(--bg)' }}>
+        <b>🔒 Il mio modello (solo per te)</b>
+        <small className="muted">Come amministratore scegli qualsiasi modello in ogni chat. Se vuoi evitare di cambiarlo per sbaglio, bloccane uno: il menu della chat mostrerà solo quello finché non lo sblocchi. Vale solo per il tuo account.</small>
+        <div className="row wrap">
+          <select value={lockDraft} onChange={(e) => setLockDraft(e.target.value)} style={{ maxWidth: 420 }}>
+            <option value="">— nessun blocco: scelgo in ogni chat —</option>
+            {groups.map((g) => <optgroup key={g.id} label={g.label}>{g.models.map((m) => <option key={m.id} value={`${g.id}/${m.id}`}>{m.label || m.id}</option>)}</optgroup>)}
+          </select>
+          <button className="ghost" disabled={lockDraft === meLock} onClick={() => onLock(lockDraft)}>{lockDraft ? '🔒 Blocca per me' : '🔓 Sblocca'}</button>
+          {meLock && <small className="ok">bloccato su {meLock}</small>}
+        </div>
+      </div>
+    </section>
   )
 }
