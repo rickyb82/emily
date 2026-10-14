@@ -42,7 +42,7 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 .card .card { padding: 12px; }
 .page .card p, .page .card small { overflow-wrap: anywhere; }
 label.row, .tool-toggle { flex-direction: row; align-items: center; gap: 6px; }
-label input[type=checkbox] { width: auto; }
+label input[type=checkbox], input[type=checkbox], input[type=radio] { width: auto; flex: 0 0 auto; padding: 0; }
 a { color: var(--primary); text-decoration: none; }
 pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: 8px; border-radius: 8px; font-size: 13px; }
 code { font-size: 13px; }
@@ -249,7 +249,8 @@ button.small { font-size: 13px; padding: 4px 10px; }
 /* memoria di famiglia */
 .mem-item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
 .mem-item.pinned { border-color: var(--primary); }
-.mem-item > input[type=checkbox] { margin-top: 4px; }
+.mem-item > input[type=checkbox] { margin-top: 4px; width: 16px; height: 16px; }
+.mem-item > .row { flex: 0 0 auto; flex-wrap: nowrap; }
 .mem-body { flex: 1; min-width: 0; }
 .mem-text { line-height: 1.4; }
 .mem-item select { width: auto; padding: 4px 6px; font-size: 12px; }
