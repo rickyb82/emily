@@ -17,7 +17,7 @@
 #   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali e diagrammi dalla chat (SVG + file nativo) + editor nel browser
 #   ./familai.sh mailcraft up|down|logs|upgrade  MailCraft: posta elettronica (IMAP/SMTP) per utente, web app + tool in chat
 #   ./familai.sh remotecraft up|down|logs|upgrade RemoteCraft: assistenza remota (server RustDesk + gestionale) per tecnico
-#   ./familai.sh covercraft up|down|logs|upgrade|db CoverCraft: verifica copertura connettivita' (TIM, Open Fiber, Fastweb, ponti radio) dal database dell'operatore
+#   ./familai.sh covercraft up|down|logs|upgrade|db|geo CoverCraft: verifica copertura connettivita' (TIM, Open Fiber, Fastweb, ponti radio) dal database dell'operatore; geo = Nominatim
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -299,7 +299,8 @@ case "${1:-}" in
         compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
         echo ">> CoverCraft attivo: menu 🧰 Produttivita' > 📡 Copertura (cartella APP nei Documenti) e tool mcp__covercraft__* in chat."
         echo "   Collega il database netmap (una volta sola): ./familai.sh covercraft db --kind mysql --host <ip> --port 3306 --user netmap --password '…' --database netmap"
-        echo "   (oppure dalle Impostazioni della web app). Configurazione in private/covercraft/ (password in secrets.json: inclusa nel backup).";;
+        echo "   Basta un utente MySQL in sola lettura: lo storico delle verifiche e' locale (private/covercraft/history.jsonl)."
+        echo "   Configurazione in private/covercraft/ (password in secrets.json: inclusa nel backup). Geocoder facoltativo: ./familai.sh covercraft geo up";;
       db)
         # inoltra a covercraft-cli db dentro il container: ./familai.sh covercraft db --kind mysql --host … --user … --password … --database netmap
         shift 2
@@ -311,7 +312,30 @@ case "${1:-}" in
         set_env COVERCRAFT_MCP_HOST ""
         compose up -d backend;;
       logs) compose --profile covercraft logs -f --tail=100 covercraft;;
-      *) echo "uso: ./familai.sh covercraft up|build|down|logs|upgrade|db …"; exit 1;;
+      geo)
+        # Nominatim (geocoder OpenStreetMap) per i civici senza coordinate nelle tabelle: ./familai.sh covercraft geo up|down|logs
+        case "${3:-up}" in
+          up)
+            if grep -q '^COMPOSE_PROFILES=' .env; then
+              grep -q "^COMPOSE_PROFILES=.*nominatim" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,nominatim/" .env && rm -f .env.bak; }
+            else
+              echo "COMPOSE_PROFILES=nominatim" >> .env
+            fi
+            grep -q '^NOMINATIM_PASSWORD=.\+' .env || set_env NOMINATIM_PASSWORD "$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+            echo ">> Avvio Nominatim: il primo avvio importa l'Italia (~2 GB di download, 1-3 ore, serve ~10 GB di RAM per Docker)…"
+            compose --profile nominatim up -d nominatim
+            compose --profile covercraft exec -u covercraft covercraft covercraft-cli prefs --home /data geocode_url=http://nominatim:8080 >/dev/null \
+              && compose --profile covercraft restart covercraft >/dev/null \
+              && echo ">> CoverCraft usera' http://nominatim:8080 quando le tabelle non danno un punto (appena l'import e' finito: ./familai.sh covercraft geo logs)." \
+              || echo "!! CoverCraft non e' attivo: dopo './familai.sh covercraft up' imposta il geocoder dalle Impostazioni (geocode_url=http://nominatim:8080)";;
+          down)
+            compose --profile nominatim stop nominatim
+            compose --profile covercraft exec -u covercraft covercraft covercraft-cli prefs --home /data geocode_url= >/dev/null 2>&1 && compose --profile covercraft restart covercraft >/dev/null 2>&1 || true
+            echo ">> Nominatim fermo (i dati importati restano nei volumi nominatim-data/nominatim-flatnode)";;
+          logs) compose --profile nominatim logs -f --tail=100 nominatim;;
+          *) echo "uso: ./familai.sh covercraft geo up|down|logs"; exit 1;;
+        esac;;
+      *) echo "uso: ./familai.sh covercraft up|build|down|logs|upgrade|db …|geo up|down|logs"; exit 1;;
     esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.

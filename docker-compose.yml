@@ -322,12 +322,34 @@ services:
       - ./private/covercraft:/data              # config.json + secrets.json (password del database, leggibile solo dal container)
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
+  # Geocoder Nominatim per CoverCraft (facoltativo, ./familai.sh covercraft geo up): interrogato solo quando le tabelle non danno
+  # un punto per il civico. Il primo avvio importa l'Italia (~2 GB di download, 1-3 ore, ~10 GB di RAM); poi parte in fretta.
+  # Dati in volumi Docker (Postgres sui bind mount di macOS e' lentissimo). Nessuna porta sull'host: lo raggiunge solo covercraft.
+  nominatim:
+    image: mediagis/nominatim:5.1
+    profiles: ["nominatim"]
+    restart: unless-stopped
+    environment:
+      - PBF_URL=${NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/italy-latest.osm.pbf}
+      - REPLICATION_URL=${NOMINATIM_REPLICATION_URL:-https://download.geofabrik.de/europe/italy-updates/}
+      - NOMINATIM_PASSWORD=${NOMINATIM_PASSWORD:-change-me}
+      - IMPORT_WIKIPEDIA=false
+      - THREADS=${NOMINATIM_THREADS:-4}
+    volumes:
+      - nominatim-data:/var/lib/postgresql/16/main
+      - nominatim-flatnode:/nominatim/flatnode
+    expose: ["8080"]
+    shm_size: 1g
+    logging: { driver: json-file, options: { max-size: "2m", max-file: "2" } }
+
 networks:
   default:
   sandbox_net:
     internal: true   # nessuna uscita verso internet: raggiungibile solo dal backend
 
 volumes:
+  nominatim-data:
+  nominatim-flatnode:
   searxng_cache:
   ollama_models:
   caddy_data:
