@@ -1,0 +1,48 @@
+# RemoteCraft (https://github.com/rickyb82/remotecraft) costruito da FamilAI: stesso risultato del Dockerfile del repository
+# (hbbs + hbbr ufficiali + gestionale + web app, due utenti con id fissi, il suo entrypoint), ma con trunk scelto in base
+# all'architettura (il repository scarica solo quello x86_64: su Apple Silicon/arm64 va in crash, exit 133) e con la
+# cache di cargo tra una build e l'altra.
+ARG REPO=https://github.com/rickyb82/remotecraft
+ARG REF=main
+ARG RUSTDESK_TAG=1.1.16
+
+FROM rustdesk/rustdesk-server:${RUSTDESK_TAG} AS rustdesk
+
+FROM rust:1-bookworm AS build
+ARG REPO
+ARG REF
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates pkg-config && rm -rf /var/lib/apt/lists/*
+RUN set -eux; arch="$(uname -m)"; case "$arch" in x86_64) t=x86_64-unknown-linux-gnu;; aarch64|arm64) t=aarch64-unknown-linux-gnu;; *) echo "arch $arch non supportata"; exit 1;; esac; \
+    curl -fsSL "https://github.com/trunk-rs/trunk/releases/latest/download/trunk-${t}.tar.gz" | tar xz -C /usr/local/bin trunk; trunk --version
+WORKDIR /src
+RUN git clone --depth 1 "$REPO" . && (git checkout -q "$REF" 2>/dev/null || (git fetch -q --depth 1 origin "$REF" && git checkout -q FETCH_HEAD) || true) && git rev-parse HEAD
+# il rust-toolchain.toml del repository puo' chiedere un'altra versione: rustup la scarica, qui le aggiungiamo il target wasm
+RUN rustup target add wasm32-unknown-unknown
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-remotecraft \
+    cargo build --release -p remotecraft-cli && cp target/release/remotecraft-cli /usr/local/bin/remotecraft-cli \
+    && cd apps/remotecraft-web && trunk build --release && ls -la /src/dist/web
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 remotecraft \
+ && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /data/desk --shell /usr/sbin/nologin remotecraft \
+ && groupadd --system --gid 10002 rustdesk \
+ && useradd --system --uid 10002 --gid 10002 --no-create-home --home-dir /data/rustdesk --shell /usr/sbin/nologin rustdesk
+COPY --from=rustdesk /usr/bin/hbbs /usr/bin/hbbr /usr/local/bin/
+COPY --from=build /usr/local/bin/remotecraft-cli /usr/local/bin/remotecraft-cli
+COPY --from=build /src/dist/web /app/web
+COPY --from=build /src/docker/entrypoint.sh /usr/local/bin/remotecraft-entrypoint
+RUN chmod 0755 /usr/local/bin/remotecraft-entrypoint
+VOLUME ["/data/rustdesk", "/data/desk"]
+ENV REMOTECRAFT_HOME=/data/desk \
+    REMOTECRAFT_RUSTDESK_KEY_FILE=/data/rustdesk/id_ed25519.pub \
+    REMOTECRAFT_RUSTDESK_CHECK_HOST=127.0.0.1 \
+    REMOTECRAFT_BIND=0.0.0.0:7979 \
+    REMOTECRAFT_STATIC=/app/web \
+    TZ=Europe/Rome
+EXPOSE 21115/tcp 21116/tcp 21116/udp 21117/tcp 7979/tcp
+HEALTHCHECK --interval=60s --timeout=10s --start-period=20s CMD remotecraft-cli rustdesk >/dev/null 2>&1 || exit 1
+ENTRYPOINT ["/usr/local/bin/remotecraft-entrypoint"]

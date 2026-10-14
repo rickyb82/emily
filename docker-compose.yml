@@ -263,12 +263,13 @@ services:
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
   # RemoteCraft (https://github.com/rickyb82/remotecraft): server RustDesk (hbbs/hbbr, porte pubbliche 21115-21117) e
-  # gestionale dell'assistenza (clienti, PC, interventi, GDPR) nello stesso container, costruito dal repository con il suo
-  # Dockerfile. Dati in ./private/remotecraft (chiavi RustDesk: perderle = riconfigurare tutti i client; fare backup).
+  # gestionale dell'assistenza (clienti, PC, interventi, GDPR) nello stesso container (extras/artcraft/Dockerfile.remotecraft,
+  # equivalente a quello del repository ma multi-architettura e con la cache di cargo). Dati in ./private/remotecraft (chiavi RustDesk: perderle = riconfigurare tutti i client; fare backup).
   remotecraft:
     build:
-      context: "https://github.com/rickyb82/remotecraft.git#${REMOTECRAFT_REF:-main}"
-      args: { RUSTDESK_TAG: "${RUSTDESK_TAG:-1.1.16}" }
+      context: extras/artcraft
+      dockerfile: Dockerfile.remotecraft
+      args: { REF: "${REMOTECRAFT_REF:-main}", RUSTDESK_TAG: "${RUSTDESK_TAG:-1.1.16}" }
     image: familai-remotecraft
     profiles: ["remotecraft"]
     restart: unless-stopped
