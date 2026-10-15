@@ -5,7 +5,8 @@
     https_port {$HTTPS_PORT:443}
 }
 
-{$PUBLIC_HOST} {
+# EXTRA_HOSTS: altri nomi o IP (separati da spazio) a cui rispondere, es. l'IP del server finche' il DNS non e' pronto
+{$PUBLIC_HOST} {$EXTRA_HOSTS} {
     # TLS_MODE=acme (default: certificati pubblici automatici) oppure internal (CA interna di Caddy, rete locale / IP)
     import /etc/caddy/tls/{$TLS_MODE:acme}.caddy
 
