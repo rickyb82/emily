@@ -517,15 +517,34 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .storage-pill { font-size: 12px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap; }
 .storage-pill.warn { color: var(--danger); border-color: var(--danger); }
 
-/* blocco attivita': le chiamate ai tool di un turno ripiegate in una riga */
-.msg.tool.activity { margin: 6px 0; }
-.activity-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
-.activity-head:hover { background: var(--bg); color: var(--text); }
-.msg.tool.activity.running .activity-head { border-color: var(--primary); }
-.msg.tool.activity.error .activity-head { border-color: #f59e0b; }
-.msg.tool.activity.open .activity-head { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.activity-label { font-weight: 600; color: var(--text); white-space: nowrap; }
-.activity-err { color: #f59e0b; white-space: nowrap; font-size: 12px; }
-.activity-body { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 4px 8px; background: var(--bg); }
-.activity-body .step { margin: 4px 0; }
+/* blocco attivita': timeline dei passaggi di un turno, ripiegata in una riga discreta a fine turno */
+.msg.tool.activity { margin: 4px 0 8px; }
+.activity-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; padding: 4px 2px; font-size: 13px; color: var(--muted); cursor: pointer; border-radius: 8px; }
+.activity-head:hover { color: var(--text); background: var(--panel); }
+.activity-dot { width: 14px; display: inline-flex; justify-content: center; flex-shrink: 0; }
+.activity-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.activity-dot i.warn { background: #f59e0b; }
+.activity-text { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.msg.tool.activity.done .activity-text { font-weight: 500; color: var(--muted); }
+.msg.tool.activity.done .activity-head:hover .activity-text { color: var(--text); }
+.activity-note { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.msg.tool.activity.error .activity-text { color: #b45309; }
+.activity-time { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.timeline { border-left: 2px solid var(--border); margin: 2px 0 2px 8px; padding: 2px 0 2px 14px; }
+.tl-more { background: none; border: 0; color: var(--primary); font-size: 13px; padding: 3px 0; cursor: pointer; }
+.tl-row { position: relative; padding: 2px 0; }
+.tl-row::before { content: ""; position: absolute; left: -20px; top: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); border: 2px solid var(--bg); }
+.tl-row.warn::before { background: #f59e0b; }
+.tl-row.run::before { background: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+.tl-line { display: flex; align-items: baseline; gap: 6px; width: 100%; text-align: left; background: transparent; border: 0; padding: 3px 6px; font-size: 13px; color: var(--muted); border-radius: 6px; cursor: pointer; min-width: 0; }
+.tl-line:hover { background: var(--panel); }
+.tl-row.run .tl-line { color: var(--text); }
+.tl-icon { width: 18px; flex-shrink: 0; text-align: center; }
+.tl-title { color: var(--text); font-weight: 600; white-space: nowrap; }
+.tl-what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.tl-how { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.tl-row.warn .tl-how { color: #b45309; }
+.tl-ms { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12px; flex-shrink: 0; }
+.tl-row .step-body { margin: 2px 0 6px 24px; }
+.tl-row .step-artifacts { padding-left: 24px; }
 .step-artifacts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 2px 0; }

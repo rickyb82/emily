@@ -224,6 +224,9 @@ export default function Chat() {
   const canWrite = access === 'owner' || access === 'write'
   const isChild = me?.user.role === 'child'
 
+  const grouped = groupActivity(messages)
+  // mentre il modello lavora dopo le chiamate ai tool (o tra una e l'altra) lo stato vive nella riga Attività, non in un secondo indicatore
+  const activityLive = busy && !gotText && grouped.length > 0 && grouped[grouped.length - 1].kind === 'activity'
   return (
     <div className={`chat-layout ${openArtifact ? 'with-panel' : ''}`}>
     <div className="chat">
@@ -293,14 +296,15 @@ export default function Chat() {
             <p className="muted">{isChild ? 'Puoi farmi domande, chiedermi un disegno o aiuto con i compiti.' : 'Chiedi, allega documenti, genera immagini e video, cerca sul web.'}</p>
           </div>
         )}
-        {groupActivity(messages).map((g) =>
+        {grouped.map((g, i) =>
           g.kind === 'activity' ? (
-            <ActivityGroup key={g.key} steps={g.steps} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
+            <ActivityGroup key={g.key} steps={g.steps} live={activityLive && i === grouped.length - 1}
+              onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
           ) : (
             <MessageView key={g.m.id} m={g.m} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
           ),
         )}
-        {busy && (!gotText || status) && <Working status={status} />}
+        {busy && (!gotText || status) && !activityLive && <Working status={status} />}
         {approval && approval.status === 'pending' && (
           <div className="working approval-wait"><span className="dots"><i /><i /><i /></span><span>📚 Aspetto il permesso di mamma o papà…</span></div>
         )}

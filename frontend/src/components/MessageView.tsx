@@ -6,6 +6,7 @@ import type { Message } from '../lib/api'
 import { useEffect, useState } from 'react'
 import ShareDialog from './ShareDialog'
 import { isSpeaking, plainText, speak, stopSpeaking, ttsEnabled } from '../lib/speech'
+import { appIcon, fmtDuration, stepInput, stepOutcome, stepTitle, turnSummary } from '../lib/steps'
 
 const TOOL_LABELS: Record<string, string> = {
   web_search: '🔎 Ricerca web',
@@ -100,51 +101,84 @@ function SpeakButton({ text }: { text: string }) {
 }
 
 
-/** Riassunto leggibile dell'input di un tool (la parte che interessa all'utente). */
-function inputSummary(name: string, input: any): string {
-  if (!input || typeof input !== 'object') return ''
-  if (name === 'web_search') return `"${input.query ?? ''}"`
-  if (name === 'generate_image' || name === 'generate_video') return `"${String(input.prompt ?? '').slice(0, 120)}"`
-  if (name === 'create_artifact') return `${input.title ?? ''}${input.kind ? ` (${input.kind})` : ''}`
-  if (name === 'update_artifact' || name === 'delete_artifact') return input.title ?? input.artifact_id ?? ''
-  if (name === 'run_code') return `${input.language ?? ''}${input.code ? ` · ${String(input.code).split('\n').length} righe` : ''}`
-  if (name === 'read_document' || name === 'search_documents') return input.query ? `"${input.query}"` : (input.file_id ?? '')
-  if (name === 'remember') return `"${String(input.text ?? '').slice(0, 120)}"`
-  if (name === 'forget') return `"${input.query ?? ''}"`
-  if (name === 'ask_model') return `→ ${input.provider ?? ''}${input.model ? ` (${input.model})` : ''}: "${String(input.prompt ?? '').slice(0, 100)}"`
-  const first = Object.entries(input)[0]
-  return first ? `${first[0]}: ${String(first[1]).slice(0, 100)}` : ''
-}
-
-/** Tutte le chiamate a tool di un turno in un unico blocco ripiegabile: chiuso mostra una riga di riepilogo (e il passo in corso),
- * aperto l'elenco dei passi con i dettagli. I risultati (immagini, file, artifact) restano sempre visibili sotto la riga. */
-export function ActivityGroup({ steps, onOpenArtifact }: { steps: Message[]; onOpenArtifact?: (a: any) => void }) {
-  const [open, setOpen] = useState(false)
+/** Tutte le chiamate a tool di un turno in un'unica timeline. Mentre lavora e' aperta e mostra gli ultimi passaggi (i vecchi si
+ * ripiegano in "altri N"); finito il turno si richiude in una riga discreta, cliccabile per riaprirla. Un errore recuperato (un passo
+ * dopo e' riuscito) non colora il blocco: arancio solo se il turno finisce con un errore. I risultati restano sempre visibili. */
+export function ActivityGroup({ steps, onOpenArtifact, live }: { steps: Message[]; onOpenArtifact?: (a: any) => void; live?: boolean }) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(null)
+  const [showAll, setShowAll] = useState(false)
+  const [, tick] = useState(0)
   const blocks: any[] = steps.flatMap((m) => m.content)
-  if (blocks.length === 0) return null
   const running = blocks.find((b) => b.status === 'running')
+  const active = !!running || !!live
+  useEffect(() => {
+    if (!active) return
+    const t = setInterval(() => tick((x) => x + 1), 1000)
+    return () => clearInterval(t)
+  }, [active])
+  if (blocks.length === 0) return null
+  const open = userOpen ?? active
+  const lastErr = blocks.length > 0 && blocks[blocks.length - 1].is_error && !running
   const errors = blocks.filter((b) => b.is_error).length
-  const names = Array.from(new Set(blocks.map((b) => toolLabel(b.name).replace(/^\S+\s/, ''))))
-  const label = running
-    ? `${toolLabel(running.name)}${inputSummary(running.name, running.input) ? ` · ${inputSummary(running.name, running.input)}` : ''}`
-    : `${blocks.length} ${blocks.length === 1 ? 'passaggio' : 'passaggi'} · ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}`
+  const { live: liveLabel, done: doneLabel } = turnSummary(blocks)
+  const t0 = blocks[0].started_at as number | undefined
+  const tEnd = blocks.reduce((m, b) => Math.max(m, b.ended_at || 0), 0) || undefined
+  const elapsed = t0 ? (active ? Date.now() - t0 : tEnd ? tEnd - t0 : undefined) : undefined
+  const headline = running
+    ? `${liveLabel} · ${stepTitle(running.name).toLowerCase()}${stepInput(running.name, running.input) ? ` ${stepInput(running.name, running.input)}` : ''}`
+    : live ? `${liveLabel} · elaboro i risultati` : doneLabel
+  const LIMIT = 3
+  const hidden = !showAll && active && blocks.length > LIMIT ? blocks.length - LIMIT : 0
+  const shown = hidden ? blocks.slice(hidden) : blocks
   const withArtifacts = blocks.filter((b) => (b.artifacts || []).length > 0)
   return (
-    <div className={`msg tool activity ${running ? 'running' : errors ? 'error' : 'done'} ${open ? 'open' : ''}`}>
-      <button className="activity-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        title={open ? 'Nascondi i passaggi' : 'Mostra cosa ha fatto'}>
-        <span className="step-icon">{running ? <span className="spinner" /> : errors ? '⚠️' : '✓'}</span>
-        <span className="activity-label">{running ? 'Sto lavorando: ' : 'Attività: '}</span>
-        <span className="step-summary" title={label}>{label}</span>
-        {errors > 0 && !running && <span className="activity-err">{errors} {errors === 1 ? 'errore' : 'errori'}</span>}
+    <div className={`msg tool activity ${active ? 'running' : lastErr ? 'error' : 'done'} ${open ? 'open' : ''}`}>
+      <button className="activity-head" onClick={() => setUserOpen(!open)} aria-expanded={open} title={open ? 'Nascondi i passaggi' : 'Mostra cosa ho fatto'}>
+        <span className="activity-dot">{active ? <span className="spinner" /> : <i className={lastErr ? 'warn' : ''} />}</span>
+        <span className="activity-text">{headline}</span>
+        {!active && errors > 0 && !lastErr && <span className="activity-note">{errors === 1 ? '1 tentativo ripetuto' : `${errors} tentativi ripetuti`}</span>}
+        {elapsed !== undefined && <span className="activity-time">{fmtDuration(elapsed)}</span>}
         <span className="step-caret">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
-        <div className="activity-body">
-          {blocks.map((b, i) => <ToolStep key={b.tool_use_id || i} b={b} onOpenArtifact={onOpenArtifact} />)}
+        <div className="timeline">
+          {hidden > 0 && <button className="tl-more" onClick={() => setShowAll(true)}>▸ altri {hidden} {hidden === 1 ? 'passaggio' : 'passaggi'}</button>}
+          {shown.map((b, i) => <TimelineRow key={b.tool_use_id || i} b={b} onOpenArtifact={onOpenArtifact} />)}
         </div>
       )}
       {!open && withArtifacts.map((b, i) => <StepArtifacts key={b.tool_use_id || i} b={b} onOpenArtifact={onOpenArtifact} />)}
+    </div>
+  )
+}
+
+/** Una riga della timeline: titolo in italiano, cosa ha chiesto, com'e' andata, durata; clic per i dettagli tecnici. */
+function TimelineRow({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
+  const [open, setOpen] = useState(false)
+  const running = b.status === 'running'
+  const err = !!b.is_error
+  const what = stepInput(b.name, b.input)
+  const how = running ? '' : stepOutcome(b.name, b.content, err)
+  const dur = b.started_at && b.ended_at ? fmtDuration(b.ended_at - b.started_at) : ''
+  return (
+    <div className={`tl-row ${running ? 'run' : err ? 'warn' : 'ok'} ${open ? 'open' : ''}`}>
+      <button className="tl-line" onClick={() => setOpen((o) => !o)} aria-expanded={open} title={b.name}>
+        <span className="tl-icon">{running ? <span className="spinner" /> : appIcon(b.name)}</span>
+        <span className="tl-title">{stepTitle(b.name)}</span>
+        {what && <span className="tl-what">{what}</span>}
+        {how && <span className="tl-how">{err ? '✕ ' : '→ '}{how}</span>}
+        {running && <span className="tl-how muted">in corso…</span>}
+        {dur && <span className="tl-ms">{dur}</span>}
+      </button>
+      <StepArtifacts b={b} onOpenArtifact={onOpenArtifact} />
+      {open && (
+        <div className="step-body">
+          <div className="muted small" style={{ marginBottom: 4 }}>{b.name}</div>
+          {b.input && Object.keys(b.input).length > 0 && (
+            <details><summary>Parametri</summary><pre>{JSON.stringify(b.input, null, 1).slice(0, 4000)}</pre></details>
+          )}
+          {running ? <div className="muted small">In esecuzione…</div> : <pre>{String(b.content ?? '').slice(0, 6000) || '(nessun output)'}</pre>}
+        </div>
+      )}
     </div>
   )
 }
@@ -180,34 +214,6 @@ function StepArtifacts({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any
     </div>
   )
 }
-
-/** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
-function ToolStep({ b, onOpenArtifact, hideArtifacts }: { b: any; onOpenArtifact?: (a: any) => void; hideArtifacts?: boolean }) {
-  const [open, setOpen] = useState(false)
-  const running = b.status === 'running'
-  const err = !!b.is_error
-  const summary = inputSummary(b.name, b.input)
-  return (
-    <div className={`step ${running ? 'running' : err ? 'error' : 'done'}`}>
-      <button className="step-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="step-icon">{running ? <span className="spinner" /> : err ? '⚠️' : '✓'}</span>
-        <span className="step-label">{toolLabel(b.name)}</span>
-        {summary && <span className="step-summary" title={summary}>{summary}</span>}
-        <span className="step-caret">{open ? '▾' : '▸'}</span>
-      </button>
-      {!hideArtifacts && <StepArtifacts b={b} onOpenArtifact={onOpenArtifact} />}
-      {open && (
-        <div className="step-body">
-          {b.input && Object.keys(b.input).length > 0 && (
-            <details><summary>Parametri</summary><pre>{JSON.stringify(b.input, null, 1).slice(0, 4000)}</pre></details>
-          )}
-          {running ? <div className="muted small">In esecuzione…</div> : <pre>{String(b.content ?? '').slice(0, 6000) || '(nessun output)'}</pre>}
-        </div>
-      )}
-    </div>
-  )
-}
-
 
 /** Ragionamento del modello: aperto mentre pensa, poi ripiegato in una riga cliccabile. */
 function Thinking({ text, live }: { text: string; live: boolean }) {

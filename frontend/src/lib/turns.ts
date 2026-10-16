@@ -114,14 +114,15 @@ export async function startTurn(convId: string, action: 'messages' | 'regenerate
           current = null
         }
         const step: Message = { id: 'tool-' + ev.id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {},
-          content: [{ type: 'tool_result', tool_use_id: ev.id, name: ev.name, input: ev.input, status: 'running', content: '', is_error: false, artifacts: [] }] }
+          content: [{ type: 'tool_result', tool_use_id: ev.id, name: ev.name, input: ev.input, status: 'running', content: '', is_error: false, artifacts: [], started_at: Date.now() }] }
         set({ status: `${toolLabel(ev.name)}…`, gotText: false, messages: [...msgs, step] })
       } else if (ev.type === 'tool_result') {
         const arts = (ev.artifacts || []).filter((a: any) => a.type === 'artifact' || a.type === 'artifact_deleted')
         const id = 'tool-' + ev.tool_use_id
         const exists = s.messages.some((x) => x.id === id)
         const done: Message = { id, role: 'tool', author_id: null, created_at: '', flagged: false, usage: {},
-          content: [{ ...ev, input: (s.messages.find((x) => x.id === id)?.content?.[0] as any)?.input, status: 'done' }] }
+          content: [{ ...ev, input: (s.messages.find((x) => x.id === id)?.content?.[0] as any)?.input, status: 'done',
+            started_at: (s.messages.find((x) => x.id === id)?.content?.[0] as any)?.started_at, ended_at: Date.now() }] }
         set({ status: '', messages: exists ? s.messages.map((x) => (x.id === id ? done : x)) : [...s.messages, done], artifacts: [...s.artifacts, ...arts] })
       } else if (ev.type === 'error') {
         set({ err: ev.error })
