@@ -5,6 +5,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { del, get, patch, post, type Conversation } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import Approvals from './Approvals'
+import Notifications from './Notifications'
 
 export default function Shell({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth()
@@ -118,6 +119,7 @@ export default function Shell({ children }: { children: ReactNode }) {
             <div>{me?.user.display_name}</div>
             <small className="muted">{me?.user.role_label || (isChild ? 'bambino/a' : me?.user.role === 'admin' ? 'amministratore' : (me?.features?.org_mode ? 'utente' : 'adulto'))} · {me?.family_name && me.family_name !== 'Famiglia' ? me.family_name : (me?.features?.org_mode ? 'organizzazione' : 'famiglia')}</small>
           </div>
+          {!isChild && <Notifications />}
           <button className="icon" onClick={logout} title="Esci">⏻</button>
         </div>
       </aside>

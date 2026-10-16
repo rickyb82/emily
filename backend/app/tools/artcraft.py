@@ -180,6 +180,8 @@ async def register_saved_file(ctx: ToolContext, path: str, only_new: bool = Fals
         await _ws.place_in_conversation(ctx.db, asset)   # CHAT/<titolo della chat>
         ctx.db.add(asset)
     await ctx.db.commit()
+    from ..services import events as _events
+    _events.publish(ctx.user.id, "files", {"reason": "generated", "file_id": asset.id})   # la pagina Documenti si aggiorna da sola
     if p.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
         return {"type": "image", "file_id": asset.id, "url": f"/files/{asset.id}", "mime": mime}
     return {"type": "file", "file_id": asset.id, "url": f"/files/{asset.id}", "filename": p.name, "mime": mime}

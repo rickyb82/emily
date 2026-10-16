@@ -280,6 +280,19 @@ class Chunk(Base):
     embedding_model: Mapped[str] = mapped_column(String(80), default="")
 
 
+class Notification(Base):
+    """Notifica per un utente (campanella): condivisioni ricevute, ecc. Pubblicata anche in tempo reale (services/events)."""
+    __tablename__ = "notifications"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(30))           # share_file | share_conversation | share_project | info
+    text: Mapped[str] = mapped_column(String(300))
+    link: Mapped[str] = mapped_column(String(300), default="")
+    actor: Mapped[str] = mapped_column(String(120), default="")
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=now)
+
+
 class Share(Base):
     """Condivisione di una risorsa con un membro (target_user_id) o con tutta la famiglia (None)."""
     __tablename__ = "shares"

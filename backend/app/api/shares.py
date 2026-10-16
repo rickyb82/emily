@@ -67,8 +67,28 @@ async def share(body: ShareRequest, ctx: AuthContext = Depends(require_auth), db
     s = Share(family_id=ctx.user.family_id, resource_type=body.resource_type, resource_id=body.resource_id,
               owner_id=ctx.user.id, target_user_id=body.target_user_id, permission=perm)
     db.add(s)
+    await _announce(db, ctx, body.resource_type, resource, body.target_user_id, perm)
     await db.commit()
     return ShareOut.model_validate(s)
+
+
+async def _announce(db: AsyncSession, ctx: AuthContext, rtype: str, resource, target_user_id: str | None, perm: str) -> None:
+    """Avvisa chi riceve la condivisione (campanella + evento in tempo reale): un utente, oppure tutti gli adulti della famiglia."""
+    from ..models import Role as _Role
+    from ..services import events
+    if target_user_id:
+        targets = [target_user_id]
+    else:
+        rows = (await db.execute(select(User.id).where(User.family_id == ctx.user.family_id, User.id != ctx.user.id,
+                                                      User.is_active.is_(True), User.role != _Role.child))).scalars().all()
+        targets = list(rows)
+    label = {"file": "il file", "conversation": "la chat", "project": "il progetto"}.get(rtype, rtype)
+    name = getattr(resource, "filename", None) or getattr(resource, "title", None) or getattr(resource, "name", None) or ""
+    link = {"file": "/documents?shared=1", "conversation": f"/c/{resource.id}", "project": f"/documents?project={resource.id}"}.get(rtype, "")
+    text = f"{ctx.user.display_name} ha condiviso con te {label} «{name}»" + (" (puoi modificarlo)" if perm == "write" else "")
+    for uid in targets:
+        await events.notify(db, uid, f"share_{rtype}", text, link, actor=ctx.user.display_name)
+        events.publish(uid, "files", {"reason": "share", "resource_type": rtype, "resource_id": resource.id})
 
 
 @router.delete("/{share_id}")
@@ -76,6 +96,9 @@ async def unshare(share_id: str, ctx: AuthContext = Depends(require_auth), db: A
     s = await db.get(Share, share_id)
     if not s or (s.owner_id != ctx.user.id and ctx.user.role.value != "admin"):
         raise HTTPException(404)
+    from ..services import events
+    if s.target_user_id:
+        events.publish(s.target_user_id, "files", {"reason": "unshare", "resource_type": s.resource_type, "resource_id": s.resource_id})
     await db.delete(s)
     await db.commit()
     return {"status": "ok"}

@@ -190,6 +190,9 @@ Ogni documento caricato in un progetto (o allegato a una chat) viene estratto, s
 
 A ogni messaggio l'assistente riceve automaticamente i `RAG_TOP_K` passaggi più pertinenti (evento `rag` nello stream, mostrato in chat) e dispone del tool `search_documents` per ricerche mirate; i documenti sotto `RAG_INLINE_MAX_CHARS` vengono comunque inseriti per intero. Nella pagina del progetto si vede lo stato dell'indice per file e si può **reindicizzare** (utile dopo aver aggiunto una chiave di embedding). Il permesso è lo stesso di "Documenti" nella policy dell'utente.
 
+### Notifiche e aggiornamento in tempo reale
+Ogni scheda aperta tiene un flusso SSE (`GET /api/events`, cookie di sessione, battito ogni 25 s) su cui il backend pubblica gli eventi dell'utente (`services/events.py`, code in memoria per processo). Una **condivisione ricevuta** (file, chat o progetto, anche verso tutta l'organizzazione) crea una notifica persistente (`notifications`, campanella 🔔 nella barra laterale con contatore, elenco, avviso a comparsa e — se l'utente lo consente — notifica del browser) e un evento `files` che fa **ricaricare da sola la pagina Documenti** di chi riceve, senza refresh; lo stesso evento parte quando una chat crea un file o quando l'amministratore carica un documento di reparto. In Documenti il caricamento mostra un **pannello di avanzamento** per file (XHR con progresso, tre file alla volta, errori in riga) e accetta il **trascinamento dal computer** nella cartella aperta.
+
 ### Archivio dell'organizzazione per reparto e cartella CHAT
 In Documenti ci sono due cartelle speciali gestite dal sistema.
 

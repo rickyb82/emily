@@ -108,6 +108,12 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     await db.commit()
     if asset.index_status == "pending":
         _schedule_reindex(asset.id)
+    if dest is not None and workspace.is_org(dest):
+        # nuovo documento di reparto: tutte le schede Documenti aperte dai colleghi si aggiornano
+        from ..models import User as _User
+        from ..services import events as _events
+        for uid in (await db.execute(select(_User.id).where(_User.family_id == ctx.user.family_id, _User.id != ctx.user.id))).scalars().all():
+            _events.publish(uid, "files", {"reason": "org_upload", "file_id": asset.id})
     return _out(asset)
 
 

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLiveEvents } from '../lib/events'
+import { HEADERS } from '../lib/api'
 import ShareDialog from '../components/ShareDialog'
 import VersionHistory from '../components/VersionHistory'
 import { APP_LABEL, canEdit, editorFor, editorPath, newFilePath, type ArtApp } from '../lib/artcraft'
@@ -62,6 +64,8 @@ export default function Documents() {
   const [histFor, setHistFor] = useState<FileOut | null>(null)
   const [dragOver, setDragOver] = useState('')
   const [selected, setSelected] = useState('')
+  const [uploads, setUploads] = useState<{ id: number; name: string; pct: number; status: 'up' | 'done' | 'error'; err?: string }[]>([])
+  const [osDrop, setOsDrop] = useState(false)   // trascinamento di file dal computer sopra la pagina
   const fileInput = useRef<HTMLInputElement>(null)
   const feats = me?.features || {}
 
@@ -76,6 +80,19 @@ export default function Documents() {
     get<FileOut[]>(`/files?project_id=${projectId}`).then(setProjFiles).catch((e) => setErr(e.message))
   }, [projectId])
   useEffect(() => { const close = () => setMenu(null); window.addEventListener('click', close); return () => window.removeEventListener('click', close) }, [])
+  // aggiornamento in tempo reale: una condivisione ricevuta, un file creato in chat o un documento di reparto nuovo ricaricano l'elenco
+  useLiveEvents((e) => { if (e.kind === 'files') load() })
+  // trascinamento di file dal computer: evidenzia la pagina e carica nella cartella corrente
+  useEffect(() => {
+    let depth = 0
+    const has = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files')
+    const enter = (e: DragEvent) => { if (has(e)) { depth++; setOsDrop(true) } }
+    const leave = (e: DragEvent) => { if (has(e)) { depth = Math.max(0, depth - 1); if (!depth) setOsDrop(false) } }
+    const over = (e: DragEvent) => { if (has(e)) e.preventDefault() }
+    const drop = (e: DragEvent) => { if (has(e)) { e.preventDefault(); depth = 0; setOsDrop(false); upload(e.dataTransfer!.files) } }
+    window.addEventListener('dragenter', enter); window.addEventListener('dragleave', leave); window.addEventListener('dragover', over); window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave); window.removeEventListener('dragover', over); window.removeEventListener('drop', drop) }
+  })
 
   // ---- navigazione ----
   const go = (p: { folder?: string; project?: string; shared?: boolean }) => { setSelected(''); setParams(p.folder ? { folder: p.folder } : p.project ? { project: p.project } : p.shared ? { shared: '1' } : {}) }
@@ -105,15 +122,38 @@ export default function Documents() {
   const searchHits = searching ? files.filter((f) => f.filename.toLowerCase().includes(q)) : []
 
   // ---- azioni ----
-  async function upload(list: FileList | null) {
-    if (!list) return
-    for (const f of Array.from(list)) {
+  /** Caricamento con avanzamento (XHR: fetch non espone il progresso in upload); pannello in basso a destra, una riga per file. */
+  function uploadOne(f: File): Promise<void> {
+    const id = Date.now() + Math.random()
+    setUploads((u) => [...u, { id, name: f.name, pct: 0, status: 'up' }])
+    const set = (patch: Partial<{ pct: number; status: 'up' | 'done' | 'error'; err: string }>) => setUploads((u) => u.map((x) => x.id === id ? { ...x, ...patch } : x))
+    return new Promise((resolve) => {
       const fd = new FormData()
       fd.append('file', f)
       if (folderId) fd.append('folder_id', folderId)
       if (projectId) fd.append('project_id', projectId)
-      try { await post('/files', fd) } catch (e: any) { setErr(e.message) }
-    }
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/files')
+      Object.entries(HEADERS).forEach(([k, v]) => xhr.setRequestHeader(k, v))
+      xhr.withCredentials = true
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) set({ pct: Math.round(100 * e.loaded / e.total) }) }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) { set({ pct: 100, status: 'done' }); setTimeout(() => setUploads((u) => u.filter((x) => x.id !== id)), 4000) }
+        else { let msg = xhr.statusText; try { const j = JSON.parse(xhr.responseText); msg = typeof j.detail === 'string' ? j.detail : msg } catch {}; set({ status: 'error', err: msg }) }
+        resolve()
+      }
+      xhr.onerror = () => { set({ status: 'error', err: 'rete non raggiungibile' }); resolve() }
+      xhr.send(fd)
+    })
+  }
+  async function upload(list: FileList | null) {
+    if (!list || !list.length) return
+    if (!canWriteHere) { setErr('In questa cartella carica solo l\'amministratore'); return }
+    const files = Array.from(list)
+    // tre alla volta: abbastanza per sfruttare la rete, senza aprire decine di connessioni
+    let i = 0
+    const worker = async () => { while (i < files.length) { const f = files[i++]; await uploadOne(f); load() } }
+    await Promise.all([worker(), worker(), worker()])
     if (fileInput.current) fileInput.current.value = ''
     load()
   }
@@ -193,7 +233,8 @@ export default function Documents() {
   const menuFolder = menu?.kind === 'folder' ? byId[menu.id] : undefined
 
   return (
-    <div className="page finder" onClick={() => setSelected('')}>
+    <div className={`page finder ${osDrop ? 'dropping' : ''}`} onClick={() => setSelected('')}>
+      {osDrop && <div className="drop-hint">📎 Rilascia per caricare in «{current?.name || (projectId ? (projects.find((p) => p.id === projectId)?.name ?? 'progetto') : 'Documenti')}»</div>}
       <div className="finder-bar row between wrap">
         <nav className="crumbs">
           {crumbs.map((c, i) => (
@@ -305,6 +346,20 @@ export default function Documents() {
             </ul>
             <button className="ghost" onClick={() => setMoveFor(null)}>Annulla</button>
           </div>
+        </div>
+      )}
+
+      {/* caricamenti in corso */}
+      {uploads.length > 0 && (
+        <div className="upload-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="row between"><b>📤 Caricamento {uploads.filter((u) => u.status === 'done').length}/{uploads.length}</b><button className="icon" onClick={() => setUploads((u) => u.filter((x) => x.status === 'up'))} title="Nascondi i completati">✕</button></div>
+          {uploads.map((u) => (
+            <div key={u.id} className={`upload-row ${u.status}`} title={u.err || u.name}>
+              <span className="upload-name">{u.status === 'done' ? '✅ ' : u.status === 'error' ? '⚠️ ' : ''}{u.name}</span>
+              <small className="muted">{u.status === 'error' ? (u.err || 'errore') : u.status === 'done' ? 'fatto' : `${u.pct}%`}</small>
+              <div className="upload-bar"><span style={{ width: `${u.status === 'error' ? 100 : u.pct}%` }} /></div>
+            </div>
+          ))}
         </div>
       )}
 
