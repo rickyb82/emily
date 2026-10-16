@@ -944,5 +944,6 @@ async def apps_catalog(ctx: AuthContext = Depends(require_admin)):
               "mailcraft": bool(settings.mailcraft_url and settings.mailcraft_token),
               "remotecraft": bool(settings.remotecraft_url and settings.remotecraft_token),
               "covercraft": bool(settings.covercraft_url and settings.covercraft_token),
+              "quotecraft": bool(settings.quotecraft_url and settings.quotecraft_token),
               "archivio": True}
     return [{**a, "active": active.get(a["id"], False)} for a in APPS]

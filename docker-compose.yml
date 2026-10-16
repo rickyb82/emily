@@ -30,6 +30,9 @@ services:
       - COVERCRAFT_URL=${COVERCRAFT_URL:-}
       - COVERCRAFT_MCP_HOST=${COVERCRAFT_MCP_HOST:-}
       - COVERCRAFT_TOKEN=${COVERCRAFT_TOKEN:-}
+      - QUOTECRAFT_URL=${QUOTECRAFT_URL:-}
+      - QUOTECRAFT_MCP_HOST=${QUOTECRAFT_MCP_HOST:-}
+      - QUOTECRAFT_TOKEN=${QUOTECRAFT_TOKEN:-}
     volumes:
       - ./data:/data
       - ./mcp_servers.json:/app/mcp_servers.json:ro
@@ -320,6 +323,29 @@ services:
     expose: ["7979", "7999"]
     volumes:
       - ./private/covercraft:/data              # config.json + secrets.json (password del database, leggibile solo dal container)
+    logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
+
+  # QuoteCraft (https://github.com/rickyb82/quotecraft): preventivatore con listino per il commerciale, documenti con wordcraft-cli
+  # (nello stesso container) su carta intestata, invio via MailCraft a nome dell'utente. Web app + API su 7878 e ponte MCP per utente
+  # su 7899 (extras/artcraft/Dockerfile.quotecraft). Il token di servizio resta nella rete Docker: il backend fa da proxy autenticato
+  # (/quotecraft/api/* -> backend -> quotecraft) e aggiunge utente, ruolo (admin per gli amministratori dell'app) e identita' MailCraft.
+  # Dati (listino, clienti, preventivi, config, carta intestata) in ./private/quotecraft; i documenti prodotti in ./data/quotecraft
+  # (cosi' compaiono in chat e in Documenti); ./data in sola lettura per importare una carta intestata dai file di Emily.
+  quotecraft:
+    build: { context: extras/artcraft, dockerfile: Dockerfile.quotecraft, args: { REF: "${QUOTECRAFT_REF:-main}", WORDCRAFT_REF: "${WORDCRAFT_REF:-main}" } }
+    image: familai-quotecraft
+    profiles: ["quotecraft"]
+    restart: unless-stopped
+    environment:
+      - QUOTECRAFT_TOKEN=${QUOTECRAFT_TOKEN:-}
+      - QUOTECRAFT_LANG=it
+      - MCP_PORT=7899
+      - TZ=${TZ:-Europe/Rome}
+    expose: ["7878", "7899"]
+    volumes:
+      - ./private/quotecraft:/qc
+      - ./data/quotecraft:/qc/out
+      - ./data:/data:ro
     logging: { driver: json-file, options: { max-size: "1m", max-file: "1" } }
 
   # Geocoder Nominatim per CoverCraft (facoltativo, ./familai.sh covercraft geo up): interrogato solo quando le tabelle non danno

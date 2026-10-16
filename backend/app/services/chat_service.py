@@ -295,6 +295,20 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "configure_database, test_database e set_preferences (oltre a tema/lingua) sono riservati all'amministratore di Emily: agli altri utenti rispondono con un errore, non insistere e rimanda all'amministratore.\n"
             "- Il risultato di una verifica si puo' mettere in un documento (WordCraft) o in una mail (MailCraft) se richiesto."
         )
+    if mcp_manager.is_connected("quotecraft") and user.role != Role.child and "quotecraft" in _apps_on:
+        parts.append(
+            "\n# Preventivi (QuoteCraft)\n"
+            "- Il reparto commerciale fa i preventivi con QuoteCraft (menu Produttivita' > Preventivi): listino con prezzi diretta e wholesale "
+            "(una tantum e canone), clienti, preventivi numerati AAAA-NNNN, documenti PDF/DOCX su carta intestata e invio via MailCraft "
+            "dall'account dell'utente. I tool mcp__quotecraft__* agiscono a nome dell'utente con cui stai parlando.\n"
+            "- Per 'fammi un preventivo per…': list_customers (o i dati dalla richiesta), list_items per trovare i codici (occhio alla categoria), "
+            "new_quote con il canale (wholesale per l'Allegato A di un partner), add_line per ogni voce con quantita' (discount_pct solo se richiesto; "
+            "voce libera per cio' che non e' a listino), poi get_quote e riporta righe e totali (una tantum, canone, valore contratto). "
+            "Chiedi prima di make_documents e SEMPRE prima di send_quote: mai spedire senza un si' esplicito.\n"
+            "- I documenti prodotti compaiono in chat come allegati e nella cartella CHAT. I prezzi sono quelli del listino: non inventarne; "
+            "listino, carta intestata, azienda e impostazioni (save_item, import_items, import_letterhead, set_company, set_preferences) "
+            "sono riservati agli amministratori dell'app: agli altri rispondono con un errore, rimanda all'amministratore."
+        )
     pol = effective_policy(user)
     if "ask_model" in pol.get("allowed_tools", []):
         from ..tools.ask_model import describe_available

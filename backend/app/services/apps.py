@@ -24,6 +24,8 @@ APPS: list[dict] = [
     {"id": "remotecraft", "label": "Assistenza remota", "app": "RemoteCraft", "glyph": "🛟", "desc": "clienti, PC RustDesk, interventi, GDPR"},
     {"id": "covercraft", "label": "Verifica copertura", "app": "CoverCraft", "glyph": "📡", "desc": "copertura connettivita' dal database dell'operatore",
      "admin": "configura il database e le preferenze condivise (web app e chat)"},
+    {"id": "quotecraft", "label": "Preventivi", "app": "QuoteCraft", "glyph": "💶", "desc": "listino, preventivi diretta/wholesale, documenti su carta intestata, invio via MailCraft",
+     "admin": "modifica listino, carta intestata, dati azienda e impostazioni"},
     {"id": "archivio", "label": "Archivio dell'organizzazione", "app": "Documenti", "glyph": "🏢", "desc": "le cartelle di reparto (lettura secondo i reparti dell'utente)",
      "admin": "carica, sposta ed elimina i documenti nelle cartelle di reparto"},
 ]

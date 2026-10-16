@@ -110,7 +110,7 @@ async def cover_logout(ctx: AuthContext = Depends(require_auth)):
     return {"ok": True}
 
 
-async def _frame_auth(request: Request, db: AsyncSession) -> AuthContext:
+async def _frame_auth(request: Request, db: AsyncSession, app: str = "covercraft") -> AuthContext:
     """Come require_auth, ma per le chiamate fatte dalla web app nell'iframe: ehttp non manda i cookie, quindi la web app
     presenta il token di frame (Authorization: Bearer) coniato da /covercraft/session; in mancanza vale il cookie.
     Difesa CSRF: il token non e' nel cookie jar, e in piu' controlliamo l'origine (Sec-Fetch-Site / Origin / Referer)."""
@@ -123,7 +123,7 @@ async def _frame_auth(request: Request, db: AsyncSession) -> AuthContext:
     if not ctx:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Non autenticato (sessione Emily scaduta: ricarica la pagina Copertura)")
     from ..services.apps import app_enabled
-    if ctx.user.role == Role.child or not app_enabled(ctx.user, "covercraft"):
+    if ctx.user.role == Role.child or not app_enabled(ctx.user, app):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "App non abilitata per questo account")
     if not ctx.session.mfa_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})

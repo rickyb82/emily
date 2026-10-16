@@ -14,6 +14,7 @@ import Editor from './pages/Editor'
 import Mail from './pages/Mail'
 import Remote from './pages/Remote'
 import Cover from './pages/Cover'
+import Quote from './pages/Quote'
 
 export default function App() {
   const { me, loading } = useAuth()
@@ -54,6 +55,7 @@ export default function App() {
         {me.user.role !== 'child' && <Route path="/mail" element={<Mail />} />}
         {me.user.role !== 'child' && <Route path="/remote" element={<Remote />} />}
         {me.user.role !== 'child' && <Route path="/cover" element={<Cover />} />}
+        {me.user.role !== 'child' && <Route path="/quotes" element={<Quote />} />}
         {me.user.role === 'admin' && <Route path="/admin/*" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -169,6 +169,9 @@ def _per_user_service(name: str):
     if name == "covercraft":
         from ..services import covercraft
         return covercraft.svc
+    if name == "quotecraft":
+        from ..services import quotecraft
+        return quotecraft.svc
     return None
 
 
@@ -292,7 +295,7 @@ class MCPManager:
             # MailCraft: una sessione MCP per utente. La connessione principale (token di un utente di servizio) serve solo
             # a elencare i tool; ogni chiamata vera passa dalla sessione dell'utente (user_connection).
             for name, mcp_host in (("mailcraft", settings.mailcraft_mcp_host), ("remotecraft", settings.remotecraft_mcp_host),
-                                   ("covercraft", settings.covercraft_mcp_host)):
+                                   ("covercraft", settings.covercraft_mcp_host), ("quotecraft", settings.quotecraft_mcp_host)):
                 svc = _per_user_service(name)
                 if svc and svc.enabled() and mcp_host and not any(r.name == name for r in rows):
                     asyncio.create_task(self._connect_per_user(name, mcp_host))
@@ -494,7 +497,7 @@ class MCPManager:
                 if not conn.connected or not conn.session:
                     return ToolResult(f"{server}: sessione utente non connessa ({conn.error or 'errore sconosciuto'})", is_error=True)
             from .artcraft import APPS as _ARTCRAFT_APPS
-            if server in _ARTCRAFT_APPS or server == "mailcraft":
+            if server in _ARTCRAFT_APPS or server in ("mailcraft", "quotecraft"):
                 args = await _resolve_file_ids(args, ctx)   # id di un file della chat al posto di un percorso -> percorso in /data
             if server == "mailcraft":
                 args = await _mail_args(tool, args, ctx)
@@ -519,6 +522,16 @@ class MCPManager:
                 if art:
                     artifacts.append(art)
                     parts.append(f"Allegato {art.get('filename', '')} salvato e mostrato all'utente in chat (id {art['file_id']}).")
+            if server == "quotecraft" and tool == "make_documents" and not _attr(res, "isError", "is_error", default=False):
+                # i documenti del preventivo: nel container stanno in /qc/out/<preventivo>/<file>, per Emily in data/quotecraft/…
+                from .artcraft import register_saved_file as _reg
+                text_all = "\n".join(parts)
+                for m in re.finditer(r"/qc/out/([^\s\"',\]\)]+\.(?:pdf|docx|html))", text_all):
+                    host_path = str(settings.data_dir / "quotecraft" / m.group(1))
+                    art = await _reg(ctx, host_path)
+                    if art:
+                        artifacts.append(art)
+                        parts.append(f"Documento {art.get('filename', '')} mostrato all'utente in chat (id {art['file_id']}).")
             from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file, sidecar_files
             if server in _ARTCRAFT and not _attr(res, "isError", "is_error", default=False):
                 app = _ARTCRAFT[server]

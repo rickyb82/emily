@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     covercraft_url: str = ""          # URL del server CoverCraft (es. http://covercraft:7979): verifica copertura connettivita' dal database dell'operatore
     covercraft_mcp_host: str = ""     # host:porta del ponte MCP per utente di CoverCraft (es. covercraft:7999)
     covercraft_token: str = ""        # token di servizio CoverCraft: resta tra backend e container (il proxy /covercraft/api lo aggiunge lui)
+    quotecraft_url: str = ""          # URL del server QuoteCraft (es. http://quotecraft:7878): preventivi con listino per il commerciale
+    quotecraft_mcp_host: str = ""     # host:porta del ponte MCP per utente di QuoteCraft (es. quotecraft:7899)
+    quotecraft_token: str = ""        # token di servizio QuoteCraft (solo backend <-> container)
 
     @field_validator("wordcraft_web", "gridcraft_web", "pdfcraft_web", "deckcraft_web", "ideacraft_web", mode="before")
     @classmethod

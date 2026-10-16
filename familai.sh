@@ -17,6 +17,7 @@
 #   ./familai.sh ideacraft up|down|logs|upgrade  IdeaCraft: mappe mentali e diagrammi dalla chat (SVG + file nativo) + editor nel browser
 #   ./familai.sh mailcraft up|down|logs|upgrade  MailCraft: posta elettronica (IMAP/SMTP) per utente, web app + tool in chat
 #   ./familai.sh remotecraft up|down|logs|upgrade RemoteCraft: assistenza remota (server RustDesk + gestionale) per tecnico
+#   ./familai.sh quotecraft up|down|logs|upgrade QuoteCraft: preventivi con listino per il commerciale (documenti via WordCraft, invio via MailCraft)
 #   ./familai.sh covercraft up|down|logs|upgrade|db|geo CoverCraft: verifica copertura connettivita' (TIM, Open Fiber, Fastweb, ponti radio) dal database dell'operatore; geo = Nominatim
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -268,6 +269,54 @@ case "${1:-}" in
         compose up -d backend;;
       logs) compose --profile remotecraft logs -f --tail=100 remotecraft remotecraft-mcp;;
       *) echo "uso: ./familai.sh remotecraft up|build|down|logs|upgrade"; exit 1;;
+    esac;;
+  quotecraft)
+    # QuoteCraft: preventivatore con listino; web app su /quotecraft/ (API via backend), tool MCP per utente, documenti con wordcraft-cli, invio via MailCraft.
+    need_env
+    set_env() { if grep -q "^$1=" .env; then sed -i.bak "s#^$1=.*#$1=$2#" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi; }
+    case "${2:-up}" in
+      up|build|upgrade)
+        mkdir -p private/quotecraft data/quotecraft
+        if grep -q '^COMPOSE_PROFILES=' .env; then
+          grep -q "^COMPOSE_PROFILES=.*quotecraft" .env || { sed -i.bak "s/^COMPOSE_PROFILES=\(.*\)\$/COMPOSE_PROFILES=\1,quotecraft/" .env && rm -f .env.bak; }
+        else
+          echo "COMPOSE_PROFILES=quotecraft" >> .env
+        fi
+        tok=$(grep '^QUOTECRAFT_TOKEN=' .env | cut -d= -f2- || true); [ ${#tok} -ge 32 ] || set_env QUOTECRAFT_TOKEN "$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        set_env QUOTECRAFT_URL "http://quotecraft:7878"
+        set_env QUOTECRAFT_MCP_HOST "quotecraft:7899"
+        if [ "$2" = upgrade ]; then
+          sha=$(git ls-remote https://github.com/rickyb82/quotecraft HEAD 2>/dev/null | cut -f1)
+          [ -n "$sha" ] || { echo "!! non riesco a leggere il repository quotecraft (rete?)"; exit 1; }
+          if grep -q "^QUOTECRAFT_REF=$sha" .env; then echo ">> quotecraft e' gia' all'ultimo commit (${sha:0:10})"; exit 0; fi
+          echo ">> quotecraft: aggiorno al commit ${sha:0:10} e ricompilo…"
+          set_env QUOTECRAFT_REF "$sha"
+        fi
+        echo ">> Build di QuoteCraft dal repository (compila Rust + WebAssembly + wordcraft-cli: la prima volta anche 30-60 minuti)…"
+        DOCKER_BUILDKIT=1 compose --profile quotecraft build quotecraft
+        compose --profile quotecraft up -d quotecraft
+        # invio via MailCraft a nome dell'utente: URL e token di servizio di MailCraft nelle preferenze di QuoteCraft (una volta)
+        mtok=$(grep '^MAILCRAFT_TOKEN=' .env | cut -d= -f2- || true)
+        if [ -n "$mtok" ]; then
+          sleep 3
+          compose --profile quotecraft exec -T -u quotecraft quotecraft quotecraft-cli prefs --home /qc "mailcraft_url=http://mailcraft:7878" "mailcraft_token=$mtok" >/dev/null 2>&1 \
+            && echo ">> MailCraft collegato: i preventivi partono dall'account di posta dell'utente" \
+            || echo "!! non sono riuscito a impostare MailCraft nelle preferenze di QuoteCraft: dalle Impostazioni della web app (mailcraft_url=http://mailcraft:7878, token = MAILCRAFT_TOKEN del .env)"
+        else
+          echo "   MailCraft non attivo: i preventivi si generano ma non si spediscono (./familai.sh mailcraft up, poi di nuovo quotecraft up)"
+        fi
+        compose up -d --build backend
+        compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || true
+        echo ">> QuoteCraft attivo: menu 🧰 Produttivita' > 💶 Preventivi (cartella APP) e tool mcp__quotecraft__* in chat."
+        echo "   Listino, carta intestata e azienda li gestiscono il super amministratore e gli amministratori dell'app (scheda del membro > Software)."
+        echo "   Dati in private/quotecraft/ (nel backup); documenti prodotti in data/quotecraft/.";;
+      down)
+        compose --profile quotecraft stop quotecraft
+        set_env QUOTECRAFT_URL ""
+        set_env QUOTECRAFT_MCP_HOST ""
+        compose up -d backend;;
+      logs) compose --profile quotecraft logs -f --tail=100 quotecraft;;
+      *) echo "uso: ./familai.sh quotecraft up|build|down|logs|upgrade"; exit 1;;
     esac;;
   covercraft)
     # CoverCraft: verifica di copertura a un indirizzo dal database netmap dell'operatore; web app su /covercraft/ (API via backend), tool MCP per utente.

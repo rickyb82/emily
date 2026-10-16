@@ -28,6 +28,7 @@ const APPS: { key: string; app?: ArtApp; label: string; glyph: string; cls: stri
   { key: 'mail', label: 'Posta', glyph: '✉', cls: 'app-mail', feature: 'mailcraft_web' },
   { key: 'remote', label: 'Assistenza', glyph: '🛟', cls: 'app-remote', feature: 'remotecraft_web' },
   { key: 'cover', label: 'Copertura', glyph: '📡', cls: 'app-cover', feature: 'covercraft_web' },
+  { key: 'quote', label: 'Preventivi', glyph: '💶', cls: 'app-quote', feature: 'quotecraft_web' },
 ]
 
 /** Icona del file in base al tipo (stesse tinte delle app). */
@@ -157,6 +158,7 @@ export default function Documents() {
     if (a.key === 'mail') { nav('/mail'); return }
     if (a.key === 'remote') { nav('/remote'); return }
     if (a.key === 'cover') { nav('/cover'); return }
+    if (a.key === 'quote') { nav('/quotes'); return }
     if (a.key === 'pdf') {
       try {
         const f = await post<FileOut>('/files/blank-pdf', { filename: 'documento.pdf', folder_id: folderId || null, project_id: projectId || null })
@@ -313,7 +315,7 @@ export default function Documents() {
             <h3>APP</h3>
             <div className="ios-apps">
               {apps.map((a) => (
-                <button key={a.key} className="ios-app" onClick={() => launch(a)} title={a.app ? APP_LABEL[a.app] : a.key === 'remote' ? 'RemoteCraft' : a.key === 'cover' ? 'CoverCraft' : 'MailCraft'}>
+                <button key={a.key} className="ios-app" onClick={() => launch(a)} title={a.app ? APP_LABEL[a.app] : a.key === 'remote' ? 'RemoteCraft' : a.key === 'cover' ? 'CoverCraft' : a.key === 'quote' ? 'QuoteCraft' : 'MailCraft'}>
                   <span className={`app-icon ${a.cls}`}>{a.glyph}</span>
                   <span>{a.label}</span>
                 </button>

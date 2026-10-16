@@ -1,0 +1,52 @@
+# QuoteCraft (https://github.com/rickyb82/quotecraft): preventivatore con listino per il reparto commerciale.
+# Un container: `quotecraft-cli serve` (API + web app WebAssembly, una sessione per utente, dati in /qc) con accanto `wordcraft-cli`
+# (DOCX e PDF sulla carta intestata) e, su un'altra porta, il server MCP per utente esposto via socat: il backend manda come prima
+# riga `nome<TAB>ruolo<TAB>identita-mail`, poi parla MCP (vedi quotecraft-mcp-user.sh). Il token di servizio non esce dal container.
+# Equivalente al Dockerfile del repository ma multi-architettura (trunk per x86_64 e arm64) e con la cache di cargo.
+# Prima build: 30-60 minuti (compila QuoteCraft, la web app e wordcraft-cli); le successive sono rapide grazie alla cache.
+ARG REPO=https://github.com/rickyb82/quotecraft
+ARG REF=main
+ARG WORDCRAFT_REPO=https://github.com/rickyb82/wordcraft
+ARG WORDCRAFT_REF=main
+
+FROM rust:1-bookworm AS build
+ARG REPO
+ARG REF
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; arch="$(uname -m)"; case "$arch" in x86_64) t=x86_64-unknown-linux-gnu;; aarch64|arm64) t=aarch64-unknown-linux-gnu;; *) echo "arch $arch non supportata"; exit 1;; esac; \
+    curl -fsSL "https://github.com/trunk-rs/trunk/releases/latest/download/trunk-${t}.tar.gz" | tar xz -C /usr/local/bin trunk; trunk --version
+WORKDIR /src
+RUN git clone --depth 1 "$REPO" . && (git checkout -q "$REF" 2>/dev/null || (git fetch -q --depth 1 origin "$REF" && git checkout -q FETCH_HEAD) || true) && git rev-parse HEAD
+RUN rustup show >/dev/null 2>&1 || true; rustup target add wasm32-unknown-unknown || true
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/src/target,id=target-quotecraft \
+    cargo build --release -p quotecraft-cli && cp target/release/quotecraft-cli /usr/local/bin/quotecraft-cli \
+    && cd apps/quotecraft-web && trunk build --release && ls -la /src/dist/web
+
+# wordcraft-cli (i documenti): dal repository di WordCraft, con la sua cache
+FROM rust:1-bookworm AS wordcraft
+ARG WORDCRAFT_REPO
+ARG WORDCRAFT_REF
+RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /wc
+RUN git clone --depth 1 "$WORDCRAFT_REPO" . && (git checkout -q "$WORDCRAFT_REF" 2>/dev/null || true) && git rev-parse HEAD
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry \
+    --mount=type=cache,target=/wc/target,id=target-wordcraft-cli \
+    cargo build --release -p wordcraft-cli && cp target/release/wordcraft-cli /usr/local/bin/wordcraft-cli
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends socat ca-certificates fonts-dejavu-core fonts-liberation && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10004 quotecraft && useradd --system --uid 10004 --gid 10004 --no-create-home --home-dir /qc --shell /usr/sbin/nologin quotecraft
+COPY --from=build /usr/local/bin/quotecraft-cli /usr/local/bin/quotecraft-cli
+COPY --from=build /src/dist/web /app/web
+COPY --from=wordcraft /usr/local/bin/wordcraft-cli /usr/local/bin/wordcraft-cli
+COPY quotecraft-start.sh /usr/local/bin/quotecraft-start
+COPY quotecraft-mcp-user.sh /usr/local/bin/quotecraft-mcp-user
+RUN chmod 0755 /usr/local/bin/quotecraft-start /usr/local/bin/quotecraft-mcp-user /usr/local/bin/quotecraft-cli /usr/local/bin/wordcraft-cli \
+    && mkdir -p /qc/out /qc/templates && chown -R quotecraft:quotecraft /qc
+# parte da root solo per sistemare i permessi di /qc (volumi montati dall'host), poi passa all'utente quotecraft (uid 10004)
+VOLUME ["/qc"]
+EXPOSE 7878 7899
+ENV QUOTECRAFT_HOME=/qc QUOTECRAFT_TOKEN="" QUOTECRAFT_LANG=it MCP_PORT=7899
+CMD ["quotecraft-start"]

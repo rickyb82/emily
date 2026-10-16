@@ -275,6 +275,7 @@ function ModApps({ feats }: { feats: Record<string, any> }) {
     { k: 'mail', cls: 'app-mail', g: '✉', name: 'Posta', app: 'MailCraft', desc: 'Le tue caselle IMAP/SMTP, stile Gmail, con l\'assistente che legge e risponde per te.', on: feats.mailcraft_web },
     { k: 'remote', cls: 'app-remote', g: '🛟', name: 'Assistenza', app: 'RemoteCraft', desc: 'Assistenza remota: clienti, PC con ID RustDesk, interventi con cronometro e ore fatturabili, consensi GDPR e report; apre il client RustDesk sul PC del cliente.', on: feats.remotecraft_web },
     { k: 'cover', cls: 'app-cover', g: '📡', name: 'Copertura', app: 'CoverCraft', desc: 'Verifica di copertura a un indirizzo dal database dell\'operatore: fibra FTTH/FTTC e rame TIM, Open Fiber scala per scala, Fastweb, rete propria, ponti radio con distanza e direzione, celle mobili; storico delle verifiche.', on: feats.covercraft_web },
+    { k: 'quote', cls: 'app-quote', g: '💶', name: 'Preventivi', app: 'QuoteCraft', desc: 'Preventivatore del commerciale: listino con prezzi diretta e wholesale, preventivi numerati, documenti PDF/DOCX sulla carta intestata, invio via posta dal tuo account; l\'assistente li prepara su richiesta.', on: feats.quotecraft_web },
   ]
   const [sel, setSel] = useState(apps[0])
   const [openF, setOpenF] = useState(false)
