@@ -516,3 +516,16 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .storage.compact .storage-bar { height: 6px; } .storage.compact small { font-size: 11px; }
 .storage-pill { font-size: 12px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap; }
 .storage-pill.warn { color: var(--danger); border-color: var(--danger); }
+
+/* blocco attivita': le chiamate ai tool di un turno ripiegate in una riga */
+.msg.tool.activity { margin: 6px 0; }
+.activity-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.activity-head:hover { background: var(--bg); color: var(--text); }
+.msg.tool.activity.running .activity-head { border-color: var(--primary); }
+.msg.tool.activity.error .activity-head { border-color: #f59e0b; }
+.msg.tool.activity.open .activity-head { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.activity-label { font-weight: 600; color: var(--text); white-space: nowrap; }
+.activity-err { color: #f59e0b; white-space: nowrap; font-size: 12px; }
+.activity-body { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 4px 8px; background: var(--bg); }
+.activity-body .step { margin: 4px 0; }
+.step-artifacts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 2px 0; }

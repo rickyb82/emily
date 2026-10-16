@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { del, get, patch, post, type Conversation, type FileOut, type Message, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import MessageView from '../components/MessageView'
+import MessageView, { ActivityGroup } from '../components/MessageView'
 import { abortTurn, clearTurn, getTurn, startTurn, subscribe, type TurnState } from '../lib/turns'
 import ShareDialog from '../components/ShareDialog'
 import ArtifactPanel, { type ArtifactData } from '../components/ArtifactPanel'
@@ -293,9 +293,13 @@ export default function Chat() {
             <p className="muted">{isChild ? 'Puoi farmi domande, chiedermi un disegno o aiuto con i compiti.' : 'Chiedi, allega documenti, genera immagini e video, cerca sul web.'}</p>
           </div>
         )}
-        {messages.map((m) => (
-          <MessageView key={m.id} m={m} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
-        ))}
+        {groupActivity(messages).map((g) =>
+          g.kind === 'activity' ? (
+            <ActivityGroup key={g.key} steps={g.steps} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
+          ) : (
+            <MessageView key={g.m.id} m={g.m} onOpenArtifact={(a) => upsertArtifact(artifacts.find((x) => x.id === a.id) ?? a)} />
+          ),
+        )}
         {busy && (!gotText || status) && <Working status={status} />}
         {approval && approval.status === 'pending' && (
           <div className="working approval-wait"><span className="dots"><i /><i /><i /></span><span>📚 Aspetto il permesso di mamma o papà…</span></div>
@@ -399,4 +403,32 @@ function Working({ status }: { status: string }) {
       {secs >= 3 && <span className="muted small">{secs}s</span>}
     </div>
   )
+}
+
+type Grouped = { kind: 'msg'; m: Message } | { kind: 'activity'; key: string; steps: Message[] }
+
+/** I passaggi con i tool di uno stesso turno (messaggi "tool" consecutivi, anche separati da risposte dell'assistente senza testo)
+ * finiscono in un solo blocco ripiegabile: l'utente vede la risposta finale e apre i dettagli solo se vuole. */
+function groupActivity(messages: Message[]): Grouped[] {
+  const out: Grouped[] = []
+  const hasText = (m: Message) => m.content.some((b: any) => (b.type === 'text' && String(b.text || '').trim()) || (b.type === 'image' && b.file_id))
+  let cur: Message[] | null = null
+  let pendingSilent: Message[] = []
+  for (const m of messages) {
+    if (m.role === 'tool') {
+      if (!cur) cur = []
+      cur.push(m)
+      pendingSilent = []
+    } else if (cur && m.role === 'assistant' && !hasText(m) && !m.streaming) {
+      pendingSilent.push(m)   // risposta vuota tra due chiamate: non interrompe il gruppo
+    } else {
+      if (cur) { out.push({ kind: 'activity', key: 'act-' + cur[0].id, steps: cur }); cur = null }
+      for (const s of pendingSilent) out.push({ kind: 'msg', m: s })
+      pendingSilent = []
+      out.push({ kind: 'msg', m })
+    }
+  }
+  if (cur) out.push({ kind: 'activity', key: 'act-' + cur[0].id, steps: cur })
+  for (const s of pendingSilent) out.push({ kind: 'msg', m: s })
+  return out
 }

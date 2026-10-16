@@ -31,11 +31,7 @@ export const toolLabel = (n: string) => TOOL_LABELS[n] ?? (n.startsWith('mcp__')
 
 export default function MessageView({ m, authorName, onOpenArtifact }: { m: Message; authorName?: string; onOpenArtifact?: (a: any) => void }) {
   if (m.role === 'tool') {
-    return (
-      <div className="msg tool">
-        {m.content.map((b: any, i: number) => <ToolStep key={i} b={b} onOpenArtifact={onOpenArtifact} />)}
-      </div>
-    )
+    return <ActivityGroup steps={[m]} onOpenArtifact={onOpenArtifact} />
   }
   const text = m.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
   const thinking = (m as any).thinking || m.content.filter((b: any) => b.type === 'thinking').map((b: any) => b.thinking || b.text || '').join('\n')
@@ -120,22 +116,46 @@ function inputSummary(name: string, input: any): string {
   return first ? `${first[0]}: ${String(first[1]).slice(0, 100)}` : ''
 }
 
-/** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
-function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
+/** Tutte le chiamate a tool di un turno in un unico blocco ripiegabile: chiuso mostra una riga di riepilogo (e il passo in corso),
+ * aperto l'elenco dei passi con i dettagli. I risultati (immagini, file, artifact) restano sempre visibili sotto la riga. */
+export function ActivityGroup({ steps, onOpenArtifact }: { steps: Message[]; onOpenArtifact?: (a: any) => void }) {
   const [open, setOpen] = useState(false)
-  const [shareFile, setShareFile] = useState<string | null>(null)
-  const feats = useAuth().me?.features
-  const running = b.status === 'running'
-  const err = !!b.is_error
-  const summary = inputSummary(b.name, b.input)
+  const blocks: any[] = steps.flatMap((m) => m.content)
+  if (blocks.length === 0) return null
+  const running = blocks.find((b) => b.status === 'running')
+  const errors = blocks.filter((b) => b.is_error).length
+  const names = Array.from(new Set(blocks.map((b) => toolLabel(b.name).replace(/^\S+\s/, ''))))
+  const label = running
+    ? `${toolLabel(running.name)}${inputSummary(running.name, running.input) ? ` · ${inputSummary(running.name, running.input)}` : ''}`
+    : `${blocks.length} ${blocks.length === 1 ? 'passaggio' : 'passaggi'} · ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}`
+  const withArtifacts = blocks.filter((b) => (b.artifacts || []).length > 0)
   return (
-    <div className={`step ${running ? 'running' : err ? 'error' : 'done'}`}>
-      <button className="step-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="step-icon">{running ? <span className="spinner" /> : err ? '⚠️' : '✓'}</span>
-        <span className="step-label">{toolLabel(b.name)}</span>
-        {summary && <span className="step-summary" title={summary}>{summary}</span>}
+    <div className={`msg tool activity ${running ? 'running' : errors ? 'error' : 'done'} ${open ? 'open' : ''}`}>
+      <button className="activity-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        title={open ? 'Nascondi i passaggi' : 'Mostra cosa ha fatto'}>
+        <span className="step-icon">{running ? <span className="spinner" /> : errors ? '⚠️' : '✓'}</span>
+        <span className="activity-label">{running ? 'Sto lavorando: ' : 'Attività: '}</span>
+        <span className="step-summary" title={label}>{label}</span>
+        {errors > 0 && !running && <span className="activity-err">{errors} {errors === 1 ? 'errore' : 'errori'}</span>}
         <span className="step-caret">{open ? '▾' : '▸'}</span>
       </button>
+      {open && (
+        <div className="activity-body">
+          {blocks.map((b, i) => <ToolStep key={b.tool_use_id || i} b={b} onOpenArtifact={onOpenArtifact} />)}
+        </div>
+      )}
+      {!open && withArtifacts.map((b, i) => <StepArtifacts key={b.tool_use_id || i} b={b} onOpenArtifact={onOpenArtifact} />)}
+    </div>
+  )
+}
+
+/** I risultati visibili di un passo: immagini e video generati, schede artifact, file scaricabili. */
+function StepArtifacts({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => void }) {
+  const [shareFile, setShareFile] = useState<string | null>(null)
+  const feats = useAuth().me?.features
+  if (!(b.artifacts || []).length) return null
+  return (
+    <div className="step-artifacts">
       {(b.artifacts || []).map((a: any, j: number) =>
         a.type === 'image' ? (
           <a key={j} href={a.url} target="_blank" rel="noreferrer"><img className="gen-image" src={a.url} alt="immagine generata" /></a>
@@ -157,6 +177,25 @@ function ToolStep({ b, onOpenArtifact }: { b: any; onOpenArtifact?: (a: any) => 
         ) : null,
       )}
       {shareFile && <ShareDialog type="file" id={shareFile} onClose={() => setShareFile(null)} />}
+    </div>
+  )
+}
+
+/** Un passo dell'agente (chiamata a un tool o a un altro modello), con stato live e dettagli espandibili. */
+function ToolStep({ b, onOpenArtifact, hideArtifacts }: { b: any; onOpenArtifact?: (a: any) => void; hideArtifacts?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const running = b.status === 'running'
+  const err = !!b.is_error
+  const summary = inputSummary(b.name, b.input)
+  return (
+    <div className={`step ${running ? 'running' : err ? 'error' : 'done'}`}>
+      <button className="step-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="step-icon">{running ? <span className="spinner" /> : err ? '⚠️' : '✓'}</span>
+        <span className="step-label">{toolLabel(b.name)}</span>
+        {summary && <span className="step-summary" title={summary}>{summary}</span>}
+        <span className="step-caret">{open ? '▾' : '▸'}</span>
+      </button>
+      {!hideArtifacts && <StepArtifacts b={b} onOpenArtifact={onOpenArtifact} />}
       {open && (
         <div className="step-body">
           {b.input && Object.keys(b.input).length > 0 && (
