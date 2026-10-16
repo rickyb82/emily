@@ -190,6 +190,9 @@ async def update_member(uid: str, body: UpdateMemberRequest, request: Request,
         u.apps = None if "*" in v else [a for a in v if a in APP_IDS]
     if "admin_apps" in data:
         u.admin_apps = [a for a in data.pop("admin_apps") if a in APP_IDS]
+    if "quota_gb" in data:
+        g = float(data.pop("quota_gb"))
+        u.quota_bytes = None if g < 0 else int(g * (1024 ** 3))
     if "is_active" in data and u.id == ctx.user.id and not data["is_active"]:
         raise HTTPException(400, "Non puoi disattivare te stesso")
     for k, v in data.items():
@@ -523,7 +526,7 @@ PROVIDER_CARDS = [
     {"id": "brave", "label": "Brave Search (ricerca web)", "key": "brave_api_key", "model_key": None,
      "hint": "api-dashboard.search.brave.com", "testable": True},
 ]
-OTHER_SETTINGS = ["user_models_json", "user_default_model", "openai_reasoning_effort", "web_search_provider", "searxng_url", "web_search_summarize", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "video_provider", "comfyui_video_model", "comfyui_video_size", "comfyui_video_frames", "embedding_provider", "embedding_model",
+OTHER_SETTINGS = ["user_models_json", "user_default_model", "default_quota_gb", "openai_reasoning_effort", "web_search_provider", "searxng_url", "web_search_summarize", "anthropic_native_search", "image_provider", "image_model", "gemini_image_model", "video_model", "video_provider", "comfyui_video_model", "comfyui_video_size", "comfyui_video_frames", "embedding_provider", "embedding_model",
                   "tts_provider", "tts_model_openai", "tts_voice_openai", "tts_model_gemini", "tts_voice_gemini", "tts_style",
                   "router_model", "router_cloud_provider", "router_mode", "memory_enabled", "memory_auto_approve", "memory_model", "compaction_enabled", "auto_continue", "thinking_mode", "router_local_provider", "custom_llm_key", "custom_llm_label",
                   "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from", "smtp_from_name", "smtp_security", "email_mfa_fallback", "google_client_id", "google_client_secret", "mail_transport"]

@@ -99,6 +99,9 @@ export interface User {
   apps?: string[] | null
   admin_apps?: string[]
   role_label?: string
+  quota_bytes?: number | null
+  quota_effective?: number
+  storage_used?: number
   policy: Record<string, any>
   effective_policy: Record<string, any>
 }
@@ -166,4 +169,12 @@ export interface FileOut {
   folder_id?: string | null
   access?: 'owner' | 'write' | 'read' | 'parent'
   owner_name?: string
+}
+
+/** Dimensioni leggibili (1.234 → "1,2 KB"). */
+export function fmtBytes(n: number): string {
+  if (!n || n < 0) return '0 B'
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; let v = n
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
+  return `${i < 2 ? Math.round(v) : v.toFixed(1)} ${u[i]}`
 }

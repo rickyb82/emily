@@ -5,6 +5,8 @@ import AdminProviders from './AdminProviders'
 import AdminBackup from './AdminBackup'
 import AdminMemory from './AdminMemory'
 import { useAuth } from '../lib/auth'
+import { StorageBar } from './Settings'
+import { fmtBytes } from '../lib/api'
 import AdminMcp from './AdminMcp'
 import AdminCosts from './AdminCosts'
 
@@ -80,6 +82,7 @@ function Members() {
         <input type="checkbox" checked={org} onChange={(e) => setOrg(e.target.checked)} />
         <span><b>🏢 Modalità azienda</b><br /><small className="muted">Nessun bambino: niente accesso con PIN, supervisione, compiti e controllo genitori; gli utenti sono colleghi e si condivide cercandoli per nome o email. Vale per tutta l'installazione.</small></span>
       </label>
+      <DefaultQuota members={members} onSaved={() => { load(); refresh() }} />
       <label className="row card" style={{ gap: 10, alignItems: 'flex-start' }}>
         <input type="checkbox" checked={me?.features?.passkeys === false} onChange={(e) => run2(() => put('/admin/providers', { values: { passkeys: e.target.checked ? '0' : '' } }))} />
         <span><b>📱 Solo app authenticator</b><br /><small className="muted">Disattiva le passkey: i nuovi utenti attivano il secondo fattore con l'app (codice a 6 cifre), utile su un server locale dove le passkey sono legate all'indirizzo. Chi ha già una passkey continua a poterla usare.</small></span>
@@ -89,7 +92,7 @@ function Members() {
         <span><b>🔐 Secondo fattore a scelta dell'utente</b><br /><small className="muted">Al primo accesso ognuno decide se attivare il 2FA (app authenticator) o entrare senza; può attivarlo dopo dalle impostazioni. Spento = obbligatorio per tutti gli adulti.</small></span>
       </label>
       <table className="table">
-        <thead><tr><th>Membro</th><th>Ruolo</th><th>{org ? 'Stato' : 'Fascia'}</th><th>2FA</th><th>Accessi</th><th></th></tr></thead>
+        <thead><tr><th>Membro</th><th>Ruolo</th><th>{org ? 'Stato' : 'Fascia'}</th><th>2FA</th><th>Accessi</th><th>Spazio</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
@@ -104,6 +107,7 @@ function Members() {
                 {m.last_logout && <span className="muted">↩ {new Date(m.last_logout).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}<br /></span>}
                 {(m.active_sessions ?? 0) > 0 ? <span style={{ color: '#1e8e4b' }}>● {m.active_sessions} sessione{m.active_sessions === 1 ? '' : 'i'} aperta{m.active_sessions === 1 ? '' : 'e'}</span> : <span className="muted">○ nessuna sessione</span>}
               </small></td>
+              <td style={{ minWidth: 150 }}><StorageBar used={m.storage_used || 0} quota={m.quota_effective || 0} compact /><small className="muted">{m.quota_bytes === null || m.quota_bytes === undefined ? 'quota predefinita' : 'quota personale'}</small></td>
               <td className="row wrap">
                 {m.id !== me?.user.id && (m.is_active
                   ? <button className="ghost" title="Blocca l'accesso: le sessioni aperte vengono chiuse subito" onClick={() => { if (confirm(`Disattivare ${m.display_name}? Verrà scollegato da tutti i dispositivi.`)) patch(`/admin/members/${m.id}`, { is_active: false }).then(load).catch((e) => setErr(e.message)) }}>⛔ Disattiva</button>
@@ -132,6 +136,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
     role: user?.role ?? (org ? 'adult' : 'child'), age_group: user?.age_group ?? 'kid', birth_year: user?.birth_year ?? '',
     email: user?.email ?? '', password: '', pin: '', is_active: user?.is_active ?? true, departments: user?.departments ?? [],
     apps: user ? (user.apps ?? null) : null, admin_apps: user?.admin_apps ?? [],   // apps null = tutti i software
+    quota_gb: user && user.quota_bytes !== null && user.quota_bytes !== undefined ? String(Math.round(user.quota_bytes / 1024 ** 3 * 10) / 10) : '',
   })
   const [catalog, setCatalog] = useState<AppInfo[]>([])
   useEffect(() => { get<AppInfo[]>('/admin/apps').then(setCatalog).catch(() => {}) }, [])
@@ -161,7 +166,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
       delete cleanPolicy.label
       delete cleanPolicy.age_group
       if (user) {
-        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps }
+        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps, quota_gb: f.quota_gb === '' ? -1 : Number(f.quota_gb) }
         if (isChild) body.age_group = f.age_group
         if (f.birth_year) body.birth_year = Number(f.birth_year)
         if (f.password) body.password = f.password
@@ -172,9 +177,9 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
         if (!body.email) delete body.email
         if (!body.password) delete body.password
         if (!body.pin) delete body.pin
-        delete body.departments; delete body.apps; delete body.admin_apps
+        delete body.departments; delete body.apps; delete body.admin_apps; delete body.quota_gb
         const u = await post<User>('/admin/members', body)
-        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps })
+        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps, quota_gb: f.quota_gb === '' ? -1 : Number(f.quota_gb) })
       }
       onClose()
     } catch (e: any) {
@@ -212,6 +217,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
             </>
           )}
           {user && <label className="row"><input type="checkbox" checked={f.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Attivo</label>}
+          <label>Quota spazio (GB) <small className="muted">(vuoto = predefinita, 0 = illimitata{user?.storage_used !== undefined ? ` · usati ${fmtBytes(user.storage_used)}` : ''})</small><input type="number" min={0} step={1} value={f.quota_gb} placeholder="predefinita" onChange={(e) => set('quota_gb', e.target.value)} /></label>
         </div>
         {org && !isChild && (
           <fieldset className="stack" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
@@ -434,3 +440,31 @@ function Audit() {
   )
 }
 
+
+
+/** Quota di spazio predefinita per tutti i membri senza quota personale, con il totale usato dall'organizzazione. */
+function DefaultQuota({ members, onSaved }: { members: User[]; onSaved: () => void }) {
+  const [cur, setCur] = useState<string>('')
+  const [draft, setDraft] = useState<string>('')
+  const [err, setErr] = useState('')
+  useEffect(() => { get('/admin/providers').then((r) => { const v = r.settings?.default_quota_gb?.value ?? '50'; setCur(v); setDraft(v) }).catch(() => {}) }, [])
+  const used = members.reduce((a, m) => a + (m.storage_used || 0), 0)
+  const over = members.filter((m) => (m.quota_effective || 0) > 0 && (m.storage_used || 0) >= 0.9 * (m.quota_effective || 1))
+  async function save() {
+    setErr('')
+    try { await put('/admin/providers', { values: { default_quota_gb: draft } }); setCur(draft); onSaved() } catch (e: any) { setErr(e.message) }
+  }
+  return (
+    <div className="card stack" style={{ gap: 6 }}>
+      <div className="row between wrap">
+        <span><b>💾 Spazio</b><br /><small className="muted">Quota predefinita per ogni utente (file e versioni di cui è proprietario); nella scheda del membro si può dare una quota personale. In totale l'organizzazione usa <b>{fmtBytes(used)}</b>.</small></span>
+        <span className="row" style={{ gap: 6 }}>
+          <input type="number" min={0} step={1} value={draft} onChange={(e) => setDraft(e.target.value)} style={{ width: 90 }} /> <span className="muted">GB</span>
+          <button disabled={draft === cur} onClick={save}>Salva</button>
+        </span>
+      </div>
+      {over.length > 0 && <small style={{ color: 'var(--danger)' }}>⚠️ Vicini al limite: {over.map((m) => `${m.display_name} (${fmtBytes(m.storage_used || 0)})`).join(', ')}</small>}
+      {err && <div className="error">{err}</div>}
+    </div>
+  )
+}

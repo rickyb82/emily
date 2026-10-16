@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { startRegistration } from '@simplewebauthn/browser'
-import { del, get, post } from '../lib/api'
+import { del, fmtBytes, get, post } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TotpSetup from '../components/TotpSetup'
 
@@ -122,6 +122,12 @@ export default function Settings() {
       <MyUsage />
 
       <section className="card stack">
+        <h3>💾 Il mio spazio</h3>
+        <StorageBar used={me!.user.storage_used || 0} quota={me!.user.quota_effective || 0} />
+        <small className="muted">Conta i file di cui sei proprietario (caricati, creati dalle app e dalla chat) e le versioni conservate. Eliminando un file si libera spazio; la quota la decide l'amministratore.</small>
+      </section>
+
+      <section className="card stack">
         <h3>🔑 Password</h3>
         <input type="password" placeholder="Password attuale" value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} />
         <input type="password" placeholder="Nuova password (min 10 caratteri)" value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} />
@@ -195,5 +201,18 @@ function MyUsage({ simple = false }: { simple?: boolean }) {
         </>
       )}
     </section>
+  )
+}
+
+
+/** Barra dello spazio usato / quota (quota 0 = illimitata). */
+export function StorageBar({ used, quota, compact = false }: { used: number; quota: number; compact?: boolean }) {
+  const pct = quota > 0 ? Math.min(100, Math.round(100 * used / quota)) : 0
+  const cls = pct >= 95 ? 'full' : pct >= 80 ? 'warn' : ''
+  return (
+    <div className={`storage ${compact ? 'compact' : ''}`} title={quota > 0 ? `${fmtBytes(used)} di ${fmtBytes(quota)} (${pct}%)` : `${fmtBytes(used)} usati, nessun limite`}>
+      <div className="storage-bar"><span className={cls} style={{ width: `${quota > 0 ? pct : 3}%` }} /></div>
+      <small className="muted">{fmtBytes(used)}{quota > 0 ? ` di ${fmtBytes(quota)} · ${pct}%` : ' · illimitato'}</small>
+    </div>
   )
 }

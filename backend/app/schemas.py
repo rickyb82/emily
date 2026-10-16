@@ -51,6 +51,9 @@ class UserOut(BaseModel):
     apps: list[str] | None = None        # None = tutti i software
     admin_apps: list[str] = []
     role_label: str = ""
+    quota_bytes: int | None = None      # None = default dell'organizzazione
+    quota_effective: int = 0            # byte (0 = illimitata)
+    storage_used: int = 0               # byte
     policy: dict = {}
     effective_policy: dict = {}
 
@@ -94,6 +97,7 @@ class UpdateMemberRequest(BaseModel):
     departments: list[str] | None = None
     apps: list[str] | None = None        # elenco esplicito; ["*"] = tutti
     admin_apps: list[str] | None = None
+    quota_gb: float | None = None       # -1 = torna al default dell'organizzazione, 0 = illimitata
 
 
 class TrustDeviceRequest(BaseModel):

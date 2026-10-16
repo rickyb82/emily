@@ -72,7 +72,10 @@ async def user_out(db: AsyncSession, user: User) -> UserOut:
         user.admin_apps = []
     out = UserOut.model_validate(user)
     from ..services.apps import role_label
+    from ..services.quota import quota_bytes as _qb, used_bytes as _ub
     out.role_label = role_label(user)
+    out.quota_effective = _qb(user)
+    out.storage_used = await _ub(db, user.id)
     out.has_passkey = await user_has_passkey(db, user)
     out.has_totp = user_has_totp(user)
     out.effective_policy = effective_policy(user)

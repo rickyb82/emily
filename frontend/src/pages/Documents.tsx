@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type FileOut, type Project } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLiveEvents } from '../lib/events'
-import { HEADERS } from '../lib/api'
+import { HEADERS, fmtBytes } from '../lib/api'
 import ShareDialog from '../components/ShareDialog'
 import VersionHistory from '../components/VersionHistory'
 import { APP_LABEL, canEdit, editorFor, editorPath, newFilePath, type ArtApp } from '../lib/artcraft'
@@ -251,6 +251,11 @@ export default function Documents() {
           {!projectId && !sharedView && canWriteHere && <button className="ghost" onClick={(e) => { e.stopPropagation(); newFolder() }}>📁 Nuova cartella</button>}
           {canWriteHere && <button className="ghost" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>📎 Carica</button>}
           {!canWriteHere && <span className="muted small" title="Documenti ufficiali del reparto: li carica l'amministratore; il modello li usa come base nelle tue chat">🔒 sola lettura · carica l'amministratore</span>}
+          {me?.user && (me.user.quota_effective || 0) > 0 && (
+            <span className={`storage-pill ${(me.user.storage_used || 0) >= 0.9 * (me.user.quota_effective || 1) ? 'warn' : ''}`} title="Spazio usato dai tuoi file (quota decisa dall'amministratore)">
+              💾 {fmtBytes(me.user.storage_used || 0)} / {fmtBytes(me.user.quota_effective || 0)}
+            </span>
+          )}
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
         </div>
       </div>

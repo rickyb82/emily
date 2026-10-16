@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     JSON,
     Boolean,
     DateTime,
@@ -103,6 +104,8 @@ class User(Base):
     apps: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     # software di cui e' amministratore (poteri di configurazione dell'app, non il pannello Amministrazione)
     admin_apps: Mapped[list] = mapped_column(JSON, default=list)
+    # quota di spazio in byte (file + versioni di cui e' proprietario); NULL = default dell'organizzazione (default_quota_gb), 0 = illimitata
+    quota_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     # scelta sul secondo fattore quando e' facoltativo: "" = non ancora chiesto, "skip" = l'utente ha scelto di non usarlo
     mfa_choice: Mapped[str] = mapped_column(String(10), default="")
 

@@ -86,6 +86,8 @@ async def upload(background: BackgroundTasks, file: UploadFile = File(...), proj
     max_bytes = int(pol.get("max_upload_mb", 20)) * 1024 * 1024
     if len(data) > max_bytes:
         raise HTTPException(413, f"File troppo grande (max {pol.get('max_upload_mb')} MB)")
+    from ..services import quota as _quota
+    await _quota.ensure_space(db, ctx.user, len(data))
     fid = uuid.uuid4().hex
     path = settings.uploads_dir / f"{fid}{ext or '.bin'}"
     path.write_bytes(data)
@@ -215,6 +217,8 @@ async def wordcraft_save(request: Request, background: BackgroundTasks, file_id:
     if len(data) > max_bytes:
         raise HTTPException(413, "File troppo grande")
     mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    from ..services import quota as _quota
+    await _quota.ensure_space(db, ctx.user, len(data) - (existing.size if existing is not None and Path(existing.filename).suffix.lower() == ext else 0))
 
     asset = existing
     if asset is not None:

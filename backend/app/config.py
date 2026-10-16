@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     mfa_optional: str = "1"          # "1" = al primo accesso l'utente sceglie se attivare il 2FA; "0" = obbligatorio per gli adulti
     user_models_json: str = ""       # JSON ["provider/modello", …]: i modelli che gli utenti (non admin) possono scegliere; vuoto = solo i default
     user_default_model: str = ""     # "provider/modello" proposto agli utenti nelle nuove chat (deve stare nell'elenco sopra)
+    default_quota_gb: str = "50"     # quota di spazio per utente (file + versioni) quando non impostata sul singolo membro; 0 = illimitata
     passkeys: str = "1"              # "0" = niente passkey: il secondo fattore e' solo l'app authenticator (TOTP), es. server locale
     upload_scan_cmd: str = ""        # antivirus sugli upload, es. "clamdscan --no-summary" (riceve il percorso del file); vuoto = nessuno
     upload_scan_fail_open: bool = True  # scanner non raggiungibile: True = accetta il file, False = rifiuta

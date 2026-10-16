@@ -46,6 +46,8 @@ export default function Chat() {
   messagesRef.current = messages
   const appliedArtifacts = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { const t = setTimeout(() => composerRef.current?.focus(), 50); return () => clearTimeout(t) }, [id])   // nuova chat o cambio chat: cursore pronto a scrivere
 
   useEffect(() => {
     get('/chat/providers').then((r) => {
@@ -332,6 +334,8 @@ export default function Chat() {
             <button type="button" className="icon" onClick={() => fileInput.current?.click()} title="Allega">📎</button>
             <input ref={fileInput} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
             <textarea
+              ref={composerRef}
+              autoFocus
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={isChild ? 'Scrivi qui…' : 'Scrivi un messaggio (Invio per inviare, Shift+Invio per andare a capo)'}

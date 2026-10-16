@@ -508,3 +508,11 @@ select.perm { width: auto; padding: 6px 28px 6px 10px; border-radius: 999px; fon
 .upload-row.done .upload-bar span { background: var(--ok); } .upload-row.error .upload-bar span { background: var(--danger); }
 .finder.dropping .finder-grid { outline: 2px dashed var(--primary); outline-offset: -6px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 6%, transparent); }
 .drop-hint { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 70; font-size: 20px; font-weight: 600; color: var(--primary); background: color-mix(in srgb, var(--panel) 70%, transparent); }
+/* 💾 quota spazio */
+.storage { display: flex; flex-direction: column; gap: 4px; }
+.storage-bar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.storage-bar span { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.storage-bar span.warn { background: #d97706; } .storage-bar span.full { background: var(--danger); }
+.storage.compact .storage-bar { height: 6px; } .storage.compact small { font-size: 11px; }
+.storage-pill { font-size: 12px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.storage-pill.warn { color: var(--danger); border-color: var(--danger); }
