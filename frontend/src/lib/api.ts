@@ -96,6 +96,9 @@ export interface User {
   last_logout?: string | null
   active_sessions?: number
   departments?: string[]
+  apps?: string[] | null
+  admin_apps?: string[]
+  role_label?: string
   policy: Record<string, any>
   effective_policy: Record<string, any>
 }
@@ -107,7 +110,7 @@ export interface Me {
   mfa_required: boolean
   providers: Provider[]
   tools: string[]
-  features?: { wordcraft_web?: boolean; wordcraft_mcp?: boolean; gridcraft_web?: boolean; gridcraft_mcp?: boolean; pdfcraft_web?: boolean; pdfcraft_mcp?: boolean; deckcraft_web?: boolean; deckcraft_mcp?: boolean; ideacraft_mcp?: boolean; ideacraft_web?: boolean; mailcraft_web?: boolean; mailcraft_mcp?: boolean; remotecraft_web?: boolean; remotecraft_mcp?: boolean; covercraft_web?: boolean; covercraft_mcp?: boolean; org_mode?: boolean; passkeys?: boolean; mfa_optional?: boolean }
+  features?: { wordcraft_web?: boolean; wordcraft_mcp?: boolean; gridcraft_web?: boolean; gridcraft_mcp?: boolean; pdfcraft_web?: boolean; pdfcraft_mcp?: boolean; deckcraft_web?: boolean; deckcraft_mcp?: boolean; ideacraft_mcp?: boolean; ideacraft_web?: boolean; mailcraft_web?: boolean; mailcraft_mcp?: boolean; remotecraft_web?: boolean; remotecraft_mcp?: boolean; covercraft_web?: boolean; covercraft_mcp?: boolean; archivio?: boolean; apps?: string[]; admin_apps?: string[]; org_mode?: boolean; passkeys?: boolean; mfa_optional?: boolean }
 }
 export interface Provider {
   id: string

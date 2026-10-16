@@ -48,6 +48,9 @@ class UserOut(BaseModel):
     last_logout: datetime | None = None
     active_sessions: int = 0
     departments: list[str] = []
+    apps: list[str] | None = None        # None = tutti i software
+    admin_apps: list[str] = []
+    role_label: str = ""
     policy: dict = {}
     effective_policy: dict = {}
 
@@ -89,6 +92,8 @@ class UpdateMemberRequest(BaseModel):
     pin: str | None = Field(default=None, min_length=4, max_length=12)
     policy: dict | None = None
     departments: list[str] | None = None
+    apps: list[str] | None = None        # elenco esplicito; ["*"] = tutti
+    admin_apps: list[str] | None = None
 
 
 class TrustDeviceRequest(BaseModel):

@@ -130,6 +130,8 @@ def effective_policy(user: User) -> dict:
     pol = dict(DEFAULTS[group])
     pol.update(user.policy or {})
     pol["age_group"] = group
+    from ..services.apps import user_apps
+    pol["apps"] = sorted(user_apps(user))
     if user.role != Role.child:
         # gli adulti possono sempre usare il modello locale e il router Auto (anche con una policy salvata prima che esistessero)
         pol["allowed_providers"] = list(dict.fromkeys(list(pol.get("allowed_providers", [])) + ["ollama", "custom", "auto"]))
@@ -167,6 +169,11 @@ TOOL_ALIASES = {"search_documents": "read_document",  # stesso permesso dei docu
 
 
 def tool_allowed(policy: dict, tool_name: str) -> bool:
+    # software non abilitato per l'utente: i suoi tool non esistono (apps nel policy = quelli consentiti; assente = tutti)
+    from ..services.apps import app_of_tool
+    app = app_of_tool(tool_name)
+    if app and "apps" in policy and app not in policy["apps"]:
+        return False
     if tool_name.startswith("mcp__"):
         return "mcp" in policy.get("allowed_tools", [])
     return TOOL_ALIASES.get(tool_name, tool_name) in policy.get("allowed_tools", [])

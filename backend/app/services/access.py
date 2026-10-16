@@ -46,7 +46,8 @@ async def access_level(db: AsyncSession, rtype: str, resource, user: User) -> st
         from . import workspace
         fo = await db.get(Folder, resource.folder_id)
         if workspace.is_org(fo) and workspace.can_see_folder(fo, user):
-            return "write" if user.role == Role.admin else "read"
+            from .apps import is_app_admin
+            return "write" if is_app_admin(user, "archivio") else "read"
     if rtype == "file" and getattr(resource, "conversation_id", None):
         conv = await db.get(Conversation, resource.conversation_id)
         if conv and conv.owner_id == user.id:

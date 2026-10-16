@@ -184,6 +184,12 @@ async def update_member(uid: str, body: UpdateMemberRequest, request: Request,
     if "departments" in data:
         from ..services.workspace import DEPARTMENTS
         u.departments = [d for d in data.pop("departments") if d in DEPARTMENTS]
+    from ..services.apps import APP_IDS
+    if "apps" in data:
+        v = data.pop("apps")
+        u.apps = None if "*" in v else [a for a in v if a in APP_IDS]
+    if "admin_apps" in data:
+        u.admin_apps = [a for a in data.pop("admin_apps") if a in APP_IDS]
     if "is_active" in data and u.id == ctx.user.id and not data["is_active"]:
         raise HTTPException(400, "Non puoi disattivare te stesso")
     for k, v in data.items():
@@ -922,3 +928,21 @@ async def memory_extract_all(ctx: AuthContext = Depends(require_admin), db: Asyn
 
     asyncio.get_event_loop().create_task(run())
     return {"status": "scheduled", "conversations": len(todo)}
+
+
+# ---- software del framework (catalogo per il pannello Membri) ----
+@router.get("/apps")
+async def apps_catalog(ctx: AuthContext = Depends(require_admin)):
+    """Il catalogo dei software con lo stato (attivo sul server) e cosa puo' fare un amministratore di quella app."""
+    from ..services.apps import APPS
+    from ..tools.mcp_client import mcp_manager
+    active = {"wordcraft": bool(settings.wordcraft_web) or mcp_manager.is_connected("wordcraft"),
+              "gridcraft": bool(settings.gridcraft_web) or mcp_manager.is_connected("gridcraft"),
+              "pdfcraft": bool(settings.pdfcraft_web) or mcp_manager.is_connected("pdfcraft"),
+              "deckcraft": bool(settings.deckcraft_web) or mcp_manager.is_connected("deckcraft"),
+              "ideacraft": bool(settings.ideacraft_web) or mcp_manager.is_connected("ideacraft"),
+              "mailcraft": bool(settings.mailcraft_url and settings.mailcraft_token),
+              "remotecraft": bool(settings.remotecraft_url and settings.remotecraft_token),
+              "covercraft": bool(settings.covercraft_url and settings.covercraft_token),
+              "archivio": True}
+    return [{**a, "active": active.get(a["id"], False)} for a in APPS]

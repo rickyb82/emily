@@ -13,8 +13,9 @@ router = APIRouter(prefix="/remote", tags=["remote"])
 @router.get("/session")
 async def remote_session(ctx: AuthContext = Depends(require_auth)):
     """Token del tecnico per la web app: la pagina apre /remotecraft/?server=<origine>/remotecraft&lang=it#token=…"""
-    if ctx.user.role == Role.child:
-        raise HTTPException(403, "L'assistenza remota e' riservata agli adulti")
+    from ..services.apps import app_enabled
+    if ctx.user.role == Role.child or not app_enabled(ctx.user, "remotecraft"):
+        raise HTTPException(403, "L'assistenza remota non e' abilitata per il tuo account: chiedi all'amministratore")
     if not remotecraft.enabled():
         raise HTTPException(503, "RemoteCraft non e' attivo su questo server (./familai.sh remotecraft up)")
     try:

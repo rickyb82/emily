@@ -171,7 +171,7 @@ export default function AdminProviders() {
           ) : (
             <div className="stack">
               <small className="muted">Accedi con l'account Gmail di famiglia e concedi il permesso di invio: niente password per le app. Richiede Client ID/secret nella scheda "Accesso con Google" e, nel client Google, anche questo URI di reindirizzamento: <code>{mail?.gmail_redirect_uri}</code>. Finché l'app Google è in modalità "Test", aggiungi l'account tra gli utenti di test della schermata di consenso.</small>
-              <div><button disabled={busy !== '' || !mail?.google_client_ready} title={!mail?.google_client_ready ? 'Prima configura Accesso con Google' : ''} onClick={async () => { const r = await get('/admin/email/google/start'); window.location.href = r.url }}>Collega account Google</button></div>
+              <div className="row wrap"><button disabled={busy !== '' || !mail?.google_client_ready} title={!mail?.google_client_ready ? 'Prima configura Accesso con Google' : ''} onClick={async () => { const r = await get('/admin/email/google/start'); window.location.href = r.url }}>Collega account Google</button>{!mail?.google_client_ready && <small className="muted">⬇ prima salva Client ID e secret nella scheda «Accesso con Google» qui sotto</small>}</div>
             </div>
           )}
         </div>
@@ -226,7 +226,7 @@ export default function AdminProviders() {
           <label>Client ID <small className="muted">({s.google_client_id.value || 'non impostato'})</small><input value={draft.google_client_id ?? ''} placeholder={s.google_client_id.value || '…apps.googleusercontent.com'} onChange={(e) => setDraft({ ...draft, google_client_id: e.target.value })} /></label>
           <label>Client secret <small className="muted">({s.google_client_secret.configured ? 'impostato' : 'non impostato'})</small><input type="password" autoComplete="off" value={draft.google_client_secret ?? ''} placeholder="GOCSPX-…" onChange={(e) => setDraft({ ...draft, google_client_secret: e.target.value })} /></label>
         </div>
-        <div><button disabled={busy !== ''} onClick={() => save(['google_client_id', 'google_client_secret'])}>Salva</button></div>
+        <div><button disabled={busy !== ''} onClick={() => save(['google_client_id', 'google_client_secret']).then(loadMail)}>Salva</button> <small className="muted">Dopo il salvataggio si attiva "Collega account Google" nella scheda Email.</small></div>
       </section>
 
       <section className="card stack">

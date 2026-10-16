@@ -10,11 +10,18 @@ from ..security.sessions import AuthContext, require_auth
 router = APIRouter(prefix="/mail", tags=["mail"])
 
 
+def _need_app(ctx: AuthContext) -> None:
+    from ..services.apps import app_enabled
+    if not app_enabled(ctx.user, "mailcraft"):
+        raise HTTPException(403, "La Posta non e' abilitata per il tuo account: chiedi all'amministratore")
+
+
 @router.get("/session")
 async def mail_session(ctx: AuthContext = Depends(require_auth)):
     """Token utente per la web app: la pagina apre /mailcraft/?server=<origine>/mailcraft&token=…&lang=it."""
     if ctx.user.role == Role.child:
         raise HTTPException(403, "La posta e' riservata agli adulti")
+    _need_app(ctx)
     if not mailcraft.enabled():
         raise HTTPException(503, "MailCraft non e' attivo su questo server (./familai.sh mailcraft up)")
     try:
@@ -96,6 +103,7 @@ async def mail_assist(body: AssistIn, ctx: AuthContext = Depends(require_auth)):
     Di default usa solo il modello locale: il contenuto della posta non esce dalla rete."""
     import json
     import re
+    _need_app(ctx)
 
     from ..config import get_settings
     from ..providers.registry import get_provider

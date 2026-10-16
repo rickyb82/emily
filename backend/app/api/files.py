@@ -268,9 +268,10 @@ async def rename_file(fid: str, body: FileRename, ctx: AuthContext = Depends(req
     if body.folder_id is not None:
         from ..models import Folder
         cur = await db.get(Folder, asset.folder_id) if asset.folder_id else None
-        if asset.owner_id != ctx.user.id and not (workspace.is_org(cur) and ctx.user.role == Role.admin):
+        from ..services.apps import is_app_admin
+        if asset.owner_id != ctx.user.id and not (workspace.is_org(cur) and is_app_admin(ctx.user, "archivio")):
             raise HTTPException(403, "Solo il proprietario puo' spostare il file nelle sue cartelle")
-        if workspace.is_org(cur) and ctx.user.role != Role.admin:
+        if workspace.is_org(cur) and not is_app_admin(ctx.user, "archivio"):
             raise HTTPException(403, "I file dell'organizzazione li sposta solo l'amministratore")
         dest = await workspace.folder_for_write(db, body.folder_id, ctx.user)
         if dest is not None and workspace.is_org(dest):

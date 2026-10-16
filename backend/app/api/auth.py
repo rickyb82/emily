@@ -68,7 +68,11 @@ async def _register_failure(db: AsyncSession, user: User) -> None:
 async def user_out(db: AsyncSession, user: User) -> UserOut:
     if user.departments is None:   # colonna aggiunta dopo: le righe vecchie sono NULL
         user.departments = []
+    if user.admin_apps is None:
+        user.admin_apps = []
     out = UserOut.model_validate(user)
+    from ..services.apps import role_label
+    out.role_label = role_label(user)
     out.has_passkey = await user_has_passkey(db, user)
     out.has_totp = user_has_totp(user)
     out.effective_policy = effective_policy(user)
@@ -258,14 +262,18 @@ async def me(ctx: AuthContext = Depends(require_pre_mfa), db: AsyncSession = Dep
     from ..config import mfa_optional_on, org_mode_on, passkeys_on
     from ..tools.mcp_client import mcp_manager
     adult = ctx.user.role != Role.child
-    features = {"wordcraft_web": bool(settings.wordcraft_web) and adult, "wordcraft_mcp": mcp_manager.is_connected("wordcraft"),
-                "gridcraft_web": bool(settings.gridcraft_web) and adult, "gridcraft_mcp": mcp_manager.is_connected("gridcraft"),
-                "pdfcraft_web": bool(settings.pdfcraft_web) and adult, "pdfcraft_mcp": mcp_manager.is_connected("pdfcraft"),
-                "deckcraft_web": bool(settings.deckcraft_web) and adult, "deckcraft_mcp": mcp_manager.is_connected("deckcraft"),
-                "ideacraft_mcp": mcp_manager.is_connected("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and adult,
-                "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and adult, "mailcraft_mcp": mcp_manager.is_connected("mailcraft"),
-                "remotecraft_web": bool(settings.remotecraft_url and settings.remotecraft_token) and adult, "remotecraft_mcp": mcp_manager.is_connected("remotecraft"),
-                "covercraft_web": bool(settings.covercraft_url and settings.covercraft_token) and adult, "covercraft_mcp": mcp_manager.is_connected("covercraft"),
+    from ..services.apps import admin_apps as _admin_apps, user_apps as _user_apps
+    apps = _user_apps(ctx.user)   # software abilitati per questo utente (super admin: tutti)
+    on = lambda app: adult and app in apps  # noqa: E731
+    features = {"wordcraft_web": bool(settings.wordcraft_web) and on("wordcraft"), "wordcraft_mcp": mcp_manager.is_connected("wordcraft") and on("wordcraft"),
+                "gridcraft_web": bool(settings.gridcraft_web) and on("gridcraft"), "gridcraft_mcp": mcp_manager.is_connected("gridcraft") and on("gridcraft"),
+                "pdfcraft_web": bool(settings.pdfcraft_web) and on("pdfcraft"), "pdfcraft_mcp": mcp_manager.is_connected("pdfcraft") and on("pdfcraft"),
+                "deckcraft_web": bool(settings.deckcraft_web) and on("deckcraft"), "deckcraft_mcp": mcp_manager.is_connected("deckcraft") and on("deckcraft"),
+                "ideacraft_mcp": mcp_manager.is_connected("ideacraft") and on("ideacraft"), "ideacraft_web": bool(settings.ideacraft_web) and on("ideacraft"),
+                "mailcraft_web": bool(settings.mailcraft_url and settings.mailcraft_token) and on("mailcraft"), "mailcraft_mcp": mcp_manager.is_connected("mailcraft") and on("mailcraft"),
+                "remotecraft_web": bool(settings.remotecraft_url and settings.remotecraft_token) and on("remotecraft"), "remotecraft_mcp": mcp_manager.is_connected("remotecraft") and on("remotecraft"),
+                "covercraft_web": bool(settings.covercraft_url and settings.covercraft_token) and on("covercraft"), "covercraft_mcp": mcp_manager.is_connected("covercraft") and on("covercraft"),
+                "archivio": on("archivio"), "apps": sorted(apps), "admin_apps": sorted(_admin_apps(ctx.user)),
                 "org_mode": org_mode_on(), "passkeys": passkeys_on(), "mfa_optional": mfa_optional_on()}
     return MeOut(user=u, family_name=fam.name if fam else "", mfa_verified=ctx.session.mfa_verified,
                  mfa_required=mfa_required, providers=provs, tools=pol["allowed_tools"], features=features,

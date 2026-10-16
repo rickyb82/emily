@@ -16,6 +16,8 @@ const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
 
 const DEPT_LABEL: Record<string, string> = { tecnico: 'Tecnico', commerciale: 'Commerciale', amministrativo: 'Amministrativo' }
+const APP_SHORT: Record<string, string> = { wordcraft: 'Word', gridcraft: 'Fogli', deckcraft: 'Presentazioni', ideacraft: 'Mappe', pdfcraft: 'PDF', mailcraft: 'Posta', remotecraft: 'Assistenza', covercraft: 'Copertura', archivio: 'Archivio' }
+interface AppInfo { id: string; label: string; app: string; glyph: string; desc: string; admin?: string; active: boolean }
 
 export default function Admin() {
   const [params] = useSearchParams()
@@ -92,7 +94,9 @@ function Members() {
           {members.map((m) => (
             <tr key={m.id} className={m.is_active ? '' : 'muted'}>
               <td>{m.avatar} {m.display_name} <small className="muted">{m.email ?? m.username}</small></td>
-              <td>{{ admin: 'Amministratore', adult: org ? 'Utente' : 'Adulto', child: 'Bambino/a' }[m.role]}{org && m.role !== 'child' && <><br /><small className="muted">{m.role === 'admin' ? 'tutti i reparti' : (m.departments?.length ? m.departments.map((d) => DEPT_LABEL[d] || d).join(', ') : 'nessun reparto')}</small></>}</td>
+              <td>{m.role === 'admin' ? '👑 Super amministratore' : m.role === 'child' ? 'Bambino/a' : (m.admin_apps?.length ? '🛠 Amministratore app' : (org ? 'Utente' : 'Adulto'))}
+                {m.role === 'adult' && <><br /><small className="muted">{m.apps === null || m.apps === undefined ? 'tutti i software' : m.apps.length === 0 ? 'nessun software' : `${m.apps.length} software`}{m.admin_apps?.length ? ` · amministra: ${m.admin_apps.map((a) => APP_SHORT[a] || a).join(', ')}` : ''}</small></>}
+                {org && m.role !== 'child' && <><br /><small className="muted">{m.role === 'admin' ? 'tutti i reparti' : (m.departments?.length ? m.departments.map((d) => DEPT_LABEL[d] || d).join(', ') : 'nessun reparto')}</small></>}</td>
               <td>{org ? (m.is_active ? '🟢 attivo' : '⛔ disattivato') : m.role === 'child' ? defaults[m.age_group]?.label ?? m.age_group : '—'}</td>
               <td>{m.role !== 'child' ? ((m.has_passkey || m.has_totp) ? (m.has_passkey && m.has_totp ? '🔑📱' : m.has_passkey ? '🔑' : '📱') : m.mfa_choice === 'skip' ? <span title="Ha scelto di entrare senza secondo fattore">— (scelta)</span> : '⚠️ no') : '—'}</td>
               <td><small>
@@ -127,7 +131,10 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
     username: user?.username ?? '', display_name: user?.display_name ?? '', avatar: user?.avatar ?? '🙂',
     role: user?.role ?? (org ? 'adult' : 'child'), age_group: user?.age_group ?? 'kid', birth_year: user?.birth_year ?? '',
     email: user?.email ?? '', password: '', pin: '', is_active: user?.is_active ?? true, departments: user?.departments ?? [],
+    apps: user ? (user.apps ?? null) : null, admin_apps: user?.admin_apps ?? [],   // apps null = tutti i software
   })
+  const [catalog, setCatalog] = useState<AppInfo[]>([])
+  useEffect(() => { get<AppInfo[]>('/admin/apps').then(setCatalog).catch(() => {}) }, [])
   const [policy, setPolicy] = useState<any>(user ? { ...user.effective_policy } : { ...(defaults[org ? 'adult' : 'kid'] ?? {}) })
   const [advanced, setAdvanced] = useState(!!user)
   const [active, setActive] = useState<{ id: string; label: string; models: { id: string; label: string }[] }[]>([])
@@ -154,7 +161,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
       delete cleanPolicy.label
       delete cleanPolicy.age_group
       if (user) {
-        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy, departments: f.departments }
+        const body: any = { display_name: f.display_name, avatar: f.avatar, role: f.role, is_active: f.is_active, policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps }
         if (isChild) body.age_group = f.age_group
         if (f.birth_year) body.birth_year = Number(f.birth_year)
         if (f.password) body.password = f.password
@@ -165,9 +172,9 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
         if (!body.email) delete body.email
         if (!body.password) delete body.password
         if (!body.pin) delete body.pin
-        delete body.departments
+        delete body.departments; delete body.apps; delete body.admin_apps
         const u = await post<User>('/admin/members', body)
-        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy, departments: f.departments })
+        await patch(`/admin/members/${u.id}`, { policy: cleanPolicy, departments: f.departments, apps: f.apps === null ? ['*'] : f.apps, admin_apps: f.admin_apps })
       }
       onClose()
     } catch (e: any) {
@@ -185,7 +192,7 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
           {!user && <label>Username<input value={f.username} onChange={(e) => set('username', e.target.value)} /></label>}
           <label>Ruolo
             <select value={f.role} onChange={(e) => set('role', e.target.value)}>
-              {!org && <option value="child">Bambino/a</option>}<option value="adult">{org ? 'Utente' : 'Adulto'}</option><option value="admin">Amministratore</option>
+              {!org && <option value="child">Bambino/a</option>}<option value="adult">{org ? 'Utente (o amministratore di app)' : 'Adulto'}</option><option value="admin">Super amministratore</option>
             </select>
           </label>
           {isChild && (
@@ -218,6 +225,35 @@ function MemberForm({ user, defaults, onClose, onError }: { user?: User; default
           </fieldset>
         )}
 
+        {!isChild && f.role !== 'admin' && (
+          <fieldset className="stack" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+            <legend>Software</legend>
+            <small className="muted">Quali software del framework l'utente vede e può usare (pagine, icone nella cartella APP, tool in chat). «Amministra» dà, solo in quella app, i poteri di configurazione riservati all'amministratore. Il super amministratore ha tutto.</small>
+            <label className="row"><input type="checkbox" checked={f.apps === null} onChange={(e) => set('apps', e.target.checked ? null : catalog.map((a) => a.id))} /> Tutti i software (anche quelli attivati in futuro)</label>
+            {f.apps !== null && (
+              <table className="table small">
+                <thead><tr><th>Software</th><th>Usa</th><th>Amministra</th></tr></thead>
+                <tbody>{catalog.map((a) => {
+                  const on = (f.apps as string[]).includes(a.id)
+                  const adm = (f.admin_apps as string[]).includes(a.id)
+                  return (
+                    <tr key={a.id} className={a.active ? '' : 'muted'}>
+                      <td title={a.desc}>{a.glyph} <b>{a.label}</b> <small className="muted">{a.app}{a.active ? '' : ' · non attivo sul server'}</small></td>
+                      <td><input type="checkbox" checked={on} onChange={(e) => { const next = e.target.checked ? [...f.apps, a.id] : (f.apps as string[]).filter((x) => x !== a.id); setF({ ...f, apps: next, admin_apps: e.target.checked ? f.admin_apps : (f.admin_apps as string[]).filter((x) => x !== a.id) }) }} /></td>
+                      <td>{a.admin ? <label className="row" title={a.admin}><input type="checkbox" disabled={!on} checked={adm} onChange={(e) => set('admin_apps', e.target.checked ? [...f.admin_apps, a.id] : (f.admin_apps as string[]).filter((x) => x !== a.id))} /> <small className="muted">{a.admin}</small></label> : <small className="muted">—</small>}</td>
+                    </tr>
+                  )
+                })}</tbody>
+              </table>
+            )}
+            {f.apps === null && catalog.some((a) => a.admin) && (
+              <div className="row wrap" style={{ gap: 14 }}>
+                <small className="muted">Amministra:</small>
+                {catalog.filter((a) => a.admin).map((a) => <label key={a.id} className="row" title={a.admin}><input type="checkbox" checked={(f.admin_apps as string[]).includes(a.id)} onChange={(e) => set('admin_apps', e.target.checked ? [...f.admin_apps, a.id] : (f.admin_apps as string[]).filter((x) => x !== a.id))} /> {a.glyph} {a.label}</label>)}
+              </div>
+            )}
+          </fieldset>
+        )}
         <details open={advanced} onToggle={(e) => setAdvanced((e.target as any).open)}>
           <summary>Permessi e limiti {isChild ? '(controllo genitori)' : ''}</summary>
           <div className="stack">

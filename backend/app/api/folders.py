@@ -71,7 +71,7 @@ async def _editable(db: AsyncSession, fid: str, ctx: AuthContext) -> Folder:
 async def list_folders(ctx: AuthContext = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Le cartelle dell'utente + quelle dell'organizzazione che puo' vedere (l'albero lo ricostruisce il client),
     con il numero di file e sottocartelle. L'amministratore trova l'archivio dell'organizzazione gia' creato."""
-    if ctx.user.role == Role.admin:
+    if ctx.user.role == Role.admin:   # l'albero dell'organizzazione nasce con il super amministratore
         await workspace.ensure_org_tree(db, ctx.user)
     await workspace.chat_root(db, ctx.user.id, ctx.user.family_id)
     await db.commit()

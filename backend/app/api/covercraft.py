@@ -36,7 +36,9 @@ ADMIN_ONLY_MSG = "Impostazioni riservate all'amministratore di Emily"
 
 
 def is_admin(ctx: AuthContext) -> bool:
-    return ctx.user.role == Role.admin
+    """Super amministratore o amministratore dell'app CoverCraft."""
+    from ..services.apps import is_app_admin
+    return is_app_admin(ctx.user, "covercraft")
 
 
 def guard_command(ctx: AuthContext, body: dict) -> str | None:
@@ -89,8 +91,9 @@ async def _session_from_frame_token(tok: str, db: AsyncSession) -> AuthContext |
 @router.get("/session")
 async def cover_session(ctx: AuthContext = Depends(require_auth)):
     """Dati per aprire la web app: /covercraft/?server=<origine>/covercraft&user=<nome>&lang=it (nessun token: lo mette il proxy)."""
-    if ctx.user.role == Role.child:
-        raise HTTPException(403, "La verifica copertura e' riservata agli adulti")
+    from ..services.apps import app_enabled
+    if ctx.user.role == Role.child or not app_enabled(ctx.user, "covercraft"):
+        raise HTTPException(403, "La verifica copertura non e' abilitata per il tuo account: chiedi all'amministratore")
     if not covercraft.enabled():
         raise HTTPException(503, "CoverCraft non e' attivo su questo server (./familai.sh covercraft up)")
     if not await covercraft.health():
@@ -119,8 +122,9 @@ async def _frame_auth(request: Request, db: AsyncSession) -> AuthContext:
         ctx = await _load_session(request, db)
     if not ctx:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Non autenticato (sessione Emily scaduta: ricarica la pagina Copertura)")
-    if ctx.user.role == Role.child:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Riservato agli adulti")
+    from ..services.apps import app_enabled
+    if ctx.user.role == Role.child or not app_enabled(ctx.user, "covercraft"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "App non abilitata per questo account")
     if not ctx.session.mfa_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verifica a due fattori richiesta", headers={"X-MFA": "required"})
     if settings.require_mfa_for_adults and ctx.session.auth_method != "google":

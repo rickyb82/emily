@@ -110,6 +110,8 @@ async def build_history(conv: Conversation, db: AsyncSession) -> list[dict]:
 
 async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) -> str:
     parts = [system_prompt_for(user)]
+    from .apps import user_apps as _user_apps
+    _apps_on = _user_apps(user)   # i software abilitati per questo utente: il prompt descrive solo quelli
     if conv.project_id:
         proj = await db.get(Project, conv.project_id)
         if proj:
@@ -121,7 +123,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
     # Documenti dell'organizzazione (cartelle di reparto che l'utente vede) e della cartella CHAT di questa conversazione
     if user.role != Role.child:
         from . import workspace as _ws
-        org = [f for f in await _ws.visible_org_folders(db, user) if f.kind == "dept"]
+        org = [f for f in await _ws.visible_org_folders(db, user) if f.kind == "dept"] if "archivio" in _apps_on else []
         if org:
             from ..models import Family as _Fam
             fam = await db.get(_Fam, user.family_id)
@@ -181,7 +183,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "Le app ArtCraft NON attive su questo server: " + ", ".join(missing) + ". Per i formati che coprono (Word, Excel, PDF, "
             "PowerPoint) usa run_code con le librerie disponibili nella sandbox (python-docx, openpyxl, python-pptx, reportlab, "
             "pypdf) e di' all'utente che l'amministratore puo' attivare l'app con ./familai.sh <app> up per avere l'editor integrato.")
-    if mcp_manager.is_connected("wordcraft"):
+    if mcp_manager.is_connected("wordcraft") and "wordcraft" in _apps_on:
         parts.append(
             "\n# Documenti Word/PDF (WordCraft)\n"
             "- Per lettere, relazioni, tesine, curriculum, verbali o qualsiasi documento da stampare/scaricare usa write_document: "
@@ -198,7 +200,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "chiedere mai all'utente di inserire a mano cio' che puoi fare tu."
             + ("\n- L'utente puo' aprire e modificare a mano ogni documento con l'editor WordCraft integrato (pulsante ✏️ Modifica "
                "accanto al file, o menu 📝 Documenti): quando ha senso, diglielo." if settings.wordcraft_web else ""))
-    if mcp_manager.is_connected("gridcraft"):
+    if mcp_manager.is_connected("gridcraft") and "gridcraft" in _apps_on:
         parts.append(
             "\n# Fogli di calcolo (GridCraft)\n"
             "- Per tabelle da scaricare, bilanci, elenchi con totali, preventivi, registri e qualsiasi cosa 'da Excel' usa "
@@ -210,7 +212,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             + str(settings.data_dir / "gridcraft") + "/<nome>.xlsx)."
             + ("\n- L'utente puo' aprire e modificare ogni foglio con l'editor GridCraft integrato (✏️ Modifica accanto al file, "
                "o menu 📝 Documenti)." if settings.gridcraft_web else ""))
-    if mcp_manager.is_connected("pdfcraft"):
+    if mcp_manager.is_connected("pdfcraft") and "pdfcraft" in _apps_on:
         parts.append(
             "\n# PDF (PdfCraft)\n"
             "- Per unire, dividere, estrarre/ruotare/togliere pagine, comprimere, mettere una filigrana, trasformare immagini in PDF "
@@ -221,7 +223,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "doc_save in " + str(settings.data_dir / "pdfcraft") + "/<nome>.pdf (l'unica cartella scrivibile)."
             + ("\n- L'utente puo' aprire ogni PDF nell'editor PdfCraft integrato (✏️ accanto al file) per annotare, compilare "
                "moduli e firmare a mano." if settings.pdfcraft_web else ""))
-    if mcp_manager.is_connected("deckcraft"):
+    if mcp_manager.is_connected("deckcraft") and "deckcraft" in _apps_on:
         parts.append(
             "\n# Presentazioni (DeckCraft)\n"
             "- Per slide, presentazioni, lezioni, pitch o 'un PowerPoint' usa write_presentation: una voce per diapositiva con "
@@ -232,7 +234,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "per controllare il risultato, save_presentation in " + str(settings.data_dir / "deckcraft") + "/<nome>.pptx)."
             + ("\n- L'utente puo' aprire e modificare ogni presentazione con l'editor DeckCraft integrato (✏️ accanto al file)."
                if settings.deckcraft_web else ""))
-    if mcp_manager.is_connected("ideacraft"):
+    if mcp_manager.is_connected("ideacraft") and "ideacraft" in _apps_on:
         parts.append(
             "\n# Mappe mentali e diagrammi (IdeaCraft)\n"
             "- Per mappe mentali, mappe concettuali, brainstorming, schemi di studio o 'una mappa di…' usa mind_map con un outline "
@@ -249,7 +251,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "prima di salvare; riporta all'utente i rilievi rimasti. mcp__ideacraft__list_stencils elenca le forme disponibili."
             + ("\n- L'utente puo' aprire e modificare mappe e diagrammi con l'editor IdeaCraft integrato (✏️ accanto al file .ideacraft.json, .mm, .opml, .drawio)."
                if settings.ideacraft_web else ""))
-    if mcp_manager.is_connected("mailcraft") and user.role != Role.child:
+    if mcp_manager.is_connected("mailcraft") and user.role != Role.child and "mailcraft" in _apps_on:
         parts.append(
             "\n# Posta elettronica (MailCraft)\n"
             "- L'utente ha la sua posta in " + settings.app_name + " (menu Produttivita' > Posta): i tool mcp__mailcraft__* agiscono SOLO sulle caselle "
@@ -265,7 +267,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "in chat come file (poi puoi aprirli con read_document o convertirli con le app).\n"
             "- Riassumi, non copiare intere mail; non leggere o inviare posta di altri membri della famiglia (non puoi comunque)."
         )
-    if mcp_manager.is_connected("remotecraft") and user.role != Role.child:
+    if mcp_manager.is_connected("remotecraft") and user.role != Role.child and "remotecraft" in _apps_on:
         parts.append(
             "\n# Assistenza remota (RemoteCraft)\n"
             "- L'organizzazione fa assistenza remota con RustDesk e tiene clienti, PC, interventi e registro GDPR in RemoteCraft "
@@ -278,7 +280,7 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "spiegato e il consenso registrato (consent_override solo se la persona lo dice, con motivo). Prima di gdpr_erase, "
             "delete_intervention o archive_customer mostra cosa succede e aspetta un si'. L'export GDPR contiene dati personali."
         )
-    if mcp_manager.is_connected("covercraft") and user.role != Role.child:
+    if mcp_manager.is_connected("covercraft") and user.role != Role.child and "covercraft" in _apps_on:
         parts.append(
             "\n# Verifica copertura (CoverCraft)\n"
             "- L'operatore tiene in CoverCraft (menu Produttivita' > Copertura) il proprio database di copertura: TIM/FiberCop per comune "

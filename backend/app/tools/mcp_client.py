@@ -500,7 +500,8 @@ class MCPManager:
                 args = await _mail_args(tool, args, ctx)
                 if isinstance(args, ToolResult):
                     return args
-            if server == "covercraft" and ctx.user.role != Role.admin:
+            from ..services.apps import is_app_admin as _is_app_admin
+            if server == "covercraft" and not _is_app_admin(ctx.user, "covercraft"):
                 # configurazione del database e preferenze condivise: solo l'amministratore (come nella web app)
                 if tool in ("configure_database", "test_database") or (tool == "set_preferences" and any(k not in ("theme", "language") for k in args)):
                     return ToolResult("Impostazioni di CoverCraft riservate all'amministratore di Emily: chiedi a lui/lei di cambiarle", is_error=True)

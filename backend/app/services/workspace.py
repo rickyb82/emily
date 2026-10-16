@@ -41,7 +41,8 @@ def can_see_folder(f: Folder, user: User) -> bool:
     if is_org(f):
         if user.role == Role.child or f.family_id != user.family_id:
             return False
-        if user.role == Role.admin or f.kind == "org":
+        from .apps import is_app_admin
+        if is_app_admin(user, "archivio") or f.kind == "org":
             return True
         return (f.dept or "") == "" or f.dept in user_departments(user)
     return False
@@ -52,7 +53,8 @@ def can_write_folder(f: Folder | None, user: User) -> bool:
     if f is None:
         return True
     if is_org(f):
-        return user.role == Role.admin and f.family_id == user.family_id
+        from .apps import is_app_admin
+        return is_app_admin(user, "archivio") and f.family_id == user.family_id
     return f.owner_id == user.id
 
 
@@ -96,8 +98,9 @@ async def ensure_org_tree(db: AsyncSession, admin: User) -> Folder:
 
 
 async def visible_org_folders(db: AsyncSession, user: User) -> list[Folder]:
-    if user.role == Role.child:
-        return []
+    from .apps import app_enabled
+    if user.role == Role.child or not app_enabled(user, "archivio"):
+        return []   # senza il software "Archivio" l'utente non vede le cartelle dell'organizzazione
     rows = (await db.execute(select(Folder).where(Folder.family_id == user.family_id, Folder.kind.in_(ORG_KINDS)))).scalars().all()
     return [f for f in rows if can_see_folder(f, user)]
 
