@@ -292,6 +292,9 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "Passa sempre query o limit a search_comune / search_street / list_civici: senza limite restituiscono tutte le righe (migliaia). radio_bridges elenca i ponti radio; history/open_history lo storico.\n"
             "- Riporta ogni tecnologia con il semaforo E il valore grezzo della cella (es. 'FTTH: coperto (ATTIVO), 1000/300 Mbit'), distanze e velocita' "
             "come le da' il tool; segnala chiaramente 'non noto' quando il dato manca. Non inventare coperture ne' velocita'. Per ogni ponte radio il tool da' anche distanza, direzione e una stima del collegamento a 5 GHz (RX, margine, Fresnel) in spazio libero: dillo come stima, il terreno non e' verificato. Se il civico non ha coordinate, chiedi se la persona ha lat/lon (verify_coverage li accetta e li ricorda). "
+            "Le celle mobili vengono dalla tabella cell_db e, se l'amministratore ha impostato il token OpenCelliD, anche 'live' da OpenCelliD "
+            "(posizioni stimate dalle misure degli utenti: precisione dell'ordine del range indicato, mai il punto esatto dell'antenna). "
+            "find_cell dice dove sta una cella dai suoi identificativi (MCC, MNC, LAC/TAC, CID o eNodeB+settore). "
             "configure_database, test_database e set_preferences (oltre a tema/lingua) sono riservati all'amministratore di Emily: agli altri utenti rispondono con un errore, non insistere e rimanda all'amministratore.\n"
             "- Il risultato di una verifica si puo' mettere in un documento (WordCraft) o in una mail (MailCraft) se richiesto."
         )

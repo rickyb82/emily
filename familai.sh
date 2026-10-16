@@ -361,6 +361,17 @@ case "${1:-}" in
         set_env COVERCRAFT_MCP_HOST ""
         compose up -d backend;;
       logs) compose --profile covercraft logs -f --tail=100 covercraft;;
+      cells)
+        # Celle mobili (OpenCelliD): ./familai.sh covercraft cells            -> stato di cell_db
+        #                            ./familai.sh covercraft cells import <file.csv.gz> --db-user <rw> --db-password '…' [--net 1,10,88,50]
+        shift 2
+        if [ "${1:-}" = import ]; then
+          f="${2:?file CSV OpenCelliD (es. 222.csv.gz)}"; shift 2
+          docker cp "$f" "$(compose --profile covercraft ps -q covercraft):/tmp/cells.csv.gz"
+          compose --profile covercraft exec -u covercraft covercraft covercraft-cli cells import /tmp/cells.csv.gz --home /data "$@"
+        else
+          compose --profile covercraft exec -u covercraft covercraft covercraft-cli cells --home /data "$@"
+        fi;;
       geo)
         # Nominatim (geocoder OpenStreetMap) per i civici senza coordinate nelle tabelle: ./familai.sh covercraft geo up|down|logs
         case "${3:-up}" in
@@ -384,7 +395,7 @@ case "${1:-}" in
           logs) compose --profile nominatim logs -f --tail=100 nominatim;;
           *) echo "uso: ./familai.sh covercraft geo up|down|logs"; exit 1;;
         esac;;
-      *) echo "uso: ./familai.sh covercraft up|build|down|logs|upgrade|db …|geo up|down|logs"; exit 1;;
+      *) echo "uso: ./familai.sh covercraft up|build|down|logs|upgrade|db …|cells [import <file> --db-user … --db-password …]|geo up|down|logs"; exit 1;;
     esac;;
   deploy)
     # Aggiorna la macchina di produzione da qui: push del repo e "update" remoto.
