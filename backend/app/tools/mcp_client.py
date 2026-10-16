@@ -115,6 +115,24 @@ async def _resolve_file_ids(args, ctx: ToolContext):
         return args
 
 
+async def _forget_missing_quotecraft_files(ctx: ToolContext) -> None:
+    """Dopo remove_document di QuoteCraft: i FileAsset dell'utente sotto data/quotecraft il cui file non esiste piu' vengono eliminati."""
+    from sqlalchemy import select
+    from ..models import FileAsset
+    try:
+        base = str(settings.data_dir / "quotecraft") + "/"
+        rows = (await ctx.db.execute(select(FileAsset).where(FileAsset.owner_id == ctx.user.id, FileAsset.path.like(base + "%")))).scalars().all()
+        gone = [a for a in rows if a.path and not Path(a.path).is_file()]
+        for a in gone:
+            await ctx.db.delete(a)
+        if gone:
+            await ctx.db.commit()
+            from ..services import events as _events
+            _events.publish(ctx.user.id, "files", {"reason": "removed"})
+    except Exception as e:
+        log.debug("pulizia file QuoteCraft rimossi fallita: %s", e)
+
+
 async def _protect_save_path(server: str, tool: str, args: dict, ctx: ToolContext, open_path: str | None = None) -> dict:
     """Un save_* (o execute file.saveAs) verso un percorso gia' usato da un file di un'altra conversazione o di un altro
     utente viene dirottato su "nome 2.ext": il modello crede di scegliere il nome, ma non puo' calpestare file altrui."""
@@ -532,6 +550,9 @@ class MCPManager:
                     if art:
                         artifacts.append(art)
                         parts.append(f"Documento {art.get('filename', '')} mostrato all'utente in chat (id {art['file_id']}).")
+            if server == "quotecraft" and tool == "remove_document" and not _attr(res, "isError", "is_error", default=False):
+                # il file e' sparito da data/quotecraft: togliamo anche la voce di Emily che lo mostrava in chat/Documenti
+                await _forget_missing_quotecraft_files(ctx)
             from .artcraft import APPS as _ARTCRAFT, harvest_paths, register_saved_file, sidecar_files
             if server in _ARTCRAFT and not _attr(res, "isError", "is_error", default=False):
                 app = _ARTCRAFT[server]

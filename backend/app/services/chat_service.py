@@ -308,7 +308,11 @@ async def build_system_prompt(user: User, conv: Conversation, db: AsyncSession) 
             "new_quote con il canale (wholesale per l'Allegato A di un partner), add_line per ogni voce con quantita' (discount_pct solo se richiesto; "
             "voce libera per cio' che non e' a listino), poi get_quote e riporta righe e totali (una tantum, canone, valore contratto). "
             "Chiedi prima di make_documents e SEMPRE prima di send_quote: mai spedire senza un si' esplicito.\n"
-            "- I documenti prodotti compaiono in chat come allegati e nella cartella CHAT. I prezzi sono quelli del listino: non inventarne; "
+            "- I documenti prodotti compaiono in chat come allegati e nella cartella CHAT. Un file fatto altrove (PDF rivisto, disegno, foglio) "
+            "si aggiunge al preventivo con attach_document passando come path l'id del file della chat (o il suo percorso): resta nella cartella del "
+            "preventivo, nell'elenco documenti e si puo' spedire con send_quote (parametro files per sceglierli per nome); remove_document lo toglie. "
+            "Le carte intestate possono impaginare da sole le tabelle ({{tabella.righe}}, {{tabella.una_tantum}}, {{tabella.canone}}, "
+            "{{tabella.riepilogo}}, sezioni {{#righe}}…{{/righe}} in HTML): list_letterheads le elenca. I prezzi sono quelli del listino: non inventarne; "
             "listino, carta intestata, azienda e impostazioni (save_item, import_items, import_letterhead, set_company, set_preferences) "
             "sono riservati agli amministratori dell'app: agli altri rispondono con un errore, rimanda all'amministratore."
         )
